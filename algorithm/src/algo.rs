@@ -8,7 +8,7 @@ use crate::*;
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn to_binary_tree<P: Point>(points: Vec<P>) -> HiearchyItem<P> {
+pub fn to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
     assert!(
         !points.is_empty(),
         "to_binary_tree called with empty vector",
@@ -39,9 +39,9 @@ pub fn to_binary_tree<P: Point>(points: Vec<P>) -> HiearchyItem<P> {
 /// This function takes vector of points alongside their distances to the next one. \
 /// However, the last point has no "next" point, so it can't have any distance to it,
 /// so it's provided as a separate argument
-fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) -> HiearchyItem<P> {
+fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) -> BinTree<P, ()> {
     if input.len() == 0 {
-        return HiearchyItem::Item(last_point);
+        return BinTree::Leaf(last_point);
     };
 
     let idx_of_max_distance_to_next = input
@@ -56,10 +56,13 @@ fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) ->
 
     let last_from_first_group = first_group.pop().expect("split_off returned empty?");
 
-    HiearchyItem::Group(vec![
-        to_binary_tree_with_distances(first_group, last_from_first_group.0),
-        to_binary_tree_with_distances(second_group, last_point),
-    ])
+    BinTree::InnerNode {
+        children: Box::new([
+            to_binary_tree_with_distances(first_group, last_from_first_group.0),
+            to_binary_tree_with_distances(second_group, last_point),
+        ]),
+        data: (),
+    }
 }
 
 fn flatten<P: Point>(bintree: HiearchyItem<P>, flatness: Flatness) -> (Distance, HiearchyItem<P>) {
