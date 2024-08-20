@@ -62,6 +62,6 @@ fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) ->
     ])
 }
 
-fn flatten<P: Point>(bintree: HiearchyItem<P>) -> (Distance, HiearchyItem<P>) {
+fn flatten<P: Point>(bintree: HiearchyItem<P>, flatness: Flatness) -> (Distance, HiearchyItem<P>) {
     todo!()
 }

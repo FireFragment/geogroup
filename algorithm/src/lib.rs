@@ -6,6 +6,7 @@ pub mod algo;
 
 /// Distance between two [points](Point)
 pub type Distance = u64;
+pub type Flatness = u32;
 
 pub trait Point {
     fn distance(&self, rhs: &Self) -> Distance;
