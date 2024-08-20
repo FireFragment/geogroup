@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 use crate::*;
 
 /// Sort points to binary tree.
