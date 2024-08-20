@@ -4,6 +4,9 @@ use geogroup_common::*;
 
 pub mod algo;
 
+/// Distance between two [points](Point)
+pub type Distance = u64;
+
 pub trait Point {
     fn distance(&self, rhs: &Self) -> Distance;
 }
@@ -13,7 +16,7 @@ pub struct Config {
 }
 
 impl Point for u64 {
-    fn distance(&self, rhs: &Self) -> geogroup_common::Distance {
+    fn distance(&self, rhs: &Self) -> Distance {
         self.abs_diff(*rhs)
     }
 }

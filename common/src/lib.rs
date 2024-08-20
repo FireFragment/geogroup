@@ -1,7 +1,5 @@
 use core::fmt;
 
-pub type Distance = u64;
-
 #[derive(Debug, Clone)]
 pub enum HiearchyItem<F> {
     Group(Vec<HiearchyItem<F>>),
