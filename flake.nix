@@ -26,13 +26,29 @@
           ];
         };
       in {
-        devShell = pkgs.mkShell {
+        devShell = pkgs.mkShell rec {
           nativeBuildInputs = with pkgs; [
             (pkgs.rust-bin.stable.latest.default.override {
                   extensions = [ "rust-src" "cargo" "rustc" ];
             })
             gcc
-          ];
+
+            xorg.libX11
+            wayland
+            libxkbcommon
+            libGL
+            libGLU
+          ] ++ (with pkgs.xorg; [
+            libxcb
+            libXcursor
+            libXrandr
+            libXi
+            pkg-config
+          ]);
+
+          shellHook = ''
+              export LD_LIBRARY_PATH=/run/opengl-driver/lib/:${pkgs.lib.makeLibraryPath nativeBuildInputs}
+          '';
 
           RUST_SRC_PATH = "${pkgs.rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" ];
