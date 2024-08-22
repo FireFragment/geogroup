@@ -29,7 +29,7 @@ pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
         }
     };
 
-    to_binary_tree_with_distances(points_with_distances, last_point)
+    sort_to_binary_tree_with_distances(points_with_distances, last_point)
 }
 
 /// The recursive part of [`to_binary_tree`]
@@ -37,7 +37,10 @@ pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
 /// This function takes vector of points alongside their distances to the next one. \
 /// However, the last point has no "next" point, so it can't have any distance to it,
 /// so it's provided as a separate argument
-fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) -> BinTree<P, ()> {
+fn sort_to_binary_tree_with_distances<P>(
+    input: Vec<(P, Distance)>,
+    last_point: P,
+) -> BinTree<P, ()> {
     if input.len() == 0 {
         return BinTree::Leaf(last_point);
     };
@@ -56,8 +59,8 @@ fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) ->
 
     BinTree::InnerNode {
         children: Box::new([
-            to_binary_tree_with_distances(first_group, last_from_first_group.0),
-            to_binary_tree_with_distances(second_group, last_point),
+            sort_to_binary_tree_with_distances(first_group, last_from_first_group.0),
+            sort_to_binary_tree_with_distances(second_group, last_point),
         ]),
         data: (),
     }
