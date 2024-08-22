@@ -2,9 +2,12 @@ use geogroup_common::*;
 
 pub mod algo;
 
+// Changing theese two may result in overflows!
+// Eg. increasing capacity of Depth is dangerous, because Depth::MAX is used in the program
+
 /// Distance between two [points](Point)
 pub type Distance = u64;
-pub type Flatness = u32;
+pub type Depth = u8;
 
 pub trait Point {
     fn distance(&self, rhs: &Self) -> Distance;

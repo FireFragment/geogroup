@@ -63,6 +63,74 @@ fn to_binary_tree_with_distances<P>(input: Vec<(P, Distance)>, last_point: P) ->
     }
 }
 
-fn flatten<P: Point>(bintree: HiearchyItem<P>, flatness: Flatness) -> (Distance, HiearchyItem<P>) {
-    todo!()
+/// "Flatten" a binary tree of points so that only bigger spaces between points are separated to different groups
+pub fn flatten<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> HiearchyItem<P> {
+    flatten_inner(bintree, depth).flattened_group
+}
+
+/// Flatten, but also return addidional data in [`FlattenRet`] useful for recursion
+fn flatten_inner<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> FlattenRet<P> {
+    match bintree {
+        BinTree::InnerNode { children, data: _ } => {
+            let [first, second] = children.map(|subtree| flatten_inner(subtree, depth));
+            let highest_inner_distance = first.last_point.distance(&second.first_point);
+            let first_point = first.first_point.clone();
+            let last_point = second.last_point.clone();
+
+            let mut final_group = Vec::new();
+
+            dissolve_if_needed(first, &mut final_group, depth, highest_inner_distance);
+            dissolve_if_needed(second, &mut final_group, depth, highest_inner_distance);
+
+            FlattenRet {
+                highest_inner_distance,
+                first_point,
+                last_point,
+                flattened_group: HiearchyItem::Group(final_group),
+            }
+        }
+        BinTree::Leaf(point) => FlattenRet {
+            highest_inner_distance: 0,
+            first_point: point.clone(),
+            last_point: point.clone(),
+            flattened_group: HiearchyItem::Item(point),
+        },
+    }
+}
+
+fn dissolve_if_needed<P: Point>(
+    group_to_dissolve: FlattenRet<P>,
+    final_group: &mut Vec<HiearchyItem<P>>,
+    depth: Depth,
+    highest_inner_distance: Distance,
+) {
+    // How "weak" is group
+    let first_group_weakness = (Depth::MAX as u128
+        * group_to_dissolve.highest_inner_distance as u128
+        / highest_inner_distance as u128) as Depth;
+
+    // lower or equal condition to not trigger the panic in case that highest_inner_distance = 0
+    if first_group_weakness <= depth {
+        final_group.push(group_to_dissolve.flattened_group);
+    } else {
+        let HiearchyItem::Group(mut group_to_dissolve_g) = group_to_dissolve.flattened_group else {
+            panic!(
+                "
+                    Probably faulty `FlattenRet` with highest_inner_distance != 0, but it's {}.
+                    (if it really is 0, that would be dumb...)
+                ",
+                group_to_dissolve.highest_inner_distance
+            )
+        };
+
+        final_group.append(&mut group_to_dissolve_g);
+    }
+}
+
+struct FlattenRet<P: Point> {
+    /// 0, if it's not a group
+    highest_inner_distance: Distance,
+    last_point: P,
+    first_point: P,
+    flattened_group: HiearchyItem<P>,
 }
