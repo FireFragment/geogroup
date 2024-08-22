@@ -73,6 +73,11 @@ fn sort_to_binary_tree_with_distances<P>(
     }
 }
 
+// TODO: Maybe not exactly how I want it to be
+// Now it just takes the bintree and compares the distances in the middle of self and the subtrees to decide
+// whether to dissolve the groups or nat
+// However, when dissolving, there can appear lower/higher distances in the group, affecting
+// the "weakness" of that group.
 /// "Flatten" a binary tree of points so that only bigger spaces between points are separated to different groups
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
