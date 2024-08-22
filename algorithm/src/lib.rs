@@ -17,6 +17,15 @@ pub struct Params {
     pub depth: Depth,
 }
 
+impl Default for Params {
+    /// The setting of parameters I personally found reasonable (there's nothing deep in theese numbers)
+    ///
+    /// Value: `Params { depth: 128 }`
+    fn default() -> Self {
+        Params { depth: 128 }
+    }
+}
+
 pub trait Point {
     fn distance(&self, rhs: &Self) -> Distance;
 }
