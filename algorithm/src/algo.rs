@@ -1,5 +1,12 @@
 use crate::*;
 
+/// Sort points by the geogroup algorithm
+///
+/// The generic argument `P: Point + Clone` should be fast to clone.
+pub fn sort<P: Point + Clone>(points: Vec<P>, depth: Depth) -> HiearchyItem<P> {
+    flatten(sort_to_binary_tree(points), depth)
+}
+
 /// Sort points to binary tree.
 ///
 /// The algorithm always cuts points into two groups by the biggest distance
@@ -67,6 +74,8 @@ fn sort_to_binary_tree_with_distances<P>(
 }
 
 /// "Flatten" a binary tree of points so that only bigger spaces between points are separated to different groups
+///
+/// The generic argument `P: Point + Clone` should be fast to clone.
 pub fn flatten<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> HiearchyItem<P> {
     flatten_inner(bintree, depth).flattened_group
 }
