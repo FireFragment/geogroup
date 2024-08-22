@@ -10,6 +10,13 @@ pub use algo::sort;
 pub type Distance = u64;
 pub type Depth = u8;
 
+/// Parameters of the algorithm influencing how it sorts
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Params {
+    pub depth: Depth,
+}
+
 pub trait Point {
     fn distance(&self, rhs: &Self) -> Distance;
 }
