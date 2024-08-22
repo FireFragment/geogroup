@@ -3,8 +3,8 @@ use crate::*;
 /// Sort points by the geogroup algorithm
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
-pub fn sort<P: Point + Clone>(points: Vec<P>, depth: Depth) -> HiearchyItem<P> {
-    flatten(sort_to_binary_tree(points), depth)
+pub fn sort<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+    flatten(sort_to_binary_tree(points), params.depth)
 }
 
 /// Sort points to binary tree.
