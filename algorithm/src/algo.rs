@@ -6,7 +6,7 @@ use crate::*;
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
+pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
     assert!(
         !points.is_empty(),
         "to_binary_tree called with empty vector",
