@@ -1,0 +1,14 @@
+[package]
+name = "geogroup_loaders"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+kamadak-exif = { version = "0.5.5", optional = true }
+geo = "0.28.0"
+thiserror = "1.0.63"
+chrono = { version = "0.4.38", optional = true }
+
+[features]
+default = ["exif"]
+exif = ["dep:kamadak-exif", "dep:chrono"]
