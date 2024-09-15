@@ -2,6 +2,7 @@ use geogroup_common::*;
 
 pub mod algo;
 pub use algo::sort;
+pub use algo::sort_just_points;
 
 // Changing theese two may result in overflows!
 // Eg. increasing capacity of Depth is dangerous, because Depth::MAX is used in the program
