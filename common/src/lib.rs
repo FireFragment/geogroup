@@ -6,6 +6,17 @@ pub enum HiearchyItem<F> {
     Item(F),
 }
 
+impl<I> HiearchyItem<I> {
+    pub fn map<Out, Fun: Fn(I) -> Out>(self, fun: &Fun) -> HiearchyItem<Out> {
+        match self {
+            HiearchyItem::Group(g) => {
+                HiearchyItem::Group(g.into_iter().map(|item| item.map(fun)).collect())
+            }
+            HiearchyItem::Item(it) => HiearchyItem::Item(fun(it)),
+        }
+    }
+}
+
 impl<F: fmt::Display> HiearchyItem<F> {
     /// Improvised and doesn't look good yet. Should be only used for debugging
     pub fn print_tree(&self) -> String {

@@ -1,11 +1,20 @@
 use crate::*;
 
-/// Sort points by the geogroup algorithm
+/// Sort points with attached additional data by the geogroup algorithm
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
 pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> HiearchyItem<(P, D)> {
     flatten(sort_to_binary_tree(points), params.depth)
+}
+
+/// Sort points by the geogroup algorithm
+///
+/// If you need to attach some additional data to the points, use [`sort`].
+///
+/// The generic argument `P: Point + Clone` should be fast to clone.
+pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+    sort(points.into_iter().map(|p| (p, ())).collect(), params).map(&|(p, _)| p)
 }
 
 /// Sort points to binary tree.
