@@ -6,6 +6,17 @@ pub enum HiearchyItem<F> {
     Item(F),
 }
 
+impl<I> HiearchyItem<I> {
+    pub fn map<Out, Fun: Fn(I) -> Out>(self, fun: &Fun) -> HiearchyItem<Out> {
+        match self {
+            HiearchyItem::Group(g) => {
+                HiearchyItem::Group(g.into_iter().map(|item| item.map(fun)).collect())
+            }
+            HiearchyItem::Item(it) => HiearchyItem::Item(fun(it)),
+        }
+    }
+}
+
 impl<F: fmt::Display> HiearchyItem<F> {
     /// Improvised and doesn't look good yet. Should be only used for debugging
     pub fn print_tree(&self) -> String {
@@ -19,6 +30,23 @@ impl<F: fmt::Display> HiearchyItem<F> {
                     .join("\n")
             ),
             Self::Item(item) => format!("--{}", item),
+        }
+    }
+}
+
+impl<F: fmt::Display, D> HiearchyItem<(F, D)> {
+    /// Improvised and doesn't look good yet. Should be only used for debugging
+    pub fn print_tree_points_only(&self) -> String {
+        match self {
+            Self::Group(group) => format!(
+                "--*\n{}",
+                group
+                    .iter()
+                    .map(|subitem| subitem.print_tree_points_only().replace("\n", "\n  |"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            Self::Item(item) => format!("--{}", item.0),
         }
     }
 }

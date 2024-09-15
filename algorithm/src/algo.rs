@@ -1,10 +1,20 @@
 use crate::*;
 
-/// Sort points by the geogroup algorithm
+/// Sort points with attached additional data by the geogroup algorithm
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
-pub fn sort<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+/// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
+pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> HiearchyItem<(P, D)> {
     flatten(sort_to_binary_tree(points), params.depth)
+}
+
+/// Sort points by the geogroup algorithm
+///
+/// If you need to attach some additional data to the points, use [`sort`].
+///
+/// The generic argument `P: Point + Clone` should be fast to clone.
+pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+    sort(points.into_iter().map(|p| (p, ())).collect(), params).map(&|(p, _)| p)
 }
 
 /// Sort points to binary tree.
@@ -13,7 +23,7 @@ pub fn sort<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P>
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
+pub fn sort_to_binary_tree<P: Point, D>(points: Vec<(P, D)>) -> BinTree<(P, D), ()> {
     assert!(
         !points.is_empty(),
         "to_binary_tree called with empty vector",
@@ -27,12 +37,12 @@ pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
         //  - In the first iteration, it has been asserted that there are at least 2 points.
         //  - In following iterations, it has been peeked on the next element.
         //    If there wasn't one, the loop would be broken out of.
-        let current_point = points_iter.next().unwrap();
-        if let Some(next_point) = points_iter.peek() {
-            let distance_to_next = current_point.distance(next_point);
-            points_with_distances.push((current_point, distance_to_next));
+        let current_item = points_iter.next().unwrap();
+        if let Some(next_item) = points_iter.peek() {
+            let distance_to_next = current_item.0.distance(&next_item.0);
+            points_with_distances.push((current_item, distance_to_next));
         } else {
-            break current_point;
+            break current_item;
         }
     };
 
@@ -48,7 +58,7 @@ fn sort_to_binary_tree_with_distances<P>(
     input: Vec<(P, Distance)>,
     last_point: P,
 ) -> BinTree<P, ()> {
-    if input.len() == 0 {
+    if input.is_empty() {
         return BinTree::Leaf(last_point);
     };
 
@@ -81,12 +91,19 @@ fn sort_to_binary_tree_with_distances<P>(
 /// "Flatten" a binary tree of points so that only bigger spaces between points are separated to different groups
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
-fn flatten<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> HiearchyItem<P> {
+/// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
+fn flatten<P: Point + Clone, D>(
+    bintree: BinTree<(P, D), ()>,
+    depth: Depth,
+) -> HiearchyItem<(P, D)> {
     flatten_inner(bintree, depth).flattened_group
 }
 
 /// Flatten, but also return addidional data in [`FlattenRet`] useful for recursion
-fn flatten_inner<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> FlattenRet<P> {
+fn flatten_inner<P: Point + Clone, D>(
+    bintree: BinTree<(P, D), ()>,
+    depth: Depth,
+) -> FlattenRet<P, D> {
     match bintree {
         BinTree::InnerNode { children, data: _ } => {
             let [first, second] = children.map(|subtree| flatten_inner(subtree, depth));
@@ -106,18 +123,18 @@ fn flatten_inner<P: Point + Clone>(bintree: BinTree<P, ()>, depth: Depth) -> Fla
                 flattened_group: HiearchyItem::Group(final_group),
             }
         }
-        BinTree::Leaf(point) => FlattenRet {
+        BinTree::Leaf(item) => FlattenRet {
             highest_inner_distance: 0,
-            first_point: point.clone(),
-            last_point: point.clone(),
-            flattened_group: HiearchyItem::Item(point),
+            first_point: item.0.clone(),
+            last_point: item.0.clone(),
+            flattened_group: HiearchyItem::Item(item),
         },
     }
 }
 
-fn dissolve_if_needed<P: Point>(
-    group_to_dissolve: FlattenRet<P>,
-    final_group: &mut Vec<HiearchyItem<P>>,
+fn dissolve_if_needed<P: Point, D>(
+    group_to_dissolve: FlattenRet<P, D>,
+    final_group: &mut Vec<HiearchyItem<(P, D)>>,
     depth: Depth,
     highest_inner_distance: Distance,
 ) {
@@ -144,10 +161,10 @@ fn dissolve_if_needed<P: Point>(
     }
 }
 
-struct FlattenRet<P: Point> {
+struct FlattenRet<P: Point, D> {
     /// 0, if it's not a group
     highest_inner_distance: Distance,
     last_point: P,
     first_point: P,
-    flattened_group: HiearchyItem<P>,
+    flattened_group: HiearchyItem<(P, D)>,
 }
