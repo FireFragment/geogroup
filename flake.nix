@@ -8,6 +8,7 @@
       url = "github:numtide/flake-utils";
       inputs.nixpkgs.follows = "nixkgs";
     };
+    crate2nix.url = "github:nix-community/crate2nix";
   };
 
   outputs = {
@@ -15,6 +16,7 @@
     nixpkgs,
     rust-overlay,
     flake-utils,
+    crate2nix,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -25,14 +27,48 @@
             (import rust-overlay)
           ];
         };
+        cargoNix = crate2nix.tools.${system}.appliedCargoNix {
+            name = "geogroup";
+            src = ./.;
+        };
+
+        # TODO: Is anything superflous here?
+        eguiLibs = with pkgs; [
+          wayland
+          libxkbcommon
+          libGL
+          libGLU
+        ] ++ (with pkgs.xorg; [
+          libX11
+          libxcb
+          libXcursor
+          libXrandr
+          libXi
+          pkg-config
+        ]);
       in {
-        devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
+        packages.default = pkgs.symlinkJoin {
+          name = "geogroup_gui";
+          paths = [ cargoNix.workspaceMembers.geogroup_gui.build ];
+          buildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/geogroup_gui \
+              --suffix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath eguiLibs}
+          '';
+        };
+        #;
+
+        devShell = pkgs.mkShell rec {
+          nativeBuildInputs = [
             (pkgs.rust-bin.stable.latest.default.override {
                   extensions = [ "rust-src" "cargo" "rustc" ];
             })
-            gcc
-          ];
+            pkgs.gcc
+          ] ++ eguiLibs;
+
+          shellHook = ''
+              export LD_LIBRARY_PATH=/run/opengl-driver/lib/:${pkgs.lib.makeLibraryPath eguiLibs}
+          '';
 
           RUST_SRC_PATH = "${pkgs.rust-bin.stable.latest.default.override {
               extensions = [ "rust-src" ];
