@@ -22,3 +22,20 @@ impl<F: fmt::Display> HiearchyItem<F> {
         }
     }
 }
+
+impl<F: fmt::Display, D> HiearchyItem<(F, D)> {
+    /// Improvised and doesn't look good yet. Should be only used for debugging
+    pub fn print_tree_points_only(&self) -> String {
+        match self {
+            Self::Group(group) => format!(
+                "--*\n{}",
+                group
+                    .iter()
+                    .map(|subitem| subitem.print_tree_points_only().replace("\n", "\n  |"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            Self::Item(item) => format!("--{}", item.0),
+        }
+    }
+}
