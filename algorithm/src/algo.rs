@@ -49,7 +49,7 @@ fn sort_to_binary_tree_with_distances<P>(
     input: Vec<(P, Distance)>,
     last_point: P,
 ) -> BinTree<P, ()> {
-    if input.len() == 0 {
+    if input.is_empty() {
         return BinTree::Leaf(last_point);
     };
 
