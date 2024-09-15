@@ -1,0 +1,10 @@
+[package]
+name = "geogroup_backend"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+geogroup_algo = { path = "../algorithm" }
+geogroup_loaders = { path = "../loaders" }
+geogroup_common = { path = "../common" }
+thiserror = "1.0.63"
