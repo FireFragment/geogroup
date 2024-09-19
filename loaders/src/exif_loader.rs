@@ -8,12 +8,12 @@ pub struct ExifLoader;
 impl DataLoader for ExifLoader {
     type LocationError = CommonError;
     type TimeError = TimeError;
-    type FatalError = exif::Error;
+    type FatalError = FatalError;
     fn get_data(
         &self,
         file: PathBuf,
-    ) -> Result<LocData<ExifLoader>, GenericFatalError<Self::FatalError>> {
-        let file = std::fs::File::open(file).map_err(GenericFatalError::CannotReadFile)?;
+    ) -> Result<LoaderSpecificLocData<ExifLoader>, Self::FatalError> {
+        let file = std::fs::File::open(file).map_err(FatalError::CannotReadFile)?;
         let exif_data =
             exif::Reader::new().read_from_container(&mut std::io::BufReader::new(&file))?;
 
@@ -21,6 +21,10 @@ impl DataLoader for ExifLoader {
             location: get_location(&exif_data),
             time: get_time(&exif_data),
         })
+    }
+
+    fn supported_extensions(&self) -> Vec<String> {
+        vec!["png".into(), "jpg".into()]
     }
 }
 
@@ -87,6 +91,14 @@ pub fn rational_tag_as_f64(exif_data: &exif::Exif, tag: exif::Tag) -> Result<f64
             allowed_types: vec!["Rational".into(), "SRational".into()],
         })?,
     })
+}
+#[derive(Error, Debug)]
+pub enum FatalError {
+    #[error("cannot read file: {0}")]
+    CannotReadFile(#[source] std::io::Error),
+
+    #[error(transparent)]
+    ExifError(#[from] exif::Error),
 }
 
 /// Error type including common errors for both for location fetching and datetime fetching
