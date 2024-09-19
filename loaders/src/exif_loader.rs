@@ -42,8 +42,8 @@ fn get_time(exif_data: &exif::Exif) -> Result<[DateTime<chrono::FixedOffset>; 2]
 
 fn get_location(exif_data: &exif::Exif) -> Result<geo::Rect, CommonError> {
     let coord = geo::Coord {
-        x: rational_tag_as_f64(&exif_data, exif::Tag::GPSLatitude)?,
-        y: rational_tag_as_f64(&exif_data, exif::Tag::GPSLongitude)?,
+        x: rational_tag_as_f64(exif_data, exif::Tag::GPSLatitude)?,
+        y: rational_tag_as_f64(exif_data, exif::Tag::GPSLongitude)?,
     };
 
     Ok(geo::Rect::new(coord, coord))
@@ -79,11 +79,11 @@ pub fn rational_tag_as_f64(exif_data: &exif::Exif, tag: exif::Tag) -> Result<f64
     Ok(match field_val {
         exif::Value::Rational(v) => {
             let coords_orig = v.iter().map(|v| v.to_f64()).collect::<Vec<_>>();
-            coords_orig[0] + coords_orig[1] / (60 as f64) + coords_orig[2] / (3600 as f64)
+            coords_orig[0] + coords_orig[1] / 60.0 + coords_orig[2] / 3600.0
         }
         exif::Value::SRational(v) => {
             let coords_orig = v.iter().map(|v| v.to_f64()).collect::<Vec<_>>();
-            coords_orig[0] + coords_orig[1] / (60 as f64) + coords_orig[2] / (3600 as f64)
+            coords_orig[0] + coords_orig[1] / 60.0 + coords_orig[2] / 3600.0
         }
         val => Err(CommonError::InvalidType {
             tag,
