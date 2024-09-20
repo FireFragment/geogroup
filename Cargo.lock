@@ -1356,7 +1356,7 @@ dependencies = [
 
 [[package]]
 name = "geogroup_backend"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "geogroup_algo",
  "geogroup_common",
@@ -1378,7 +1378,7 @@ dependencies = [
 
 [[package]]
 name = "geogroup_loaders"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "geo",
