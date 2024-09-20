@@ -14,7 +14,7 @@ pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> Hiearch
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
 pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
-    sort(points.into_iter().map(|p| (p, ())).collect(), params).map(&|(p, _)| p)
+    sort(points.into_iter().map(|p| (p, ())).collect(), params).map_leafs(&|(p, _)| p)
 }
 
 /// Sort points to binary tree.

@@ -7,10 +7,10 @@ pub enum HiearchyItem<F> {
 }
 
 impl<I> HiearchyItem<I> {
-    pub fn map<Out, Fun: Fn(I) -> Out>(self, fun: &Fun) -> HiearchyItem<Out> {
+    pub fn map_leafs<Out, Fun: Fn(I) -> Out>(self, fun: &Fun) -> HiearchyItem<Out> {
         match self {
             HiearchyItem::Group(g) => {
-                HiearchyItem::Group(g.into_iter().map(|item| item.map(fun)).collect())
+                HiearchyItem::Group(g.into_iter().map(|item| item.map_leafs(fun)).collect())
             }
             HiearchyItem::Item(it) => HiearchyItem::Item(fun(it)),
         }
