@@ -9,10 +9,7 @@ impl DataLoader for ExifLoader {
     type LocationError = CommonError;
     type TimeError = TimeError;
     type FatalError = FatalError;
-    fn get_data(
-        &self,
-        file: PathBuf,
-    ) -> Result<LoaderSpecificLocData<ExifLoader>, Self::FatalError> {
+    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<ExifLoader>, Self::FatalError> {
         let file = std::fs::File::open(file).map_err(FatalError::CannotReadFile)?;
         let exif_data =
             exif::Reader::new().read_from_container(&mut std::io::BufReader::new(&file))?;

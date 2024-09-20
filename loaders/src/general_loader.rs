@@ -8,7 +8,7 @@ impl DataLoader for GeneralLoader {
     type LocationError = LocationError;
     type TimeError = TimeError;
 
-    fn get_data(&self, file: PathBuf) -> Result<LoaderSpecificLocData<Self>, Self::FatalError> {
+    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<Self>, Self::FatalError> {
         if !file.is_file() {
             return Err(FatalError::NotAFile);
         };

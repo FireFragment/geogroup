@@ -1,6 +1,6 @@
 use chrono::DateTime;
 use std::error::Error as StdError;
-use std::path::PathBuf;
+use std::path::Path;
 use thiserror::Error;
 
 #[cfg(feature = "exif")]
@@ -8,6 +8,7 @@ pub mod exif_loader;
 pub use exif_loader::ExifLoader;
 
 mod general_loader;
+pub use general_loader::GeneralLoader;
 
 #[derive(Clone, Debug)]
 pub struct LocData<TimeError: StdError, LocationError: StdError> {
@@ -58,7 +59,7 @@ pub trait DataLoader {
     /// Error preventing loading *any* data from a file, other than already provided in [`GenericFatalError`]
     type FatalError: StdError;
 
-    fn get_data(&self, file: PathBuf) -> Result<LoaderSpecificLocData<Self>, Self::FatalError>;
+    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<Self>, Self::FatalError>;
 
     /// List of file extensions this loader supports
     fn supported_extensions(&self) -> Vec<String>;
