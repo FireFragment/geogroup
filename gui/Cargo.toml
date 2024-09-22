@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+geogroup_backend = { path = "../backend" }
 eframe = "0.28.0"
-egui-file-dialog = "0.6.1"
 egui_extras = "0.28.0"
 env_logger = { version = "0.10", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
+rfd = "0.15.0"
+egui_inbox = "0.5.0"

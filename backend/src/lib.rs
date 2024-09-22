@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub use geogroup_algo as algorithm;
 pub use geogroup_common::*;
@@ -26,4 +26,16 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<&Path> {
         .collect();
 
     algorithm::sort(data, algorithm::Params::default()).map_leafs(&|(_, f)| f)
+}
+
+pub fn load_directory(path: PathBuf) -> std::io::Result<HiearchyItem<PathBuf>> {
+    if path.is_dir() {
+        Ok(HiearchyItem::Group(
+            path.read_dir()?
+                .map(|file| load_directory(file?.path())) // TODO: Maybe single failed files shouldn't fail the entire function
+                .collect::<Result<_, _>>()?,
+        ))
+    } else {
+        Ok(HiearchyItem::Item(path))
+    }
 }
