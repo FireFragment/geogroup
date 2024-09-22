@@ -158,33 +158,16 @@ fn show_hiearchy(ui: &mut Ui, hiearchy: &backend::HiearchyItem<PathBuf>, id: imp
 fn show_hiearchy_in_grid(ui: &mut Ui, hiearchy: &backend::HiearchyItem<PathBuf>) {
     match hiearchy {
         geogroup_backend::HiearchyItem::Group(group) => {
-            egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                Id::with(ui.id(), "hiearchy_dir_collapsing"),
-                true,
-            )
-            .show_header(ui, |ui| {
-                hiearchy_row(ui, "Directory");
-            })
-            .body(|ui| {
-                for (id, item) in group.iter().enumerate() {
-                    ui.push_id(id, |ui| show_hiearchy_in_grid(ui, item));
+            ui.collapsing("Directory", |ui| {
+                for (idx, item) in group.iter().enumerate() {
+                    ui.push_id(idx, |ui| show_hiearchy_in_grid(ui, item));
                 }
             });
         }
         geogroup_backend::HiearchyItem::Item(path) => {
-            hiearchy_row(ui, path.file_name().unwrap().to_str().unwrap());
+            ui.label(path.file_name().unwrap().to_str().unwrap());
         }
     }
-}
-
-fn hiearchy_row(ui: &mut Ui, item: &str) {
-    ui.selectable_label(false, item);
-    ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), 0.0),
-        Layout::right_to_left(Align::Center),
-        |ui| ui.button("Dissolve"),
-    );
 }
 
 fn error_ui(ui: &mut Ui, error: &str) {
