@@ -35,8 +35,21 @@ struct App {
 enum AppContent {
     WelcomePage(WelcomePage),
     MainPage {
+        pane: PaneContent,
         hiearchy: backend::HiearchyItem<PathBuf>,
+        flatten_mode: Option<FlattenMode>,
     },
+}
+
+enum PaneContent {
+    Flatten,
+    LoadData,
+}
+
+#[derive(PartialEq, Eq, Clone)]
+enum FlattenMode {
+    Flatten,
+    OnlyRoot,
 }
 
 enum WelcomePage {
@@ -61,9 +74,28 @@ impl eframe::App for App {
         match &mut self.content {
             AppContent::WelcomePage(welcome_page) => welcome_page.draw(ctx, &self.inbox),
 
-            AppContent::MainPage { hiearchy } => {
+            AppContent::MainPage {
+                hiearchy,
+                pane,
+                flatten_mode,
+            } => {
+                egui::SidePanel::left("the wizard pane").show(ctx, |ui| match pane {
+                    PaneContent::Flatten => {
+                        ui.heading("Step 1: Subdirectories");
+                        ui.label("In the directory you've chosen, there are some subdirectories. Please choose what to do with files in those subdirectories");
+
+                        ui.radio_value(flatten_mode, Some(FlattenMode::Flatten), "Use all files");
+                        ui.radio_value(flatten_mode, Some(FlattenMode::OnlyRoot), "Skip files in subdirectories");
+
+                        ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
+                            ui.add_enabled(flatten_mode.is_some(), Button::new("Next"));
+                        })
+                    }
+                    PaneContent::LoadData => todo!(),
+                });
+
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.centered_and_justified(|ui| show_hiearchy(ui, hiearchy, "photo tree"))
+                    ui.centered_and_justified(|ui| show_hiearchy(ui, hiearchy, flatten_mode))
                 });
             }
         }
@@ -137,7 +169,11 @@ impl WelcomePage {
                     // you can just ignore the error
                     sender
                         .send(Message::SetContent(match res {
-                            Ok(hiearchy) => AppContent::MainPage { hiearchy },
+                            Ok(hiearchy) => AppContent::MainPage {
+                                hiearchy,
+                                pane: PaneContent::Flatten,
+                                flatten_mode: None,
+                            },
                             Err(err) => {
                                 AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
                             }
@@ -151,26 +187,51 @@ impl WelcomePage {
     }
 }
 
-fn show_hiearchy(ui: &mut Ui, hiearchy: &backend::HiearchyItem<PathBuf>, id: impl std::hash::Hash) {
-    ui.vertical(|ui| show_hiearchy_in_grid(ui, hiearchy));
+fn show_hiearchy(
+    ui: &mut Ui,
+    hiearchy: &backend::HiearchyItem<PathBuf>,
+    flatten_mode: &Option<FlattenMode>,
+) {
+    ui.vertical(|ui| show_hiearchy_inner(ui, hiearchy, flatten_mode, true));
 }
 
-fn show_hiearchy_in_grid(ui: &mut Ui, hiearchy: &backend::HiearchyItem<PathBuf>) {
+fn show_hiearchy_inner(
+    ui: &mut Ui,
+    hiearchy: &backend::HiearchyItem<PathBuf>,
+    flatten_mode: &Option<FlattenMode>,
+    root: bool,
+) {
     match hiearchy {
         geogroup_backend::HiearchyItem::Group(group) => {
-            egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                Id::with(ui.id(), "hiearchy_dir_collapsing"),
-                true,
-            )
-            .show_header(ui, |ui| {
-                hiearchy_row(ui, "Directory");
-            })
-            .body(|ui| {
-                for (id, item) in group.iter().enumerate() {
-                    ui.push_id(id, |ui| show_hiearchy_in_grid(ui, item));
+            match flatten_mode {
+                None => {
+                    egui::collapsing_header::CollapsingState::load_with_default_open(
+                        ui.ctx(),
+                        Id::with(ui.id(), "hiearchy_dir_collapsing"),
+                        true,
+                    )
+                    .show_header(ui, |ui| {
+                        hiearchy_row(ui, "Directory");
+                    })
+                    .body(|ui| {
+                        for (id, item) in group.iter().enumerate() {
+                            ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
+                        }
+                    });
                 }
-            });
+                Some(FlattenMode::OnlyRoot) => {
+                    if root {
+                        for (id, item) in group.iter().enumerate() {
+                            ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
+                        }
+                    }
+                }
+                Some(FlattenMode::Flatten) => {
+                    for (id, item) in group.iter().enumerate() {
+                        ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
+                    }
+                }
+            };
         }
         geogroup_backend::HiearchyItem::Item(path) => {
             hiearchy_row(ui, path.file_name().unwrap().to_str().unwrap());
