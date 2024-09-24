@@ -214,7 +214,7 @@ fn show_hiearchy_inner(
     match hiearchy {
         geogroup_backend::HiearchyItem::Group(group) => {
             match flatten_mode {
-                None => {
+                None | Some(FlattenMode::Flatten) => {
                     egui::collapsing_header::CollapsingState::load_with_default_open(
                         ui.ctx(),
                         Id::with(ui.id(), "hiearchy_dir_collapsing"),
@@ -234,11 +234,6 @@ fn show_hiearchy_inner(
                         for (id, item) in group.iter().enumerate() {
                             ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
                         }
-                    }
-                }
-                Some(FlattenMode::Flatten) => {
-                    for (id, item) in group.iter().enumerate() {
-                        ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
                     }
                 }
             };
