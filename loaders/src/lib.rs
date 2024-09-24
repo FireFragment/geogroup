@@ -11,7 +11,10 @@ mod general_loader;
 pub use general_loader::GeneralLoader;
 
 #[derive(Clone, Debug)]
-pub struct LocData<TimeError: StdError, LocationError: StdError> {
+pub struct LocData<
+    TimeError: StdError = <GeneralLoader as DataLoader>::TimeError,
+    LocationError: StdError = <GeneralLoader as DataLoader>::LocationError,
+> {
     /// Time range of the file.
     /// First element must always be before or equal to the second element.
     ///
