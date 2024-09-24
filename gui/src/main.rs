@@ -88,10 +88,18 @@ impl eframe::App for App {
                         ui.radio_value(flatten_mode, Some(FlattenMode::OnlyRoot), "Skip files in subdirectories");
 
                         ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                            ui.add_enabled(flatten_mode.is_some(), Button::new("Next"));
-                        })
-                    }
-                    PaneContent::LoadData => todo!(),
+                            let clicked = ui.add_enabled(flatten_mode.is_some(), Button::new("Next")).clicked();
+
+                            if clicked {
+                                *pane = PaneContent::LoadData;
+                            }
+                        });
+                    },
+                    PaneContent::LoadData => {
+                        ui.heading("Step 2: Loading data");
+
+                        ui.horizontal(|ui| {ui.spinner(); ui.label("Loading data from files...")});
+                    },
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -192,7 +200,9 @@ fn show_hiearchy(
     hiearchy: &backend::HiearchyItem<PathBuf>,
     flatten_mode: &Option<FlattenMode>,
 ) {
-    ui.vertical(|ui| show_hiearchy_inner(ui, hiearchy, flatten_mode, true));
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        ui.vertical_centered_justified(|ui| show_hiearchy_inner(ui, hiearchy, flatten_mode, true));
+    });
 }
 
 fn show_hiearchy_inner(
@@ -240,12 +250,14 @@ fn show_hiearchy_inner(
 }
 
 fn hiearchy_row(ui: &mut Ui, item: &str) {
-    ui.selectable_label(false, item);
-    ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), 0.0),
-        Layout::right_to_left(Align::Center),
-        |ui| ui.button("Dissolve"),
-    );
+    ui.horizontal(|ui| {
+        ui.selectable_label(false, item);
+        ui.allocate_ui_with_layout(
+            Vec2::new(ui.available_width(), 0.0),
+            Layout::right_to_left(Align::Center),
+            |ui| ui.button("Dissolve"),
+        );
+    });
 }
 
 fn error_ui(ui: &mut Ui, error: &str) {
