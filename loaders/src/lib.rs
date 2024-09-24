@@ -9,6 +9,7 @@ pub use exif_loader::ExifLoader;
 
 mod general_loader;
 pub use general_loader::GeneralLoader;
+pub use general_loader::LoadingReturnValue;
 
 #[derive(Clone, Debug)]
 pub struct LocData<

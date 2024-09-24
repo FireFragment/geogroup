@@ -3,12 +3,18 @@ use super::*;
 /// A loader combining all the loaders in this crate
 pub struct GeneralLoader;
 
+/// Return value when trying to load data from a file.
+pub type LoadingReturnValue = Result<
+    LoaderSpecificLocData<GeneralLoader>,
+    <general_loader::GeneralLoader as DataLoader>::FatalError,
+>;
+
 impl DataLoader for GeneralLoader {
     type FatalError = FatalError;
     type LocationError = LocationError;
     type TimeError = TimeError;
 
-    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<Self>, Self::FatalError> {
+    fn get_data(&self, file: &Path) -> LoadingReturnValue {
         if !file.is_file() {
             return Err(FatalError::NotAFile);
         };
