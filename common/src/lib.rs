@@ -15,6 +15,13 @@ impl<I> HiearchyItem<I> {
             HiearchyItem::Item(it) => HiearchyItem::Item(fun(it)),
         }
     }
+
+    pub fn leaves_mut<'s>(&'s mut self) -> Box<dyn Iterator<Item = &mut I> + 's> {
+        match self {
+            HiearchyItem::Group(g) => Box::new(g.iter_mut().flat_map(|item| item.leaves_mut())),
+            HiearchyItem::Item(it) => Box::new(std::iter::once(it)),
+        }
+    }
 }
 
 impl<F: fmt::Display> HiearchyItem<F> {
