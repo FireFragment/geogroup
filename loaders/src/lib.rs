@@ -68,3 +68,7 @@ pub trait DataLoader {
     /// List of file extensions this loader supports
     fn supported_extensions(&self) -> Vec<String>;
 }
+
+pub fn get_data(file: &Path) -> LoadingReturnValue {
+    GeneralLoader.get_data(file)
+}
