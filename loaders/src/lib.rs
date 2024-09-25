@@ -13,8 +13,8 @@ pub use general_loader::LoadingReturnValue;
 
 #[derive(Clone, Debug)]
 pub struct LocData<
-    TimeError: StdError = <GeneralLoader as DataLoader>::TimeError,
-    LocationError: StdError = <GeneralLoader as DataLoader>::LocationError,
+    TimeError = <GeneralLoader as DataLoader>::TimeError,
+    LocationError = <GeneralLoader as DataLoader>::LocationError,
 > {
     /// Time range of the file.
     /// First element must always be before or equal to the second element.
@@ -28,18 +28,32 @@ pub struct LocData<
     pub location: Result<geo::Rect, LocationError>,
 }
 
-impl<FromTimeError: StdError, FromLocationError: StdError>
-    LocData<FromTimeError, FromLocationError>
-{
+impl<FromTimeError, FromLocationError> LocData<FromTimeError, FromLocationError> {
     pub fn convert_errors<
-        ToTimeError: StdError + From<FromTimeError>,
-        ToLocationError: StdError + From<FromLocationError>,
+        ToTimeError: From<FromTimeError>,
+        ToLocationError: From<FromLocationError>,
     >(
         self,
     ) -> LocData<ToTimeError, ToLocationError> {
         LocData {
             time: self.time.map_err(From::from),
             location: self.location.map_err(From::from),
+        }
+    }
+
+    pub fn map_errors<
+        ToTimeError,
+        ToLocationError,
+        TimeFn: FnOnce(FromTimeError) -> ToTimeError,
+        LocFn: FnOnce(FromLocationError) -> ToLocationError,
+    >(
+        self,
+        time_fn: TimeFn,
+        loc_fn: LocFn,
+    ) -> LocData<ToTimeError, ToLocationError> {
+        LocData {
+            time: self.time.map_err(time_fn),
+            location: self.location.map_err(loc_fn),
         }
     }
 }
