@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 geogroup_backend = { path = "../backend" }
-eframe = "0.28.0"
-egui_extras = "0.28.0"
+eframe = "0.29.1"
+egui_extras = "0.29.1"
 env_logger = { version = "0.10", default-features = false, features = [
     "auto-color",
     "humantime",

@@ -2,7 +2,7 @@
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use egui_inbox::UiInbox;
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use eframe::*;
 use egui::*;
@@ -36,14 +36,15 @@ enum AppContent {
     WelcomePage(WelcomePage),
     MainPage {
         pane: PaneContent,
-        hiearchy: backend::HiearchyItem<PathBuf>,
+        hiearchy: Vec<backend::HiearchyItem<PathBuf>>,
         flatten_mode: Option<FlattenMode>,
-    },
+        selection: Vec<usize>,
+     },
 }
 
 enum PaneContent {
     Flatten,
-    LoadData,
+    LoadData { in_progress: bool },
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -66,7 +67,6 @@ impl Default for AppContent {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.inbox.set_ctx(ctx);
         for message in self.inbox.read_without_ctx() {
             message.perform(self);
         }
@@ -78,6 +78,7 @@ impl eframe::App for App {
                 hiearchy,
                 pane,
                 flatten_mode,
+                selection
             } => {
                 egui::SidePanel::left("the wizard pane").show(ctx, |ui| match pane {
                     PaneContent::Flatten => {
@@ -91,19 +92,43 @@ impl eframe::App for App {
                             let clicked = ui.add_enabled(flatten_mode.is_some(), Button::new("Next")).clicked();
 
                             if clicked {
-                                *pane = PaneContent::LoadData;
+                                let sender = self.inbox.sender();
+                                let cloned_hiearchy = hiearchy.clone();
+
+                                std::thread::spawn(move || {
+
+
+                                    println!("working...");
+                                    // Send will return an error if the receiver has been dropped
+                                    // but unless you have a long running task that will send multiple messages
+                                    // you can just ignore the error
+                                    sender
+                                        .send(Message::SetContent(AppContent::MainPage {
+                                            hiearchy: cloned_hiearchy,
+                                            pane: PaneContent::LoadData { in_progress: false },
+                                            flatten_mode: None,
+                                            selection: Vec::new()
+                                        }))
+                                        .ok();
+
+                                        println!("done");
+                                });
+
+                                *pane = PaneContent::LoadData { in_progress: true };
                             }
                         });
                     },
-                    PaneContent::LoadData => {
+                    PaneContent::LoadData { in_progress } => {
                         ui.heading("Step 2: Loading data");
 
-                        ui.horizontal(|ui| {ui.spinner(); ui.label("Loading data from files...")});
+                        if *in_progress {
+                            ui.horizontal(|ui| {ui.spinner(); ui.label("Loading data from files...")});
+                        }
                     },
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.centered_and_justified(|ui| show_hiearchy(ui, hiearchy, flatten_mode))
+                show_hiearchy(ui, hiearchy, selection, flatten_mode)
                 });
             }
         }
@@ -171,22 +196,24 @@ impl WelcomePage {
                 let sender = inbox.sender();
 
                 std::thread::spawn(move || {
+
+                    use geogroup_backend::HiearchyItem as HI;
                     let res = backend::load_directory(folder);
                     // Send will return an error if the receiver has been dropped
                     // but unless you have a long running task that will send multiple messages
                     // you can just ignore the error
                     sender
                         .send(Message::SetContent(match res {
-                            Ok(hiearchy) => AppContent::MainPage {
+                            Ok(HI::Group(hiearchy)) => AppContent::MainPage {
                                 hiearchy,
                                 pane: PaneContent::Flatten,
                                 flatten_mode: None,
+                                selection: Vec::new()
                             },
-                            Err(err) => {
-                                AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
-                            }
+                            Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(String::from("Please choose a directory"))),
+                            Err(err) => AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
                         }))
-                        .ok()
+                        .ok();
                 });
 
                 *self = Self::Loading("Loading files".into());
@@ -195,70 +222,78 @@ impl WelcomePage {
     }
 }
 
+
 fn show_hiearchy(
     ui: &mut Ui,
-    hiearchy: &backend::HiearchyItem<PathBuf>,
+    hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
+    selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
 ) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.vertical_centered_justified(|ui| show_hiearchy_inner(ui, hiearchy, flatten_mode, true));
+    ui.horizontal(|ui| {
+        show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode)
     });
 }
 
 fn show_hiearchy_inner(
     ui: &mut Ui,
-    hiearchy: &backend::HiearchyItem<PathBuf>,
+    hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
+    selected_vec: &mut Vec<usize>,
+    current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
-    root: bool,
 ) {
-    match hiearchy {
-        geogroup_backend::HiearchyItem::Group(group) => {
-            match flatten_mode {
-                None => {
-                    egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(),
-                        Id::with(ui.id(), "hiearchy_dir_collapsing"),
-                        true,
-                    )
-                    .show_header(ui, |ui| {
-                        hiearchy_row(ui, "Directory");
-                    })
-                    .body(|ui| {
-                        for (id, item) in group.iter().enumerate() {
-                            ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
-                        }
+    assert!(selected_vec.len() >= current_depth);
+
+    use egui_extras::{TableBuilder, Column};
+
+
+    let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
+        if let geogroup_backend::HiearchyItem::Group(g) = &hiearchy[*selection_idx] {
+            Some(g)
+        } else { None }
+    } else { None };
+
+    ui.push_id(current_depth, |ui|
+        TableBuilder::new(ui)
+            .column(if selected_group.is_some() { Column::exact(256.0) } else { Column::remainder() })
+            .sense(Sense::click())
+            .body(|body| {
+                body.rows(16.0, hiearchy.len(), |mut row| {
+                    let idx = row.index();
+
+                    row.set_selected(selected_vec.get(current_depth).map(|s| *s == row.index()).unwrap_or(false));
+
+                    row.col(|ui| {
+                        match &hiearchy[idx] {
+                            geogroup_backend::HiearchyItem::Group(_) => ui.label("Directory"),
+                            geogroup_backend::HiearchyItem::Item(path) =>
+                                ui.label(
+                                    path.file_name()
+                                    .unwrap_or(OsStr::new("[invalid filename]"))
+                                    .to_str().unwrap_or("[invalid filename]")
+                                )
+                        };
                     });
-                }
-                Some(FlattenMode::OnlyRoot) => {
-                    if root {
-                        for (id, item) in group.iter().enumerate() {
-                            ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
+
+                    if row.response().clicked() {
+                        println!("Clicked");
+                        if let Some(selection_idx) = selected_vec.get_mut(current_depth) {
+                            *selection_idx = idx;
+                            selected_vec.truncate(current_depth + 1);
+                        } else {
+                            selected_vec.push(idx);
                         }
                     }
-                }
-                Some(FlattenMode::Flatten) => {
-                    for (id, item) in group.iter().enumerate() {
-                        ui.push_id(id, |ui| show_hiearchy_inner(ui, item, flatten_mode, false));
-                    }
-                }
-            };
-        }
-        geogroup_backend::HiearchyItem::Item(path) => {
-            hiearchy_row(ui, path.file_name().unwrap().to_str().unwrap());
-        }
+                });
+            })
+    );
+
+    if let Some(g) = selected_group {
+        show_hiearchy_inner(ui, g, selected_vec, current_depth + 1, flatten_mode)
     }
+
+
 }
 
-fn hiearchy_row(ui: &mut Ui, item: &str) {
-    ui.horizontal(|ui| {
-        ui.selectable_label(false, item);
-        ui.allocate_ui_with_layout(
-            Vec2::new(ui.available_width(), 0.0),
-            Layout::right_to_left(Align::Center),
-            |ui| ui.button("Dissolve"),
-        );
-    });
-}
 
 fn error_ui(ui: &mut Ui, error: &str) {
     ui.colored_label(ui.visuals().error_fg_color, format!("⊗ {}", error));
