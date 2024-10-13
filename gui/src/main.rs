@@ -226,7 +226,7 @@ fn show_hiearchy(
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
 ) {
-    ui.horizontal(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
+    ui.horizontal_centered(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
 }
 
 fn show_hiearchy_inner(
