@@ -94,27 +94,27 @@ fn sort_to_binary_tree_with_distances<P>(
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
 fn flatten<P: Point + Clone, D>(
     bintree: BinTree<(P, D), ()>,
-    depth: Depth,
+    depth_param: DepthParam,
 ) -> HiearchyItem<(P, D)> {
-    flatten_inner(bintree, depth).flattened_group
+    flatten_inner(bintree, depth_param).flattened_group
 }
 
 /// Flatten, but also return addidional data in [`FlattenRet`] useful for recursion
 fn flatten_inner<P: Point + Clone, D>(
     bintree: BinTree<(P, D), ()>,
-    depth: Depth,
+    depth_param: DepthParam,
 ) -> FlattenRet<P, D> {
     match bintree {
         BinTree::InnerNode { children, data: _ } => {
-            let [first, second] = children.map(|subtree| flatten_inner(subtree, depth));
+            let [first, second] = children.map(|subtree| flatten_inner(subtree, depth_param));
             let highest_inner_distance = first.last_point.distance(&second.first_point);
             let first_point = first.first_point.clone();
             let last_point = second.last_point.clone();
 
             let mut final_group = Vec::new();
 
-            dissolve_if_needed(first, &mut final_group, depth, highest_inner_distance);
-            dissolve_if_needed(second, &mut final_group, depth, highest_inner_distance);
+            dissolve_if_needed(first, &mut final_group, depth_param, highest_inner_distance);
+            dissolve_if_needed(second, &mut final_group, depth_param, highest_inner_distance);
 
             FlattenRet {
                 highest_inner_distance,
@@ -135,13 +135,13 @@ fn flatten_inner<P: Point + Clone, D>(
 fn dissolve_if_needed<P: Point, D>(
     group_to_dissolve: FlattenRet<P, D>,
     final_group: &mut Vec<HiearchyItem<(P, D)>>,
-    depth: Depth,
+    depth: DepthParam,
     highest_inner_distance: Distance,
 ) {
     // How "weak" is group
-    let first_group_weakness = (Depth::MAX as u128
+    let first_group_weakness = if highest_inner_distance == 0 { u8::MAX } else {(DepthParam::MAX as u128
         * group_to_dissolve.highest_inner_distance as u128
-        / highest_inner_distance as u128) as Depth;
+        / highest_inner_distance as u128) as u8};
 
     // lower or equal condition to not trigger the panic in case that highest_inner_distance = 0
     if first_group_weakness <= depth {

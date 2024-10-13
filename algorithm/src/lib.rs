@@ -9,13 +9,13 @@ pub use algo::sort_just_points;
 
 /// Distance between two [points](Point)
 pub type Distance = u64;
-pub type Depth = u8;
+pub type DepthParam = u8;
 
 /// Parameters of the algorithm influencing how it sorts
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Params {
-    pub depth: Depth,
+    pub depth: DepthParam,
 }
 
 impl Default for Params {
