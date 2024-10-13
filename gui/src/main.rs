@@ -2,7 +2,7 @@
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use egui_inbox::UiInbox;
-use std::{ffi::OsStr, path::PathBuf};
+use std::{ffi::OsStr, path::{Path, PathBuf}};
 
 use eframe::*;
 use egui::*;
@@ -24,6 +24,7 @@ fn main() -> eframe::Result {
 
 enum Message {
     SetContent(AppContent),
+    SetHiearchy(Vec<backend::HiearchyItem<PathBuf>>),
 }
 
 #[derive(Default)]
@@ -36,15 +37,15 @@ enum AppContent {
     WelcomePage(WelcomePage),
     MainPage {
         pane: PaneContent,
+        src_dir: PathBuf,
         hiearchy: Vec<backend::HiearchyItem<PathBuf>>,
         flatten_mode: Option<FlattenMode>,
         selection: Vec<usize>,
-     },
+    },
 }
 
 enum PaneContent {
-    Flatten,
-    LoadData { in_progress: bool },
+    Sort,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -77,58 +78,37 @@ impl eframe::App for App {
             AppContent::MainPage {
                 hiearchy,
                 pane,
+                src_dir,
                 flatten_mode,
-                selection
+                selection,
             } => {
                 egui::SidePanel::left("the wizard pane").show(ctx, |ui| match pane {
-                    PaneContent::Flatten => {
-                        ui.heading("Step 1: Subdirectories");
-                        ui.label("In the directory you've chosen, there are some subdirectories. Please choose what to do with files in those subdirectories");
-
-                        ui.radio_value(flatten_mode, Some(FlattenMode::Flatten), "Use all files");
-                        ui.radio_value(flatten_mode, Some(FlattenMode::OnlyRoot), "Skip files in subdirectories");
+                    PaneContent::Sort => {
+                        ui.heading("Sort files");
 
                         ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                            let clicked = ui.add_enabled(flatten_mode.is_some(), Button::new("Next")).clicked();
+                            let clicked = ui
+                                .add(Button::new("Sort"))
+                                .clicked();
 
                             if clicked {
                                 let sender = self.inbox.sender();
-                                let cloned_hiearchy = hiearchy.clone();
+                                let cloned_src_dir = src_dir.clone();
 
                                 std::thread::spawn(move || {
+                                    println!("Sorting...");
+                                    let sorted = backend::sort_from_fs_to_mem(&cloned_src_dir);
 
-
-                                    println!("working...");
-                                    // Send will return an error if the receiver has been dropped
-                                    // but unless you have a long running task that will send multiple messages
-                                    // you can just ignore the error
-                                    sender
-                                        .send(Message::SetContent(AppContent::MainPage {
-                                            hiearchy: cloned_hiearchy,
-                                            pane: PaneContent::LoadData { in_progress: false },
-                                            flatten_mode: None,
-                                            selection: Vec::new()
-                                        }))
-                                        .ok();
-
-                                        println!("done");
+                                    println!("Done.");
+                                    sender.send(Message::SetHiearchy(vec![sorted]))
                                 });
-
-                                *pane = PaneContent::LoadData { in_progress: true };
                             }
                         });
-                    },
-                    PaneContent::LoadData { in_progress } => {
-                        ui.heading("Step 2: Loading data");
-
-                        if *in_progress {
-                            ui.horizontal(|ui| {ui.spinner(); ui.label("Loading data from files...")});
-                        }
-                    },
+                    }
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                show_hiearchy(ui, hiearchy, selection, flatten_mode)
+                    show_hiearchy(ui, hiearchy, selection, flatten_mode)
                 });
             }
         }
@@ -139,6 +119,19 @@ impl Message {
     pub fn perform(self, app: &mut App) {
         match self {
             Message::SetContent(content) => app.content = content,
+            Message::SetHiearchy(hiearchy_to_set) => {
+                if let AppContent::MainPage {
+                    pane: _,
+                    src_dir: _,
+                    ref mut hiearchy,
+                    flatten_mode: _,
+                    selection: _,
+                } = app.content
+                {
+                    *hiearchy = hiearchy_to_set;
+                } else { /* TODO: Warning */
+                }
+            }
         }
     }
 }
@@ -196,9 +189,8 @@ impl WelcomePage {
                 let sender = inbox.sender();
 
                 std::thread::spawn(move || {
-
                     use geogroup_backend::HiearchyItem as HI;
-                    let res = backend::load_directory(folder);
+                    let res = backend::load_directory(&folder);
                     // Send will return an error if the receiver has been dropped
                     // but unless you have a long running task that will send multiple messages
                     // you can just ignore the error
@@ -206,12 +198,17 @@ impl WelcomePage {
                         .send(Message::SetContent(match res {
                             Ok(HI::Group(hiearchy)) => AppContent::MainPage {
                                 hiearchy,
-                                pane: PaneContent::Flatten,
+                                pane: PaneContent::Sort,
+                                src_dir: folder,
                                 flatten_mode: None,
-                                selection: Vec::new()
+                                selection: Vec::new(),
                             },
-                            Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(String::from("Please choose a directory"))),
-                            Err(err) => AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
+                            Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(
+                                String::from("Please choose a directory"),
+                            )),
+                            Err(err) => {
+                                AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
+                            }
                         }))
                         .ok();
                 });
@@ -222,16 +219,13 @@ impl WelcomePage {
     }
 }
 
-
 fn show_hiearchy(
     ui: &mut Ui,
     hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
 ) {
-    ui.horizontal(|ui| {
-        show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode)
-    });
+    ui.horizontal(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
 }
 
 fn show_hiearchy_inner(
@@ -243,40 +237,51 @@ fn show_hiearchy_inner(
 ) {
     assert!(selected_vec.len() >= current_depth);
 
-    use egui_extras::{TableBuilder, Column};
-
+    use egui_extras::{Column, TableBuilder};
 
     let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
         if let geogroup_backend::HiearchyItem::Group(g) = &hiearchy[*selection_idx] {
             Some(g)
-        } else { None }
-    } else { None };
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
-    ui.push_id(current_depth, |ui|
+    ui.push_id(current_depth, |ui| {
         TableBuilder::new(ui)
-            .column(if selected_group.is_some() { Column::exact(256.0) } else { Column::remainder() })
+            .column(if selected_group.is_some() {
+                Column::exact(256.0)
+            } else {
+                Column::remainder()
+            })
             .sense(Sense::click())
             .body(|body| {
                 body.rows(16.0, hiearchy.len(), |mut row| {
                     let idx = row.index();
 
-                    row.set_selected(selected_vec.get(current_depth).map(|s| *s == row.index()).unwrap_or(false));
+                    row.set_selected(
+                        selected_vec
+                            .get(current_depth)
+                            .map(|s| *s == row.index())
+                            .unwrap_or(false),
+                    );
 
                     row.col(|ui| {
                         match &hiearchy[idx] {
-                            geogroup_backend::HiearchyItem::Group(_) => ui.add(
+                            geogroup_backend::HiearchyItem::Group(_) => {
+                                ui.add(Label::new("🗁 Directory").selectable(false))
+                            }
+                            geogroup_backend::HiearchyItem::Item(path) => ui.add(
                                 Label::new(
-                                    "🗁 Directory"
-                                ).selectable(false)
-                            ),
-                            geogroup_backend::HiearchyItem::Item(path) =>
-                                ui.add(
-                                    Label::new(
-                                        path.file_name()
+                                    path.file_name()
                                         .unwrap_or(OsStr::new("[invalid filename]"))
-                                        .to_str().unwrap_or("[invalid filename]")
-                                    ).selectable(false)
+                                        .to_str()
+                                        .unwrap_or("[invalid filename]"),
                                 )
+                                .selectable(false),
+                            ),
                         };
                     });
 
@@ -291,15 +296,12 @@ fn show_hiearchy_inner(
                     }
                 });
             })
-    );
+    });
 
     if let Some(g) = selected_group {
         show_hiearchy_inner(ui, g, selected_vec, current_depth + 1, flatten_mode)
     }
-
-
 }
-
 
 fn error_ui(ui: &mut Ui, error: &str) {
     ui.colored_label(ui.visuals().error_fg_color, format!("⊗ {}", error));

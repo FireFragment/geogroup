@@ -6,14 +6,16 @@ pub use geogroup_loaders as loaders;
 use loaders::DataLoader as _;
 
 /// Sort photos from filesystem and return the resulting the [hiearchy](HiearchyItem)
-pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<&Path> {
+pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
     let mut data: Vec<_> = path
-        .ancestors()
+        .read_dir()
+        .expect("Not a dir") // TODO: Handle
+        .flatten() // Maybe this could also be handled better instead of flattening all the options
         .map(|file| {
-            let loc_data = loaders::GeneralLoader.get_data(file)?;
-            Ok((file, loc_data.location?, loc_data.time?))
+            let loc_data = loaders::GeneralLoader.get_data(&file.path())?;
+            Ok((file.path(), loc_data.location?, loc_data.time?))
         })
-        .filter_map(|it: Result<_, Box<dyn std::error::Error>>| it.ok()) // TODO: Handle it better, don't just silently ignore failures
+        .filter_map(|it: Result<_, Box<dyn std::error::Error>>| { it.ok() }) // TODO: Handle it better, don't just silently ignore failures
         .collect();
 
     // Ignore the second time for now (until algorithm supports it)
@@ -25,17 +27,19 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<&Path> {
         .map(|(file, rect, _)| (rect.center(), file))
         .collect();
 
+    dbg!(&data);
+
     algorithm::sort(data, algorithm::Params::default()).map_leafs(&|(_, f)| f)
 }
 
-pub fn load_directory(path: PathBuf) -> std::io::Result<HiearchyItem<PathBuf>> {
+pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf>> {
     if path.is_dir() {
         Ok(HiearchyItem::Group(
             path.read_dir()?
-                .map(|file| load_directory(file?.path())) // TODO: Maybe single failed files shouldn't fail the entire function
+                .map(|file| load_directory(&file?.path())) // TODO: Maybe single failed files shouldn't fail the entire function
                 .collect::<Result<_, _>>()?,
         ))
     } else {
-        Ok(HiearchyItem::Item(path))
+        Ok(HiearchyItem::Item(path.to_owned()))
     }
 }
