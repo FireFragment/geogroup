@@ -125,9 +125,10 @@ impl Message {
                     src_dir: _,
                     ref mut hiearchy,
                     flatten_mode: _,
-                    selection: _,
+                    ref mut selection,
                 } = app.content
                 {
+                    *selection = Vec::new();
                     *hiearchy = hiearchy_to_set;
                 } else { /* TODO: Warning */
                 }
