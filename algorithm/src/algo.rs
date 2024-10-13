@@ -139,7 +139,7 @@ fn dissolve_if_needed<P: Point, D>(
     highest_inner_distance: Distance,
 ) {
     // How "weak" is group
-    let first_group_weakness = if highest_inner_distance == 0 { u8::MAX } else {(DepthParam::MAX as u128
+    let first_group_weakness = if highest_inner_distance == 0 { 0 } else {(DepthParam::MAX as u128
         * group_to_dissolve.highest_inner_distance as u128
         / highest_inner_distance as u128) as u8};
 
