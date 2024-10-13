@@ -27,8 +27,6 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
         .map(|(file, rect, _)| (rect.center(), file))
         .collect();
 
-    dbg!(&data);
-
     algorithm::sort(data, algorithm::Params::default()).map_leafs(&|(_, f)| f)
 }
 
