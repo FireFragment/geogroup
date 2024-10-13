@@ -264,12 +264,18 @@ fn show_hiearchy_inner(
 
                     row.col(|ui| {
                         match &hiearchy[idx] {
-                            geogroup_backend::HiearchyItem::Group(_) => ui.label("Directory"),
+                            geogroup_backend::HiearchyItem::Group(_) => ui.add(
+                                Label::new(
+                                    "🗁 Directory"
+                                ).selectable(false)
+                            ),
                             geogroup_backend::HiearchyItem::Item(path) =>
-                                ui.label(
-                                    path.file_name()
-                                    .unwrap_or(OsStr::new("[invalid filename]"))
-                                    .to_str().unwrap_or("[invalid filename]")
+                                ui.add(
+                                    Label::new(
+                                        path.file_name()
+                                        .unwrap_or(OsStr::new("[invalid filename]"))
+                                        .to_str().unwrap_or("[invalid filename]")
+                                    ).selectable(false)
                                 )
                         };
                     });
