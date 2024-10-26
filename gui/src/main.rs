@@ -226,7 +226,11 @@ fn show_hiearchy(
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
 ) {
-    ui.horizontal_centered(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
+
+    egui::ScrollArea::horizontal().show(ui, |ui| {
+        ui.horizontal_centered(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
+    });
+
 }
 
 fn show_hiearchy_inner(
