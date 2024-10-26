@@ -82,7 +82,7 @@ impl eframe::App for App {
                 flatten_mode,
                 selection,
             } => {
-                egui::SidePanel::left("the wizard pane").show(ctx, |ui| match pane {
+                egui::TopBottomPanel::bottom("the wizard pane").show(ctx, |ui| match pane {
                     PaneContent::Sort => {
                         ui.heading("Sort files");
 
