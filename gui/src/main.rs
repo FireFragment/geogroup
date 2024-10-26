@@ -96,10 +96,7 @@ impl eframe::App for App {
                                 let cloned_src_dir = src_dir.clone();
 
                                 std::thread::spawn(move || {
-                                    println!("Sorting...");
                                     let sorted = backend::sort_from_fs_to_mem(&cloned_src_dir);
-
-                                    println!("Done.");
                                     sender.send(Message::SetHiearchy(vec![sorted]))
                                 });
                             }
@@ -291,7 +288,6 @@ fn show_hiearchy_inner(
                     });
 
                     if row.response().clicked() {
-                        println!("Clicked");
                         if let Some(selection_idx) = selected_vec.get_mut(current_depth) {
                             *selection_idx = idx;
                             selected_vec.truncate(current_depth + 1);
