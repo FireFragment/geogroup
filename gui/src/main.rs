@@ -2,7 +2,10 @@
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use egui_inbox::UiInbox;
-use std::{ffi::OsStr, path::{Path, PathBuf}};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use eframe::*;
 use egui::*;
@@ -18,7 +21,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|cc| Ok(Box::<App>::default())),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::<App>::default())
+        }),
     )
 }
 
@@ -41,6 +47,7 @@ enum AppContent {
         hiearchy: Vec<backend::HiearchyItem<PathBuf>>,
         flatten_mode: Option<FlattenMode>,
         selection: Vec<usize>,
+        image_scale: u16,
     },
 }
 
@@ -81,15 +88,14 @@ impl eframe::App for App {
                 src_dir,
                 flatten_mode,
                 selection,
+                image_scale,
             } => {
                 egui::TopBottomPanel::bottom("the wizard pane").show(ctx, |ui| match pane {
                     PaneContent::Sort => {
                         ui.heading("Sort files");
 
                         ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                            let clicked = ui
-                                .add(Button::new("Sort"))
-                                .clicked();
+                            let clicked = ui.add(Button::new("Sort")).clicked();
 
                             if clicked {
                                 let sender = self.inbox.sender();
@@ -105,7 +111,14 @@ impl eframe::App for App {
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    show_hiearchy(ui, hiearchy, selection, flatten_mode)
+
+                    egui::menu::bar(ui, |ui| {
+                        ui.menu_button("View", |ui| {
+                            egui::Slider::new(image_scale, 32..=128).text("Image preview height").ui(ui);
+                        });
+                    });
+
+                    show_hiearchy(ui, hiearchy, selection, flatten_mode, *image_scale)
                 });
             }
         }
@@ -123,6 +136,7 @@ impl Message {
                     ref mut hiearchy,
                     flatten_mode: _,
                     ref mut selection,
+                    image_scale: _
                 } = app.content
                 {
                     *selection = Vec::new();
@@ -200,6 +214,7 @@ impl WelcomePage {
                                 src_dir: folder,
                                 flatten_mode: None,
                                 selection: Vec::new(),
+                                image_scale: 48
                             },
                             Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(
                                 String::from("Please choose a directory"),
@@ -222,12 +237,13 @@ fn show_hiearchy(
     hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
+    image_scale: u16,
 ) {
-
     egui::ScrollArea::horizontal().show(ui, |ui| {
-        ui.horizontal_centered(|ui| show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode));
+        ui.horizontal_centered(|ui| {
+            show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode, image_scale)
+        });
     });
-
 }
 
 fn show_hiearchy_inner(
@@ -236,6 +252,7 @@ fn show_hiearchy_inner(
     selected_vec: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
+    image_scale: u16,
 ) {
     assert!(selected_vec.len() >= current_depth);
 
@@ -260,47 +277,71 @@ fn show_hiearchy_inner(
             })
             .sense(Sense::click())
             .body(|body| {
-                body.rows(16.0, hiearchy.len(), |mut row| {
-                    let idx = row.index();
-
-                    row.set_selected(
-                        selected_vec
-                            .get(current_depth)
-                            .map(|s| *s == row.index())
-                            .unwrap_or(false),
-                    );
-
-                    row.col(|ui| {
-                        match &hiearchy[idx] {
-                            geogroup_backend::HiearchyItem::Group(_) => {
-                                ui.add(Label::new("🗁 Directory").selectable(false))
-                            }
-                            geogroup_backend::HiearchyItem::Item(path) => ui.add(
-                                Label::new(
-                                    path.file_name()
-                                        .unwrap_or(OsStr::new("[invalid filename]"))
-                                        .to_str()
-                                        .unwrap_or("[invalid filename]"),
-                                )
-                                .selectable(false),
-                            ),
-                        };
-                    });
-
-                    if row.response().clicked() {
-                        if let Some(selection_idx) = selected_vec.get_mut(current_depth) {
-                            *selection_idx = idx;
-                            selected_vec.truncate(current_depth + 1);
-                        } else {
-                            selected_vec.push(idx);
+                body.heterogeneous_rows(
+                    hiearchy.iter().map(|item| {
+                        use geogroup_backend::HiearchyItem as HI;
+                        match item {
+                            HI::Group(_) => 16.0,
+                            HI::Item(_) => image_scale as f32,
                         }
-                    }
-                });
+                    }),
+                    |mut row| {
+                        let idx = row.index();
+
+                        row.set_selected(
+                            selected_vec
+                                .get(current_depth)
+                                .map(|s| *s == row.index())
+                                .unwrap_or(false),
+                        );
+
+                        row.col(|ui| {
+                            match &hiearchy[idx] {
+                                geogroup_backend::HiearchyItem::Group(_) => {
+                                    ui.add(Label::new("🗁 Directory").selectable(false));
+                                }
+                                geogroup_backend::HiearchyItem::Item(path) => {
+                                    ui.horizontal_top(|ui| {
+                                        if let Some(file_path) = path.to_str() {
+                                            Image::new(format!("file://{file_path}")).ui(ui);
+                                        }
+
+                                        ui.add(
+                                            Label::new(
+                                                path.file_name()
+                                                    .unwrap_or(OsStr::new("[invalid filename]"))
+                                                    .to_str()
+                                                    .unwrap_or("[invalid filename]"),
+                                            )
+                                            .selectable(false),
+                                        )
+                                    });
+                                }
+                            };
+                        });
+
+                        if row.response().clicked() {
+                            if let Some(selection_idx) = selected_vec.get_mut(current_depth) {
+                                *selection_idx = idx;
+                                selected_vec.truncate(current_depth + 1);
+                            } else {
+                                selected_vec.push(idx);
+                            }
+                        }
+                    },
+                );
             })
     });
 
     if let Some(g) = selected_group {
-        show_hiearchy_inner(ui, g, selected_vec, current_depth + 1, flatten_mode)
+        show_hiearchy_inner(
+            ui,
+            g,
+            selected_vec,
+            current_depth + 1,
+            flatten_mode,
+            image_scale,
+        )
     }
 }
 
