@@ -15,7 +15,7 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
             let loc_data = loaders::GeneralLoader.get_data(&file.path())?;
             Ok((file.path(), loc_data.location?, loc_data.time?))
         })
-        .filter_map(|it: Result<_, Box<dyn std::error::Error>>| { it.ok() }) // TODO: Handle it better, don't just silently ignore failures
+        .filter_map(|it: Result<_, Box<dyn std::error::Error>>| it.ok()) // TODO: Handle it better, don't just silently ignore failures
         .collect();
 
     // Ignore the second time for now (until algorithm supports it)
@@ -30,12 +30,13 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
     algorithm::sort(data, algorithm::Params::default()).map_leafs(&|(_, f)| f)
 }
 
-pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf>> {
+pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf, PathBuf>> {
     if path.is_dir() {
         Ok(HiearchyItem::Group(
             path.read_dir()?
                 .map(|file| load_directory(&file?.path())) // TODO: Maybe single failed files shouldn't fail the entire function
                 .collect::<Result<_, _>>()?,
+            path.to_owned(),
         ))
     } else {
         Ok(HiearchyItem::Item(path.to_owned()))

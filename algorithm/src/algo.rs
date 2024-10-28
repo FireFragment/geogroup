@@ -125,7 +125,7 @@ fn flatten_inner<P: Point + Clone, D>(
                 highest_inner_distance,
                 first_point,
                 last_point,
-                flattened_group: HiearchyItem::Group(final_group),
+                flattened_group: HiearchyItem::Group(final_group, ()),
             }
         }
         BinTree::Leaf(item) => FlattenRet {
@@ -144,15 +144,19 @@ fn dissolve_if_needed<P: Point, D>(
     highest_inner_distance: Distance,
 ) {
     // How "weak" is group
-    let first_group_weakness = if highest_inner_distance == 0 { 0 } else {(DepthParam::MAX as u128
-        * group_to_dissolve.highest_inner_distance as u128
-        / highest_inner_distance as u128) as u8};
+    let first_group_weakness = if highest_inner_distance == 0 {
+        0
+    } else {
+        (DepthParam::MAX as u128 * group_to_dissolve.highest_inner_distance as u128
+            / highest_inner_distance as u128) as u8
+    };
 
     // lower or equal condition to not trigger the panic in case that highest_inner_distance = 0
     if first_group_weakness <= depth {
         final_group.push(group_to_dissolve.flattened_group);
     } else {
-        let HiearchyItem::Group(mut group_to_dissolve_g) = group_to_dissolve.flattened_group else {
+        let HiearchyItem::Group(mut group_to_dissolve_g, _) = group_to_dissolve.flattened_group
+        else {
             panic!(
                 "
                     Probably faulty `FlattenRet` with highest_inner_distance != 0, but it's {}.

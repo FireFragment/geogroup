@@ -28,9 +28,11 @@ fn main() -> eframe::Result {
     )
 }
 
+type Hiearchy = Vec<backend::HiearchyItem<PathBuf, String>>;
+
 enum Message {
     SetContent(AppContent),
-    SetHiearchy(Vec<backend::HiearchyItem<PathBuf>>),
+    SetHiearchy(Hiearchy),
 }
 
 #[derive(Default)]
@@ -44,7 +46,7 @@ enum AppContent {
     MainPage {
         pane: PaneContent,
         src_dir: PathBuf,
-        hiearchy: Vec<backend::HiearchyItem<PathBuf>>,
+        hiearchy: Hiearchy,
         flatten_mode: Option<FlattenMode>,
         selection: Vec<usize>,
         image_scale: u16,
@@ -103,7 +105,7 @@ impl eframe::App for App {
 
                                 std::thread::spawn(move || {
                                     let sorted = backend::sort_from_fs_to_mem(&cloned_src_dir);
-                                    sender.send(Message::SetHiearchy(vec![sorted]))
+                                    sender.send(Message::SetHiearchy(vec![sorted.map_group_data(&|_| String::from("Group"))]))
                                 });
                             }
                         });
@@ -111,10 +113,11 @@ impl eframe::App for App {
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-
                     egui::menu::bar(ui, |ui| {
                         ui.menu_button("View", |ui| {
-                            egui::Slider::new(image_scale, 32..=128).text("Image preview height").ui(ui);
+                            egui::Slider::new(image_scale, 32..=128)
+                                .text("Image preview height")
+                                .ui(ui);
                         });
                     });
 
@@ -136,7 +139,7 @@ impl Message {
                     ref mut hiearchy,
                     flatten_mode: _,
                     ref mut selection,
-                    image_scale: _
+                    image_scale: _,
                 } = app.content
                 {
                     *selection = Vec::new();
@@ -208,13 +211,24 @@ impl WelcomePage {
                     // you can just ignore the error
                     sender
                         .send(Message::SetContent(match res {
-                            Ok(HI::Group(hiearchy)) => AppContent::MainPage {
-                                hiearchy,
+                            Ok(HI::Group(hiearchy, _)) => AppContent::MainPage {
+                                hiearchy: hiearchy
+                                    .into_iter()
+                                    .map(|h| {
+                                        h.map_group_data(&|path: PathBuf| {
+                                            path.file_name()
+                                                .map(|path| path.to_str())
+                                                .flatten()
+                                                .unwrap_or("[invalid filename]")
+                                                .into()
+                                        })
+                                    })
+                                    .collect(),
                                 pane: PaneContent::Sort,
                                 src_dir: folder,
                                 flatten_mode: None,
                                 selection: Vec::new(),
-                                image_scale: 48
+                                image_scale: 48,
                             },
                             Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(
                                 String::from("Please choose a directory"),
@@ -234,7 +248,7 @@ impl WelcomePage {
 
 fn show_hiearchy(
     ui: &mut Ui,
-    hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
+    hiearchy: &Hiearchy,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
@@ -248,7 +262,7 @@ fn show_hiearchy(
 
 fn show_hiearchy_inner(
     ui: &mut Ui,
-    hiearchy: &Vec<backend::HiearchyItem<PathBuf>>,
+    hiearchy: &Hiearchy,
     selected_vec: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
@@ -259,7 +273,7 @@ fn show_hiearchy_inner(
     use egui_extras::{Column, TableBuilder};
 
     let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
-        if let geogroup_backend::HiearchyItem::Group(g) = &hiearchy[*selection_idx] {
+        if let geogroup_backend::HiearchyItem::Group(g, _) = &hiearchy[*selection_idx] {
             Some(g)
         } else {
             None
@@ -281,7 +295,7 @@ fn show_hiearchy_inner(
                     hiearchy.iter().map(|item| {
                         use geogroup_backend::HiearchyItem as HI;
                         match item {
-                            HI::Group(_) => 16.0,
+                            HI::Group(_, _) => 16.0,
                             HI::Item(_) => image_scale as f32,
                         }
                     }),
@@ -297,8 +311,13 @@ fn show_hiearchy_inner(
 
                         row.col(|ui| {
                             match &hiearchy[idx] {
-                                geogroup_backend::HiearchyItem::Group(_) => {
-                                    ui.add(Label::new("🗁 Directory").selectable(false));
+                                geogroup_backend::HiearchyItem::Group(_, name) => {
+                                    ui.add(
+                                        Label::new(format!(
+                                            "🗁 {name}"
+                                        ))
+                                        .selectable(false),
+                                    );
                                 }
                                 geogroup_backend::HiearchyItem::Item(path) => {
                                     ui.horizontal_top(|ui| {

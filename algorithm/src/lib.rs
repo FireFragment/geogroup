@@ -57,7 +57,7 @@ impl<T> From<BinTree<T, ()>> for HiearchyItem<T> {
     fn from(value: BinTree<T, ()>) -> Self {
         match value {
             BinTree::InnerNode { children, data: _ } => {
-                HiearchyItem::Group(children.map(From::from).into())
+                HiearchyItem::Group(children.map(From::from).into(), ())
             }
             BinTree::Leaf(data) => HiearchyItem::Item(data),
         }
