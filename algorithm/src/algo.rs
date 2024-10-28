@@ -114,7 +114,12 @@ fn flatten_inner<P: Point + Clone, D>(
             let mut final_group = Vec::new();
 
             dissolve_if_needed(first, &mut final_group, depth_param, highest_inner_distance);
-            dissolve_if_needed(second, &mut final_group, depth_param, highest_inner_distance);
+            dissolve_if_needed(
+                second,
+                &mut final_group,
+                depth_param,
+                highest_inner_distance,
+            );
 
             FlattenRet {
                 highest_inner_distance,
