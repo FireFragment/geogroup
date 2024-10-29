@@ -113,7 +113,7 @@ fn reverse_geocode_nocache(
 
 use address_formatter::Place;
 
-/// Returns [Place] with just fields, where both arguments share same values
+/// Returns [Place] with just fields, where both arguments share the same values
 pub fn shared(a: &Place, b: &Place) -> Place {
     a.iter()
         .filter(|(comp, val)| b[*comp] == **val)
