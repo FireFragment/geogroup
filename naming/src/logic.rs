@@ -6,12 +6,12 @@ use geogroup_common::HiearchyItem;
 
 use crate::*;
 
-type PlaceAnnotatedHiearchy<LeafData> = HiearchyItem<(LeafData, Place), Place>;
+type PlaceAnnotatedHiearchy<LeafData> = HiearchyItem<(Place, LeafData), Place>;
 
 fn get_place_of_hiearchy<LeafData>(hiearchy: &PlaceAnnotatedHiearchy<LeafData>) -> &Place {
     match hiearchy {
         HiearchyItem::Group(_, pl) => pl,
-        HiearchyItem::Item((_, pl)) => pl,
+        HiearchyItem::Item((pl, _)) => pl,
     }
 }
 
@@ -40,10 +40,10 @@ pub fn intersection(a: &Place, b: &Place) -> Place {
 impl RevGeocoder<'_> {
     pub fn name_hiearchy<LeafData>(
         &self,
-        hiearchy: HiearchyItem<(LeafData, Point)>,
-    ) -> HiearchyItem<(LeafData, String), String> {
+        hiearchy: HiearchyItem<(Point, LeafData)>,
+    ) -> HiearchyItem<(String, LeafData), String> {
         self.annotate_hiearchy_with_full_places(hiearchy)
-            .map_leafs(&|(data, place)| (data, format_place(place)))
+            .map_leafs(&|(place, data)| (format_place(place), data))
             .map_group_data(&format_place)
     }
 
@@ -55,7 +55,7 @@ impl RevGeocoder<'_> {
     /// ```
     fn annotate_hiearchy_with_full_places<LeafData>(
         &self,
-        hiearchy: HiearchyItem<(LeafData, Point)>,
+        hiearchy: HiearchyItem<(Point, LeafData)>,
     ) -> PlaceAnnotatedHiearchy<LeafData> {
         match hiearchy {
             HiearchyItem::Group(children, data) => {
@@ -75,9 +75,8 @@ impl RevGeocoder<'_> {
                     HiearchyItem::Group(named_children, Place::default())
                 }
             }
-            HiearchyItem::Item((data, point)) => {
+            HiearchyItem::Item((point, data)) => {
                 HiearchyItem::Item((
-                    data,
                     build_place(
                         self.reverse_geocode(&point)
                             .expect("Failed to geocode") /*TODO: Handle*/
@@ -89,6 +88,7 @@ impl RevGeocoder<'_> {
                                 )
                             }),
                     ),
+                    data,
                 ))
             }
         }
