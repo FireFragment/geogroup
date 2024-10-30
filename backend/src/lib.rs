@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 pub use geogroup_algo as algorithm;
 pub use geogroup_common::*;
 pub use geogroup_loaders as loaders;
+pub use geogroup_naming as naming;
 use loaders::DataLoader as _;
 
 /// Sort photos from filesystem and return the resulting the [hiearchy](HiearchyItem)
-pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
+pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<(String, PathBuf), String> {
     let mut data: Vec<_> = path
         .read_dir()
         .expect("Not a dir") // TODO: Handle
@@ -24,11 +25,12 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<PathBuf> {
         .into_iter()
         // Just convert the rect to a concrete location for now when the algo doesn't support rects
         // TODO: Error on too large rects (ie. inaccurate positions)
-        .map(|(file, rect, _)| (rect.center(), file))
+        .map(|(file, rect, _)| (rect.center().into(), file))
         .collect();
 
-    algorithm::sort(data, algorithm::Params::default()).map_leafs(&|(_, f)| f)
+    naming::RevGeocoder::from_env().name_hiearchy(algorithm::sort(data, algorithm::Params::default()))
 }
+
 
 pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf, PathBuf>> {
     if path.is_dir() {
