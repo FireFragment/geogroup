@@ -1,3 +1,5 @@
+//! Utilities for actual geocoding and caching the results
+
 use address_formatter::Place;
 use geocoding::{GeocodingError, Opencage, Point};
 use std::{
@@ -88,18 +90,4 @@ pub fn format_place(place: Place) -> String {
         .lines()
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// Returns [Place] with just fields, where both arguments share the same values
-pub fn intersection(a: &Place, b: &Place) -> Place {
-    a.iter()
-        .filter(|(comp, val)| b[*comp] == **val)
-        .filter_map(|(c, v)| {
-            if let Some(rv) = v {
-                Some((c, rv.as_str()))
-            } else {
-                None
-            }
-        })
-        .into()
 }
