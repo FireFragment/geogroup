@@ -65,7 +65,12 @@ fn annotate_hiearchy_with_full_places<LeafData>(
                     reverse_geocode(todo!(), todo!(), &point)
                         .expect("Failed to geocode") /*TODO: Handle*/
                         .iter()
-                        .map(|(k, v)| (k.as_str(), v.to_owned() /* TODO: Suboptimal performance */)),
+                        .map(|(k, v)| {
+                            (
+                                k.as_str(),
+                                v.to_owned(), /* TODO: Suboptimal performance */
+                            )
+                        }),
                 ),
             ))
         }
