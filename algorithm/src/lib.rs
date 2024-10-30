@@ -45,6 +45,14 @@ impl Point for geo::Coord {
     }
 }
 
+#[cfg(feature = "geo")]
+impl Point for geo::Point {
+    fn distance(&self, rhs: &Self) -> Distance {
+        use geo::EuclideanDistance;
+        (self.euclidean_distance(rhs) * 65536.0) as u64
+    }
+}
+
 pub enum BinTree<Leaf, InnerNode> {
     InnerNode {
         children: Box<[BinTree<Leaf, InnerNode>; 2]>,
