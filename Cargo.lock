@@ -1708,6 +1708,7 @@ dependencies = [
  "geogroup_algo",
  "geogroup_common",
  "geogroup_loaders",
+ "geogroup_naming",
  "thiserror",
 ]
 
