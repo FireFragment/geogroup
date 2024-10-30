@@ -6,10 +6,7 @@ use geogroup_naming::*;
 fn main() {
     let p = Point::new(2.12870, 41.40139);
 
-    let oc = Opencage::new(
-        env::var("OPENCAGE_API_KEY")
-            .expect("Please set OpenCage API key as en environment variable OPENCAGE_API_KEY"),
-    );
+    let oc = get_opencage("native");
     let cache: PathBuf = env::var("GEOGROUP_CACHE_DIR")
         .expect("Env var GEOGROUP_CACHE_DIR missing")
         .into();
