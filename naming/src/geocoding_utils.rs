@@ -7,48 +7,60 @@ use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
+    sync::{LazyLock, Mutex},
 };
 
-pub fn get_opencage<'a>(lang: &'a str) -> Opencage<'a> {
-    let mut oc = Opencage::new(
-        std::env::var("OPENCAGE_API_KEY")
-            .expect("Please set OpenCage API key as en environment variable OPENCAGE_API_KEY"),
-    );
-    oc.parameters.limit = Some("1");
-    oc.parameters.language = Some(lang);
-    oc
+pub struct RevGeocoder<'a> {
+    pub cache: PathBuf,
+    pub opencage: Opencage<'a>,
 }
 
-pub fn reverse_geocode(
-    mut cache: PathBuf,
-    opencage: &Opencage,
-    point: &Point,
-) -> Result<HashMap<String, String>, GeocodingError> {
-    cache.push(format!("{}_{}", point.0.x, point.0.y));
-
-    println!(" -- Querying cache...");
-    if let Some(ret) = fs::read(&cache)
-        .ok()
-        .map(|cache_contents| Some(bincode::deserialize(&cache_contents[..]).ok()))
-        .flatten()
-        .flatten()
-    {
-        println!(" -- Using cache");
-        Ok(ret)
-    } else {
-        let ret = reverse_geocode_nocache(opencage, point);
-        if let Ok(ret) = &ret {
-            if let Ok(mut file) = File::create(cache) {
-                // TODO: Log the error
-
-                if let Ok(serialized) = bincode::serialize(&ret) {
-                    // TODO: Log the error
-                    file.write_all(&serialized); // TODO: Log the error
-                }
-            }
-        }
-
+impl RevGeocoder<'_> {
+    pub fn from_env() -> Self {
+        let mut ret =
+            Self {
+                cache: std::env::var("GEOGROUP_CACHE_DIR")
+                    .expect("Env var GEOGROUP_CACHE_DIR missing")
+                    .into(),
+                opencage: Opencage::new(std::env::var("OPENCAGE_API_KEY").expect(
+                    "Please set OpenCage API key as en environment variable OPENCAGE_API_KEY",
+                )),
+            };
+        ret.opencage.parameters.limit = Some("1");
         ret
+    }
+
+    pub fn reverse_geocode(
+        &self,
+        point: &Point,
+    ) -> Result<HashMap<String, String>, GeocodingError> {
+        let mut cache = self.cache.to_owned();
+        cache.push(format!("{}_{}", point.0.x, point.0.y));
+
+        println!(" -- Querying cache...");
+        if let Some(ret) = fs::read(&cache)
+            .ok()
+            .map(|cache_contents| Some(bincode::deserialize(&cache_contents[..]).ok()))
+            .flatten()
+            .flatten()
+            {
+                println!(" -- Using cache");
+                Ok(ret)
+            } else {
+                let ret = reverse_geocode_nocache(&self.opencage, point);
+                if let Ok(ret) = &ret {
+                    if let Ok(mut file) = File::create(cache) {
+                        // TODO: Log the error
+
+                        if let Ok(serialized) = bincode::serialize(&ret) {
+                            // TODO: Log the error
+                            file.write_all(&serialized); // TODO: Log the error
+                        }
+                    }
+                }
+
+                ret
+            }
     }
 }
 
@@ -56,7 +68,6 @@ pub fn reverse_geocode_nocache(
     opencage: &Opencage,
     point: &Point,
 ) -> Result<HashMap<String, String>, GeocodingError> {
-    println!(" -- Querying OpenCage...");
     if let [result, ..] = &opencage.reverse_full(point)?.results[..] {
         Ok(result
             .components
