@@ -39,8 +39,8 @@ fn get_time(exif_data: &exif::Exif) -> Result<[DateTime<chrono::FixedOffset>; 2]
 
 fn get_location(exif_data: &exif::Exif) -> Result<geo::Rect, CommonError> {
     let coord = geo::Coord {
-        x: rational_tag_as_f64(exif_data, exif::Tag::GPSLatitude)?,
-        y: rational_tag_as_f64(exif_data, exif::Tag::GPSLongitude)?,
+        x: rational_tag_as_f64(exif_data, exif::Tag::GPSLongitude)?,
+        y: rational_tag_as_f64(exif_data, exif::Tag::GPSLatitude)?,
     };
 
     Ok(geo::Rect::new(coord, coord))
