@@ -28,7 +28,7 @@ fn main() -> eframe::Result {
     )
 }
 
-type Hiearchy = Vec<backend::HiearchyItem<PathBuf, String>>;
+type Hiearchy = Vec<backend::HiearchyItem<(String, PathBuf), String>>;
 
 enum Message {
     SetContent(AppContent),
@@ -105,7 +105,8 @@ impl eframe::App for App {
 
                                 std::thread::spawn(move || {
                                     let sorted = backend::sort_from_fs_to_mem(&cloned_src_dir);
-                                    sender.send(Message::SetHiearchy(vec![sorted.map_group_data(&|_| String::from("Group"))]))
+                                    println!("Sorted!");
+                                    sender.send(Message::SetHiearchy(vec![sorted]))
                                 });
                             }
                         });
@@ -222,6 +223,16 @@ impl WelcomePage {
                                                 .unwrap_or("[invalid filename]")
                                                 .into()
                                         })
+                                        .map_leafs(&|path| {
+                                            (
+                                                path.file_name()
+                                                    .map(|path| path.to_str())
+                                                    .flatten()
+                                                    .unwrap_or("[invalid filename]")
+                                                    .into(),
+                                                path
+                                            )
+                                        })
                                     })
                                     .collect(),
                                 pane: PaneContent::Sort,
@@ -321,17 +332,12 @@ fn show_hiearchy_inner(
                                 }
                                 geogroup_backend::HiearchyItem::Item(path) => {
                                     ui.horizontal_top(|ui| {
-                                        if let Some(file_path) = path.to_str() {
+                                        if let Some(file_path) = path.1.to_str() {
                                             Image::new(format!("file://{file_path}")).ui(ui);
                                         }
 
                                         ui.add(
-                                            Label::new(
-                                                path.file_name()
-                                                    .unwrap_or(OsStr::new("[invalid filename]"))
-                                                    .to_str()
-                                                    .unwrap_or("[invalid filename]"),
-                                            )
+                                            Label::new(&path.0)
                                             .selectable(false),
                                         )
                                     });
