@@ -43,31 +43,44 @@ impl RevGeocoder<'_> {
             .map(|cache_contents| Some(bincode::deserialize(&cache_contents[..]).ok()))
             .flatten()
             .flatten()
-            {
-                println!(" -- Using cache");
-                Ok(ret)
-            } else {
-                let ret = reverse_geocode_nocache(&self.opencage, point);
-                if let Ok(ret) = &ret {
-                    if let Ok(mut file) = File::create(cache) {
-                        // TODO: Log the error
+        {
+            //println!(" -- Using cache");
+            let mut all_geocode_cnt = ALL_GEOCODE_CNT.lock().unwrap();
+            println!("All: #{all_geocode_cnt}");
+            *all_geocode_cnt += 1;
 
-                        if let Ok(serialized) = bincode::serialize(&ret) {
-                            // TODO: Log the error
-                            file.write_all(&serialized); // TODO: Log the error
-                        }
+            Ok(ret)
+        } else {
+            let ret = reverse_geocode_nocache(&self.opencage, point);
+            if let Ok(ret) = &ret {
+                if let Ok(mut file) = File::create(cache) {
+                    // TODO: Log the error
+
+                    if let Ok(serialized) = bincode::serialize(&ret) {
+                        // TODO: Log the error
+                        file.write_all(&serialized); // TODO: Log the error
                     }
                 }
-
-                ret
             }
+
+            ret
+        }
     }
 }
+
+static REAL_GEOCODE_CNT: LazyLock<Mutex<u32>> = LazyLock::new(|| Mutex::new(0));
+static ALL_GEOCODE_CNT: LazyLock<Mutex<u32>> = LazyLock::new(|| Mutex::new(0));
 
 pub fn reverse_geocode_nocache(
     opencage: &Opencage,
     point: &Point,
 ) -> Result<HashMap<String, String>, GeocodingError> {
+    let mut real_geocode_cnt = REAL_GEOCODE_CNT.lock().unwrap();
+    let mut all_geocode_cnt = ALL_GEOCODE_CNT.lock().unwrap();
+    println!("Real: #{real_geocode_cnt} | All: #{all_geocode_cnt}");
+    *real_geocode_cnt += 1;
+    *all_geocode_cnt += 1;
+
     if let [result, ..] = &opencage.reverse_full(point)?.results[..] {
         Ok(result
             .components
