@@ -27,6 +27,7 @@ impl RevGeocoder<'_> {
                 )),
             };
         ret.opencage.parameters.limit = Some("1");
+        ret.opencage.parameters.language = Some("native");
         ret
     }
 
