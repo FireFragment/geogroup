@@ -21,9 +21,9 @@ pub struct Params {
 impl Default for Params {
     /// The setting of parameters I personally found reasonable (there's nothing deep in theese numbers)
     ///
-    /// Value: `Params { depth: 128 }`
+    /// Value: `Params { depth: 64 }`
     fn default() -> Self {
-        Params { depth: 128 }
+        Params { depth: 64 }
     }
 }
 
