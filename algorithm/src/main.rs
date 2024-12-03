@@ -8,7 +8,7 @@ fn main() {
                 .into_iter()
                 .map(|n| (n, ()))
                 .collect(),
-            Params::default()
+            &Params::default()
         )
         .print_tree_points_only()
     );

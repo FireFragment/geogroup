@@ -4,6 +4,7 @@
 use egui_inbox::UiInbox;
 use std::{
     ffi::OsStr,
+    hash::{DefaultHasher, Hash, Hasher},
     ops::Deref,
     path::{Path, PathBuf},
 };
@@ -66,7 +67,11 @@ type Hiearchy = Vec<backend::HiearchyItem<FileInHiearchy, String>>;
 #[derive(Debug)]
 enum Message {
     SetContent(AppContent),
-    SetHiearchy(Hiearchy),
+    Sorted {
+        new_hiearchy: Hiearchy,
+        /// [`backend::SortingCfg`] used for sorting
+        config_hash: u64,
+    },
     SetProgress(Option<u16>),
 }
 
@@ -87,6 +92,11 @@ enum AppContent {
         selection: Vec<usize>,
         image_scale: u16,
         progress: Option<u16>,
+        /// Config controlling the entire operation, including sorting, naming, etc.
+        operation_config: backend::SortingCfg,
+        auto_sort: bool,
+        /// Hash of the last `operation_config` this has been sorted with
+        last_sorted_with_hash: Option<u64>,
     },
 }
 
@@ -123,6 +133,8 @@ impl Default for AppContent {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.all_styles_mut(|style| style.interaction.selectable_labels = false);
+
         for message in self.inbox.read_without_ctx() {
             message.perform(self, ctx);
         }
@@ -138,6 +150,9 @@ impl eframe::App for App {
                 selection,
                 image_scale,
                 progress,
+                operation_config,
+                auto_sort,
+                last_sorted_with_hash,
             } => {
                 if progress.is_some() {
                     ctx.request_repaint_after_secs(0.1);
@@ -145,49 +160,42 @@ impl eframe::App for App {
 
                 egui::TopBottomPanel::bottom("the wizard pane").show(ctx, |ui| {
                     ui.horizontal(|ui| {
-                        ui.selectable_value(pane, PaneContent::Sort, "Sort");
-                        ui.selectable_value(pane, PaneContent::Name, "Name");
+                        ui.selectable_value(pane, PaneContent::Sort, "🔀 Sort");
+                        ui.selectable_value(pane, PaneContent::Name, "🏷 Name");
                     });
 
                     match pane {
                         PaneContent::Sort => {
-                            ui.heading("Sort files");
-                            ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                                let clicked = ui.add(Button::new("Sort")).clicked();
-
-                                if clicked {
-                                    let sender = self.inbox.sender();
-                                    let cloned_src_dir = src_dir.clone();
-                                    let mut flattened = hiearchy
-                                        .iter()
-                                        .flat_map(|h| h.leaves_cloned())
-                                        .collect::<Vec<_>>();
-
-                                    flattened.sort_by_key(|it| it.date);
-                                    let ready_for_sorting = flattened
-                                        .into_iter()
-                                        .filter_map(|leaf| leaf.transform_for_sorting()) // TODO: Don't just filter out items without a position
-                                        .collect();
-
-                                    std::thread::spawn(move || {
-                                        let sorted = backend::algorithm::sort(
-                                            ready_for_sorting,
-                                            backend::algorithm::Params::default(),
-                                        )
-                                        .map_leafs(&|leaf| {
-                                            FileInHiearchy::transform_after_sorting(leaf)
-                                        })
-                                        .map_group_data(&|()| String::from("Group"));
-
-                                        println!("Sorted!");
-
-                                        sender.send(Message::SetHiearchy(vec![sorted]))
-                                    });
+                            egui::Grid::new("cfg_sort_grid").show(ui, |ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Depth").on_hover_cursor(CursorIcon::Help).on_hover_text("High values yield deeply nested folder structure. Low values lead to shallow structures");
+                                });
+                                ui.add(egui::Slider::new(
+                                    &mut operation_config.geogroup_params.depth,
+                                    0..=u8::MAX,
+                                ));
+                                #[allow(clippy::collapsible_if)]
+                                if operation_config.geogroup_params.depth
+                                    != backend::algorithm::Params::default().depth
+                                {
+                                    if ui.button("⟳").clicked() {
+                                        operation_config.geogroup_params.depth =
+                                            backend::algorithm::Params::default().depth;
+                                    }
                                 }
+                                ui.end_row();
+                            });
+
+                            ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
+                                let clicked = ui.add_enabled(!*auto_sort, Button::new("🔀 Sort")).clicked();
+                                if clicked {
+                                    action_sort(operation_config, hiearchy.to_owned(), &self.inbox);
+                                }
+
+                                ui.checkbox(auto_sort, "Sort automatically");
                             });
                         }
                         PaneContent::Name => {
-                            ui.heading("Naming");
                             ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
                                 let clicked = ui.add(Button::new("Download names")).clicked();
 
@@ -221,20 +229,38 @@ impl eframe::App for App {
     }
 }
 
-fn action_naming(
+fn action_sort(
+    operation_config: &mut geogroup_backend::SortingCfg,
     hiearchy: Vec<geogroup_backend::HiearchyItem<FileInHiearchy, String>>,
     inbox: &UiInbox<Message>,
 ) {
     let sender = inbox.sender();
+    let op_config = operation_config.geogroup_params.to_owned();
+
+    let mut flattened = hiearchy
+        .iter()
+        .flat_map(|h| h.leaves_cloned())
+        .collect::<Vec<_>>();
+    flattened.sort_by_key(|it| it.date);
+    let ready_for_sorting = flattened
+        .into_iter()
+        .filter_map(|leaf| leaf.transform_for_sorting()) // TODO: Don't just filter out items without a position
+        .collect();
 
     std::thread::spawn(move || {
+        let sorted_hiearchy = backend::algorithm::sort(ready_for_sorting, &op_config)
+            .map_leafs(&|leaf| FileInHiearchy::transform_after_sorting(leaf))
+            .map_group_data(&|()| String::from("Group"));
+
+        println!("Sorted!");
+
         let geocoder = backend::naming::RevGeocoder::from_env();
 
         geocoder
             .prefetch_places(
-                &hiearchy
-                    .iter()
-                    .flat_map(|h| h.leaves().filter_map(|file| file.pos))
+                &sorted_hiearchy
+                    .leaves()
+                    .filter_map(|file| file.pos)
                     .collect(),
                 |prog| {
                     sender
@@ -245,34 +271,53 @@ fn action_naming(
                 },
             )
             .unwrap();
-        let named_hiearchy = hiearchy
-            .into_iter()
-            .map(|hiearchy| {
-                geocoder
-                    .name_hiearchy(
-                        hiearchy
-                            .map_leafs(&|file| {
-                                (
-                                    file.pos
-                                        .expect("Missing point, TODO: Handle this correctly"),
-                                    file,
-                                )
-                            })
-                            .map_group_data(&|_| ()),
-                    )
-                    .map_leafs(&|(name, file)| FileInHiearchy { name, ..file })
-            })
-            .collect::<Vec<_>>();
+        let named_hiearchy = geocoder
+            .name_hiearchy(
+                sorted_hiearchy
+                    .map_leafs(&|file| {
+                        (
+                            file.pos
+                                .expect("Missing point, TODO: Handle this correctly"),
+                            file,
+                        )
+                    })
+                    .map_group_data(&|_| ()),
+            )
+            .map_leafs(&|(name, file)| FileInHiearchy { name, ..file });
 
-        sender.send(Message::SetHiearchy(named_hiearchy))
+        sender.send(Message::Sorted {
+            new_hiearchy: match named_hiearchy {
+                backend::HiearchyItem::Group(g, _) => g,
+                backend::HiearchyItem::Item(it) => vec![backend::HiearchyItem::Item(it)],
+            },
+            config_hash: {
+                let mut h = DefaultHasher::new();
+                op_config.hash(&mut h);
+                h.finish()
+            },
+        })
     });
+}
+
+fn action_naming(
+    hiearchy: Vec<geogroup_backend::HiearchyItem<FileInHiearchy, String>>,
+    inbox: &UiInbox<Message>,
+) {
+    let sender = inbox.sender();
+
+    todo!();
+
+    std::thread::spawn(move || {});
 }
 
 impl Message {
     pub fn perform(self, app: &mut App, ctx: &egui::Context) {
         match self {
             Message::SetContent(content) => app.content = content,
-            Message::SetHiearchy(hiearchy_to_set) => {
+            Message::Sorted {
+                new_hiearchy,
+                config_hash,
+            } => {
                 if let AppContent::MainPage {
                     pane: _,
                     src_dir: _,
@@ -281,10 +326,14 @@ impl Message {
                     ref mut selection,
                     image_scale: _,
                     progress: _,
+                    operation_config: _,
+                    auto_sort: _,
+                    ref mut last_sorted_with_hash,
                 } = app.content
                 {
                     *selection = Vec::new();
-                    *hiearchy = hiearchy_to_set;
+                    *hiearchy = new_hiearchy;
+                    *last_sorted_with_hash = Some(config_hash);
                 } else { /* TODO: Warning */
                 }
             }
@@ -402,6 +451,9 @@ impl WelcomePage {
                                     selection: Vec::new(),
                                     image_scale: 48,
                                     progress: None,
+                                    operation_config: Default::default(),
+                                    auto_sort: true,
+                                    last_sorted_with_hash: None,
                                 }
                             }
                             Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(

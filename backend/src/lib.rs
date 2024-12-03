@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
+pub use geo as geo_lib;
 pub use geogroup_algo as algorithm;
 pub use geogroup_common::*;
 pub use geogroup_loaders as loaders;
 pub use geogroup_naming as naming;
-pub use geo as geo_lib;
 use loaders::DataLoader as _;
 
 /// Sort photos from filesystem and return the resulting the [hiearchy](HiearchyItem)
@@ -29,7 +29,7 @@ pub fn sort_from_fs_to_mem(path: &Path) -> HiearchyItem<(geo::Point, PathBuf)> {
         .map(|(file, rect, _)| (rect.center().into(), file))
         .collect();
 
-    algorithm::sort(data, algorithm::Params::default())
+    algorithm::sort(data, &algorithm::Params::default())
 }
 
 pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf, PathBuf>> {
@@ -44,3 +44,17 @@ pub fn load_directory(path: &Path) -> std::io::Result<HiearchyItem<PathBuf, Path
         Ok(HiearchyItem::Item(path.to_owned()))
     }
 }
+
+#[derive(Clone, Debug, Default, Hash)]
+pub struct Config {
+    pub sorting: SortingCfg,
+    pub naming: NamingCfg,
+}
+
+#[derive(Clone, Debug, Default, Hash)]
+pub struct SortingCfg {
+    pub geogroup_params: algorithm::Params,
+}
+
+#[derive(Clone, Debug, Default, Hash)]
+pub struct NamingCfg;

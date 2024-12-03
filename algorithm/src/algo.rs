@@ -3,9 +3,15 @@ use crate::*;
 /// Sort points with attached additional data by the geogroup algorithm.
 ///
 /// This function is insensitive to order of the input points and reorders them by [time](SortItem::time) before passing them to [`sort`]
-pub fn sort_unordered<P: Point + Clone, T: Ord + Clone, D>(mut points: Vec<SortItem<P, T, D>>, params: Params) -> HiearchyItem<(P, D)> {
+pub fn sort_unordered<P: Point + Clone, T: Ord + Clone, D>(
+    mut points: Vec<SortItem<P, T, D>>,
+    params: &Params,
+) -> HiearchyItem<(P, D)> {
     points.sort_unstable_by_key(|it| it.time.to_owned());
-    sort(points.into_iter().map(|pt| (pt.point, pt.data)).collect(), params)
+    sort(
+        points.into_iter().map(|pt| (pt.point, pt.data)).collect(),
+        params,
+    )
 }
 
 /// Sort points with attached additional data by the geogroup algorithm.
@@ -14,7 +20,7 @@ pub fn sort_unordered<P: Point + Clone, T: Ord + Clone, D>(mut points: Vec<SortI
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
-pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> HiearchyItem<(P, D)> {
+pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: &Params) -> HiearchyItem<(P, D)> {
     flatten(sort_to_binary_tree(points), params.depth)
 }
 
@@ -23,7 +29,7 @@ pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> Hiearch
 /// If you need to attach some additional data to the points, use [`sort`].
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
-pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: &Params) -> HiearchyItem<P> {
     sort(points.into_iter().map(|p| (p, ())).collect(), params).map_leafs(&|(p, _)| p)
 }
 

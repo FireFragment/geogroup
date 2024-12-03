@@ -23,7 +23,7 @@ pub struct SortItem<P: Point + Clone, T: Ord + Clone, D> {
 
 /// Parameters of the algorithm influencing how it sorts
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Params {
     pub depth: DepthParam,
 }
