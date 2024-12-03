@@ -12,7 +12,7 @@ use std::{
 use eframe::*;
 use egui::*;
 use geogroup_backend::{self as backend, loaders::DataLoader as _};
-use glow::RED;
+use glow::{FALSE, RED};
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -158,7 +158,9 @@ impl eframe::App for App {
                     ctx.request_repaint_after_secs(0.1);
                 }
 
-                egui::TopBottomPanel::bottom("the wizard pane").show(ctx, |ui| {
+                egui::TopBottomPanel::bottom("operation configuration pane").show(ctx, |ui| {
+                    let mut cfg_changed = false;
+
                     ui.horizontal(|ui| {
                         ui.selectable_value(pane, PaneContent::Sort, "🔀 Sort");
                         ui.selectable_value(pane, PaneContent::Name, "🏷 Name");
@@ -166,14 +168,14 @@ impl eframe::App for App {
 
                     match pane {
                         PaneContent::Sort => {
-                            egui::Grid::new("cfg_sort_grid").show(ui, |ui| {
-                                ui.vertical(|ui| {
-                                    ui.label("Depth").on_hover_cursor(CursorIcon::Help).on_hover_text("High values yield deeply nested folder structure. Low values lead to shallow structures");
-                                });
-                                ui.add(egui::Slider::new(
+                            egui::Grid::new("sort configuration grid").show(ui, |ui| {
+                                let label = ui.label("Depth").on_hover_cursor(CursorIcon::Help).on_hover_text("High values yield deeply nested folder structure. Low values lead to shallow structures");
+
+                                cfg_changed |= ui.add(egui::Slider::new(
                                     &mut operation_config.geogroup_params.depth,
                                     0..=u8::MAX,
-                                ));
+                                )).labelled_by(label.id).changed();
+
                                 #[allow(clippy::collapsible_if)]
                                 if operation_config.geogroup_params.depth
                                     != backend::algorithm::Params::default().depth
@@ -185,26 +187,19 @@ impl eframe::App for App {
                                 }
                                 ui.end_row();
                             });
-
-                            ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
-                                let clicked = ui.add_enabled(!*auto_sort, Button::new("🔀 Sort")).clicked();
-                                if clicked {
-                                    action_sort(operation_config, hiearchy.to_owned(), &self.inbox);
-                                }
-
-                                ui.checkbox(auto_sort, "Sort automatically");
-                            });
                         }
-                        PaneContent::Name => {
-                            ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                                let clicked = ui.add(Button::new("Download names")).clicked();
-
-                                if clicked {
-                                    action_naming(hiearchy.to_owned(), &self.inbox);
-                                }
-                            });
-                        }
+                        PaneContent::Name => {}
                     }
+
+
+                    ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
+                        let sort_btn_clicked = ui.add_enabled(!*auto_sort, Button::new("⛭ Sort")).clicked();
+                        ui.checkbox(auto_sort, "Sort automatically");
+
+                        if (cfg_changed && *auto_sort) | sort_btn_clicked {
+                            action_sort(operation_config, hiearchy.to_owned(), &self.inbox);
+                        }
+                    });
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -297,17 +292,6 @@ fn action_sort(
             },
         })
     });
-}
-
-fn action_naming(
-    hiearchy: Vec<geogroup_backend::HiearchyItem<FileInHiearchy, String>>,
-    inbox: &UiInbox<Message>,
-) {
-    let sender = inbox.sender();
-
-    todo!();
-
-    std::thread::spawn(move || {});
 }
 
 impl Message {
