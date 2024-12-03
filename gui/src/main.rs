@@ -7,6 +7,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
     ops::Deref,
     path::{Path, PathBuf},
+    thread,
 };
 
 use eframe::*;
@@ -95,8 +96,10 @@ enum AppContent {
         /// Config controlling the entire operation, including sorting, naming, etc.
         operation_config: backend::SortingCfg,
         auto_sort: bool,
-        /// Hash of the last `operation_config` this has been sorted with
-        last_sorted_with_hash: Option<u64>,
+        /// Whether sorting should be rerun once `sort_process` completes.
+        /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
+        sort_pending: bool,
+        sort_process: Option<thread::JoinHandle<()>>,
     },
 }
 
@@ -152,7 +155,8 @@ impl eframe::App for App {
                 progress,
                 operation_config,
                 auto_sort,
-                last_sorted_with_hash,
+                sort_process,
+                sort_pending,
             } => {
                 if progress.is_some() {
                     ctx.request_repaint_after_secs(0.1);
@@ -193,11 +197,29 @@ impl eframe::App for App {
 
 
                     ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
-                        let sort_btn_clicked = ui.add_enabled(!*auto_sort, Button::new("⛭ Sort")).clicked();
+
+                        let is_sort_process_idle = sort_process.as_ref().is_none_or(|p| p.is_finished());
+
+                        let sort_btn_clicked = match is_sort_process_idle {
+                            true => {
+                                ui.add_enabled(!*auto_sort, Button::new("⛭ Sort")).clicked()
+                            },
+                            false => {
+                                let label = ui.label("Sorting...");
+                                ui.spinner().labelled_by(label.id);
+
+                                false
+                            }
+                        };
                         ui.checkbox(auto_sort, "Sort automatically");
 
-                        if (cfg_changed && *auto_sort) | sort_btn_clicked {
-                            action_sort(operation_config, hiearchy.to_owned(), &self.inbox);
+                        if (cfg_changed && *auto_sort) | sort_btn_clicked | *sort_pending {
+                            if is_sort_process_idle {
+                                *sort_process = Some(action_sort(operation_config, hiearchy.to_owned(), &self.inbox));
+                                *sort_pending = false;
+                            } else {
+                                *sort_pending = true;
+                            }
                         }
                     });
                 });
@@ -228,7 +250,7 @@ fn action_sort(
     operation_config: &mut geogroup_backend::SortingCfg,
     hiearchy: Vec<geogroup_backend::HiearchyItem<FileInHiearchy, String>>,
     inbox: &UiInbox<Message>,
-) {
+) -> thread::JoinHandle<()> {
     let sender = inbox.sender();
     let op_config = operation_config.geogroup_params.to_owned();
 
@@ -280,18 +302,20 @@ fn action_sort(
             )
             .map_leafs(&|(name, file)| FileInHiearchy { name, ..file });
 
-        sender.send(Message::Sorted {
-            new_hiearchy: match named_hiearchy {
-                backend::HiearchyItem::Group(g, _) => g,
-                backend::HiearchyItem::Item(it) => vec![backend::HiearchyItem::Item(it)],
-            },
-            config_hash: {
-                let mut h = DefaultHasher::new();
-                op_config.hash(&mut h);
-                h.finish()
-            },
-        })
-    });
+        sender
+            .send(Message::Sorted {
+                new_hiearchy: match named_hiearchy {
+                    backend::HiearchyItem::Group(g, _) => g,
+                    backend::HiearchyItem::Item(it) => vec![backend::HiearchyItem::Item(it)],
+                },
+                config_hash: {
+                    let mut h = DefaultHasher::new();
+                    op_config.hash(&mut h);
+                    h.finish()
+                },
+            })
+            .unwrap();
+    })
 }
 
 impl Message {
@@ -300,7 +324,7 @@ impl Message {
             Message::SetContent(content) => app.content = content,
             Message::Sorted {
                 new_hiearchy,
-                config_hash,
+                config_hash: config_hash_received,
             } => {
                 if let AppContent::MainPage {
                     pane: _,
@@ -312,12 +336,12 @@ impl Message {
                     progress: _,
                     operation_config: _,
                     auto_sort: _,
-                    ref mut last_sorted_with_hash,
+                    sort_process: _,
+                    sort_pending: _,
                 } = app.content
                 {
                     *selection = Vec::new();
                     *hiearchy = new_hiearchy;
-                    *last_sorted_with_hash = Some(config_hash);
                 } else { /* TODO: Warning */
                 }
             }
@@ -437,7 +461,9 @@ impl WelcomePage {
                                     progress: None,
                                     operation_config: Default::default(),
                                     auto_sort: true,
-                                    last_sorted_with_hash: None,
+                                    sort_process: None,
+                                    // True to perform an initial sort
+                                    sort_pending: true,
                                 }
                             }
                             Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(
