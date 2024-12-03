@@ -1,5 +1,7 @@
 use core::fmt;
 
+use either::Either;
+
 #[derive(Debug, Clone)]
 pub enum HiearchyItem<LeafData, GroupData = ()> {
     Group(Vec<HiearchyItem<LeafData, GroupData>>, GroupData),
@@ -34,6 +36,21 @@ impl<L, G> HiearchyItem<L, G> {
         match self {
             HiearchyItem::Group(g, _) => Box::new(g.iter_mut().flat_map(|item| item.leaves_mut())),
             HiearchyItem::Item(it) => Box::new(std::iter::once(it)),
+        }
+    }
+
+    pub fn leaves<'s>(&'s self) -> Box<dyn Iterator<Item = &L> + 's> {
+        match self {
+            HiearchyItem::Group(g, _) => Box::new(g.iter().flat_map(|item| item.leaves())),
+            HiearchyItem::Item(it) => Box::new(std::iter::once(it)),
+        }
+    }
+
+
+    pub fn leaves_cloned<'s>(&'s self) -> impl Iterator<Item = L> where L: Clone {
+        match self {
+            HiearchyItem::Group(g, _) => g.iter().map(|item| item.leaves_cloned()).flatten().collect::<Vec<_>>().into_iter(),
+            HiearchyItem::Item(it) => vec![it.to_owned()].into_iter(),
         }
     }
 }

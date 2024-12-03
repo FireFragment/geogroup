@@ -11,6 +11,16 @@ pub use algo::sort_just_points;
 pub type Distance = u64;
 pub type DepthParam = u8;
 
+/// One item as an input to the [`sort_unordered`] function
+pub struct SortItem<P: Point + Clone, T: Ord + Clone, D> {
+    /// Position of the item. Should be fast to [clone](Clone).
+    pub point: P,
+    /// Timestamp of the item. Should be fast to [clone](Clone).
+    pub time: T,
+    /// Additional data, the algorithm ignores theese
+    pub data: D,
+}
+
 /// Parameters of the algorithm influencing how it sorts
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]

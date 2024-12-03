@@ -1,6 +1,16 @@
 use crate::*;
 
-/// Sort points with attached additional data by the geogroup algorithm
+/// Sort points with attached additional data by the geogroup algorithm.
+///
+/// This function is insensitive to order of the input points and reorders them by [time](SortItem::time) before passing them to [`sort`]
+pub fn sort_unordered<P: Point + Clone, T: Ord + Clone, D>(mut points: Vec<SortItem<P, T, D>>, params: Params) -> HiearchyItem<(P, D)> {
+    points.sort_unstable_by_key(|it| it.time.to_owned());
+    sort(points.into_iter().map(|pt| (pt.point, pt.data)).collect(), params)
+}
+
+/// Sort points with attached additional data by the geogroup algorithm.
+///
+/// This function is sensitive to order of the input points. For a function that is not, see [`sort_unordered`].
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item

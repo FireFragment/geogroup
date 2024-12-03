@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 geo = { version = "0.28.0", optional = true }
 geogroup_common = { path = "../common" }
+egui_struct = {version = "0.4", optional = true}
 
 [features]
 geo = ["dep:geo"]

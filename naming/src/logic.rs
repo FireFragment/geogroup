@@ -1,7 +1,7 @@
 //! The logic of naming a [hiearchy](HiearchyItem)
 
 use address_formatter::Place;
-use geocoding::Point;
+use geocoding::{GeocodingError, Point};
 use geogroup_common::HiearchyItem;
 
 use crate::*;
@@ -69,6 +69,25 @@ fn prune_hiearchy_places<LeafData>(
 }
 
 impl RevGeocoder<'_> {
+    /// Fetch places of all points, saving them to cache for faster future naming
+    pub fn prefetch_places(
+        &self,
+        points: &Vec<Point>,
+        mut report_progress: impl FnMut(PrefetchProgressReport),
+    ) -> Result<(), GeocodingError> {
+        let total_points = points.len();
+
+        for (idx, point) in points.into_iter().enumerate() {
+            report_progress(PrefetchProgressReport {
+                done: idx,
+                total: total_points,
+            });
+            self.reverse_geocode(point)?;
+        }
+
+        Ok(())
+    }
+
     pub fn name_hiearchy<LeafData>(
         &self,
         hiearchy: HiearchyItem<(Point, LeafData)>,
