@@ -148,6 +148,8 @@ struct MainPage {
 enum PaneContent {
     Sort,
     Name,
+    View,
+    Apply,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -191,12 +193,15 @@ impl eframe::App for App {
                     ctx.request_repaint_after_secs(0.1);
                 }
 
-                egui::TopBottomPanel::bottom("operation configuration pane").show(ctx, |ui| {
+                egui::TopBottomPanel::top("operation configuration pane").show(ctx, |ui| {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Sort");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Name, "🏷 Name");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Sorting");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Name, "🏷 Naming");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
+                        ui.separator();
+                        ui.selectable_value(&mut main_page.pane, PaneContent::View, "👁 View");
                     });
 
                     match main_page.pane {
@@ -221,7 +226,13 @@ impl eframe::App for App {
                                 ui.end_row();
                             });
                         }
+                        PaneContent::Apply => {}
                         PaneContent::Name => {}
+                        PaneContent::View => {
+                            egui::Slider::new(&mut main_page.image_scale, 32..=128)
+                                    .text("Image size")
+                                    .ui(ui);
+                        }
                     }
 
                     ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
@@ -253,14 +264,6 @@ impl eframe::App for App {
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    egui::menu::bar(ui, |ui| {
-                        ui.menu_button("View", |ui| {
-                            egui::Slider::new(&mut main_page.image_scale, 32..=128)
-                                .text("Image preview height")
-                                .ui(ui);
-                        });
-                    });
-
                     if let Some(progress) = main_page.progress {
                         ProgressBar::new(progress as f32 / u16::MAX as f32)
                             .show_percentage()
