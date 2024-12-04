@@ -160,8 +160,8 @@ enum ProgressAction {
 
 #[derive(Debug, PartialEq, Eq)]
 enum PaneContent {
-    Sort,
-    Name,
+    Grouping,
+    Naming,
     View,
     Apply,
 }
@@ -246,15 +246,15 @@ impl eframe::App for App {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Grouping");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Name, "🏷 Naming");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Grouping, "🗁 Grouping");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Naming, "🏷 Naming");
                         ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
                         ui.separator();
                         ui.selectable_value(&mut main_page.pane, PaneContent::View, "👁 View");
                     });
 
                     match main_page.pane {
-                        PaneContent::Sort => {
+                        PaneContent::Grouping => {
                             let mut sort_btn_clicked = false;
                             let is_sort_process_idle = main_page
                                     .sort_process
@@ -322,7 +322,7 @@ impl eframe::App for App {
                             });
                         }
                         PaneContent::Apply => {}
-                        PaneContent::Name => {}
+                        PaneContent::Naming => {}
                         PaneContent::View => {
                             ribbon_slider(
                                 ui,
@@ -608,7 +608,7 @@ impl MainPage {
                         })
                 })
                 .collect(),
-            pane: PaneContent::Sort,
+            pane: PaneContent::Grouping,
             src_dir: folder,
             flatten_mode: None,
             selection: Vec::new(),
