@@ -112,7 +112,7 @@ enum Message {
         /// [`backend::SortingCfg`] used for sorting
         config_hash: u64,
     },
-    SetProgress(Option<u16>),
+    SetProgress(Option<Progress>),
 }
 
 #[derive(Default)]
@@ -135,7 +135,7 @@ struct MainPage {
     flatten_mode: Option<FlattenMode>,
     selection: Vec<usize>,
     image_scale: u16,
-    progress: Option<u16>,
+    progress: Option<Progress>,
     /// Config controlling the entire operation, including sorting, naming, etc.
     operation_config: backend::SortingCfg,
     auto_sort: bool,
@@ -143,6 +143,19 @@ struct MainPage {
     /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
     sort_pending: bool,
     sort_process: Option<thread::JoinHandle<()>>,
+}
+
+#[derive(Debug)]
+struct Progress {
+    pub action: ProgressAction,
+    pub progress: Option<u16>,
+}
+
+#[derive(Debug)]
+enum ProgressAction {
+    Geocoding,
+    Grouping,
+    Naming,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -233,7 +246,7 @@ impl eframe::App for App {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Sorting");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Grouping");
                         ui.selectable_value(&mut main_page.pane, PaneContent::Name, "🏷 Naming");
                         ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
                         ui.separator();
@@ -271,7 +284,7 @@ impl eframe::App for App {
                                         });
 
                                         strip.cell(|ui| {
-                                            ui.checkbox(&mut main_page.auto_sort, "Sort automatically");
+                                            cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
                                         });
                                     });
                                 });
@@ -325,13 +338,28 @@ impl eframe::App for App {
 
                 });
 
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    if let Some(progress) = main_page.progress {
-                        ProgressBar::new(progress as f32 / u16::MAX as f32)
-                            .show_percentage()
-                            .ui(ui);
-                    }
+                egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
+                    if let Some(ref progress) = main_page.progress {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(match progress.action {
+                                ProgressAction::Geocoding => "Geocoding",
+                                ProgressAction::Grouping => "Grouping",
+                                ProgressAction::Naming => "Naming",
+                            });
 
+                            if let Some(progress) = progress.progress {
+                                ProgressBar::new(progress as f32 / u16::MAX as f32)
+                                    .show_percentage()
+                                    .ui(ui);
+                            }
+                        });
+                    } else {
+                        ui.label("Idle");
+                    }
+                });
+
+                egui::CentralPanel::default().show(ctx, |ui| {
                     show_hiearchy(
                         ui,
                         &main_page.hiearchy,
@@ -364,11 +392,25 @@ fn action_sort(
         .collect();
 
     std::thread::spawn(move || {
+        sender
+            .send(Message::SetProgress(Some(Progress {
+                action: ProgressAction::Grouping,
+                progress: None,
+            })))
+            .unwrap();
+
         let sorted_hiearchy = backend::algorithm::sort(ready_for_sorting, &op_config)
             .map_leafs(&|leaf| FileInHiearchy::transform_after_sorting(leaf))
             .map_group_data(&|()| String::from("Group"));
 
         println!("Sorted!");
+
+        sender
+            .send(Message::SetProgress(Some(Progress {
+                action: ProgressAction::Geocoding,
+                progress: None,
+            })))
+            .unwrap();
 
         let geocoder = backend::naming::RevGeocoder::from_env();
 
@@ -380,13 +422,24 @@ fn action_sort(
                     .collect(),
                 |prog| {
                     sender
-                        .send(Message::SetProgress(Some(
-                            (u16::MAX as f32 * prog.done as f32 / prog.total as f32) as u16,
-                        )))
+                        .send(Message::SetProgress(Some(Progress {
+                            action: ProgressAction::Geocoding,
+                            progress: Some(
+                                (u16::MAX as f32 * prog.done as f32 / prog.total as f32) as u16,
+                            ),
+                        })))
                         .unwrap();
                 },
             )
             .unwrap();
+
+        sender
+            .send(Message::SetProgress(Some(Progress {
+                action: ProgressAction::Naming,
+                progress: None,
+            })))
+            .unwrap();
+
         let named_hiearchy = geocoder
             .name_hiearchy(
                 sorted_hiearchy
@@ -400,6 +453,8 @@ fn action_sort(
                     .map_group_data(&|_| ()),
             )
             .map_leafs(&|(name, file)| FileInHiearchy { name, ..file });
+
+        sender.send(Message::SetProgress(None)).unwrap();
 
         sender
             .send(Message::Sorted {
