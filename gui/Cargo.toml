@@ -1,5 +1,6 @@
 [package]
 name = "geogroup_gui"
+description = "A tool to easily organize photos into folders based on their location"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,3 +16,4 @@ env_logger = { version = "0.10", default-features = false, features = [
 rfd = "0.15.0"
 egui_inbox = "0.5.0"
 chrono = "0.4.38"
+clap = { version = "4.5.22", features = ["cargo", "derive", "env"] }

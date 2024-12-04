@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
+use clap::Parser;
 use egui_inbox::UiInbox;
 use std::{
     ffi::OsStr,
@@ -15,18 +16,55 @@ use egui::*;
 use geogroup_backend::{self as backend, loaders::DataLoader as _};
 use glow::{FALSE, RED};
 
+#[derive(clap::Parser)]
+#[command(name = "geogroup", version, about)]
+struct CliArgs {
+    /// Directory that should be opened on startup.
+    /// If not specified, user will be prompted to choose directory in a GUI.
+    #[arg(value_hint = clap::ValueHint::DirPath)]
+    dir: Option<PathBuf>,
+
+    /// Directory to cache reverse-geocoded locations in
+    #[arg(
+        long,
+        env = "GEOGROUP_GEOCODING_CACHE_DIR",
+        default_value = "/tmp/geogroup_reverse_geocoding_cache" // TODO: What on other platforms than linux?
+    )]
+    geocoding_cache: PathBuf,
+    /* Clap doesn't support env-only arguments, see https://github.com/clap-rs/clap/discussions/5432
+    /// API key for [Opencage](https://opencagedata.com/) used for reverse geocoding
+    #[arg(env = "OPENCAGE_API_KEY")]
+    opencage_api_key: Option<String>,
+    */
+}
+
 fn main() -> eframe::Result {
+    let args = CliArgs::parse();
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_maximized(true),
         ..Default::default()
     };
+
+    let mut app = App::default();
+    let AppContent::WelcomePage(ref mut welcome_page) = app.content else {
+        panic!(
+            "App::default().content has is not a welcome page, it's {:?}",
+            app.content
+        )
+    };
+
+    if let Some(dir) = args.dir {
+        welcome_page.action_load_dir(&app.inbox, dir);
+    }
+
     eframe::run_native(
         "Geogroup",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::<App>::default())
+            Ok(Box::new(app))
         }),
     )
 }
@@ -85,22 +123,25 @@ struct App {
 #[derive(Debug)]
 enum AppContent {
     WelcomePage(WelcomePage),
-    MainPage {
-        pane: PaneContent,
-        src_dir: PathBuf,
-        hiearchy: Hiearchy,
-        flatten_mode: Option<FlattenMode>,
-        selection: Vec<usize>,
-        image_scale: u16,
-        progress: Option<u16>,
-        /// Config controlling the entire operation, including sorting, naming, etc.
-        operation_config: backend::SortingCfg,
-        auto_sort: bool,
-        /// Whether sorting should be rerun once `sort_process` completes.
-        /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
-        sort_pending: bool,
-        sort_process: Option<thread::JoinHandle<()>>,
-    },
+    MainPage(MainPage),
+}
+
+#[derive(Debug)]
+struct MainPage {
+    pane: PaneContent,
+    src_dir: PathBuf,
+    hiearchy: Hiearchy,
+    flatten_mode: Option<FlattenMode>,
+    selection: Vec<usize>,
+    image_scale: u16,
+    progress: Option<u16>,
+    /// Config controlling the entire operation, including sorting, naming, etc.
+    operation_config: backend::SortingCfg,
+    auto_sort: bool,
+    /// Whether sorting should be rerun once `sort_process` completes.
+    /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
+    sort_pending: bool,
+    sort_process: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -145,20 +186,8 @@ impl eframe::App for App {
         match &mut self.content {
             AppContent::WelcomePage(welcome_page) => welcome_page.draw(ctx, &self.inbox),
 
-            AppContent::MainPage {
-                hiearchy,
-                pane,
-                src_dir,
-                flatten_mode,
-                selection,
-                image_scale,
-                progress,
-                operation_config,
-                auto_sort,
-                sort_process,
-                sort_pending,
-            } => {
-                if progress.is_some() {
+            AppContent::MainPage(main_page) => {
+                if main_page.progress.is_some() {
                     ctx.request_repaint_after_secs(0.1);
                 }
 
@@ -166,26 +195,26 @@ impl eframe::App for App {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
-                        ui.selectable_value(pane, PaneContent::Sort, "🔀 Sort");
-                        ui.selectable_value(pane, PaneContent::Name, "🏷 Name");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Sort, "🔀 Sort");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Name, "🏷 Name");
                     });
 
-                    match pane {
+                    match main_page.pane {
                         PaneContent::Sort => {
                             egui::Grid::new("sort configuration grid").show(ui, |ui| {
                                 let label = ui.label("Depth").on_hover_cursor(CursorIcon::Help).on_hover_text("High values yield deeply nested folder structure. Low values lead to shallow structures");
 
                                 cfg_changed |= ui.add(egui::Slider::new(
-                                    &mut operation_config.geogroup_params.depth,
+                                    &mut main_page.operation_config.geogroup_params.depth,
                                     0..=u8::MAX,
                                 )).labelled_by(label.id).changed();
 
                                 #[allow(clippy::collapsible_if)]
-                                if operation_config.geogroup_params.depth
+                                if main_page.operation_config.geogroup_params.depth
                                     != backend::algorithm::Params::default().depth
                                 {
                                     if ui.button("⟳").clicked() {
-                                        operation_config.geogroup_params.depth =
+                                        main_page.operation_config.geogroup_params.depth =
                                             backend::algorithm::Params::default().depth;
                                     }
                                 }
@@ -195,14 +224,13 @@ impl eframe::App for App {
                         PaneContent::Name => {}
                     }
 
-
                     ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
 
-                        let is_sort_process_idle = sort_process.as_ref().is_none_or(|p| p.is_finished());
+                        let is_sort_process_idle = main_page.sort_process.as_ref().is_none_or(|p| p.is_finished());
 
                         let sort_btn_clicked = match is_sort_process_idle {
                             true => {
-                                ui.add_enabled(!*auto_sort, Button::new("⛭ Sort")).clicked()
+                                ui.add_enabled(!main_page.auto_sort, Button::new("⛭ Sort")).clicked()
                             },
                             false => {
                                 let label = ui.label("Sorting...");
@@ -211,14 +239,14 @@ impl eframe::App for App {
                                 false
                             }
                         };
-                        ui.checkbox(auto_sort, "Sort automatically");
+                        ui.checkbox(&mut main_page.auto_sort, "Sort automatically");
 
-                        if (cfg_changed && *auto_sort) | sort_btn_clicked | *sort_pending {
+                        if (cfg_changed && main_page.auto_sort) | sort_btn_clicked | main_page.sort_pending {
                             if is_sort_process_idle {
-                                *sort_process = Some(action_sort(operation_config, hiearchy.to_owned(), &self.inbox));
-                                *sort_pending = false;
+                                main_page.sort_process = Some(action_sort(&mut main_page.operation_config, main_page.hiearchy.to_owned(), &self.inbox));
+                                main_page.sort_pending = false;
                             } else {
-                                *sort_pending = true;
+                                main_page.sort_pending = true;
                             }
                         }
                     });
@@ -227,19 +255,25 @@ impl eframe::App for App {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     egui::menu::bar(ui, |ui| {
                         ui.menu_button("View", |ui| {
-                            egui::Slider::new(image_scale, 32..=128)
+                            egui::Slider::new(&mut main_page.image_scale, 32..=128)
                                 .text("Image preview height")
                                 .ui(ui);
                         });
                     });
 
-                    if let Some(progress) = progress {
-                        ProgressBar::new(*progress as f32 / u16::MAX as f32)
+                    if let Some(progress) = main_page.progress {
+                        ProgressBar::new(progress as f32 / u16::MAX as f32)
                             .show_percentage()
                             .ui(ui);
                     }
 
-                    show_hiearchy(ui, hiearchy, selection, flatten_mode, *image_scale)
+                    show_hiearchy(
+                        ui,
+                        &main_page.hiearchy,
+                        &mut main_page.selection,
+                        &main_page.flatten_mode,
+                        main_page.image_scale,
+                    )
                 });
             }
         }
@@ -326,31 +360,15 @@ impl Message {
                 new_hiearchy,
                 config_hash: config_hash_received,
             } => {
-                if let AppContent::MainPage {
-                    pane: _,
-                    src_dir: _,
-                    ref mut hiearchy,
-                    flatten_mode: _,
-                    ref mut selection,
-                    image_scale: _,
-                    progress: _,
-                    operation_config: _,
-                    auto_sort: _,
-                    sort_process: _,
-                    sort_pending: _,
-                } = app.content
-                {
-                    *selection = Vec::new();
-                    *hiearchy = new_hiearchy;
+                if let AppContent::MainPage(ref mut main_page) = app.content {
+                    main_page.selection = Vec::new();
+                    main_page.hiearchy = new_hiearchy;
                 } else { /* TODO: Warning */
                 }
             }
             Message::SetProgress(p) => {
-                if let AppContent::MainPage {
-                    ref mut progress, ..
-                } = app.content
-                {
-                    *progress = p;
+                if let AppContent::MainPage(ref mut main_page) = app.content {
+                    main_page.progress = p;
                     ctx.request_repaint();
                 } else { /* TODO: Warning */
                 }
@@ -409,76 +427,79 @@ impl WelcomePage {
         let clicked = ui.button("🗁 Pick folder").clicked();
         if clicked {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                let sender = inbox.sender();
-
-                std::thread::spawn(move || {
-                    use geogroup_backend::HiearchyItem as HI;
-                    let res = backend::load_directory(&folder);
-                    // Send will return an error if the receiver has been dropped
-                    // but unless you have a long running task that will send multiple messages
-                    // you can just ignore the error
-                    sender
-                        .send(Message::SetContent(match res {
-                            Ok(HI::Group(hiearchy, _)) => {
-                                AppContent::MainPage {
-                                    hiearchy: hiearchy
-                                        .into_iter()
-                                        .map(|h| {
-                                            h.map_group_data(&|path: PathBuf| {
-                                                filename_to_string(path.file_name())
-                                            })
-                                            .map_leafs(&|path| {
-                                                let loc_data = backend::loaders::GeneralLoader
-                                                    .get_data(&path)
-                                                    .ok(); // TODO: Do something with unexpected errors
-                                                FileInHiearchy {
-                                                    name: filename_to_string(path.file_name()),
-                                                    path,
-                                                    pos: loc_data.as_ref().and_then(|loc_data| {
-                                                        loc_data
-                                                            .location
-                                                            .as_ref()
-                                                            .ok()
-                                                            .map(|rect| rect.center().into())
-                                                    }),
-                                                    date: loc_data.as_ref().and_then(|loc_data| {
-                                                        loc_data
-                                                            .time
-                                                            .as_ref()
-                                                            .ok()
-                                                            .map(|dates| dates[0])
-                                                        // TODO: Don't use just the first one
-                                                    }),
-                                                }
-                                            })
-                                        })
-                                        .collect(),
-                                    pane: PaneContent::Sort,
-                                    src_dir: folder,
-                                    flatten_mode: None,
-                                    selection: Vec::new(),
-                                    image_scale: 48,
-                                    progress: None,
-                                    operation_config: Default::default(),
-                                    auto_sort: true,
-                                    sort_process: None,
-                                    // True to perform an initial sort
-                                    sort_pending: true,
-                                }
-                            }
-                            Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(
-                                String::from("Please choose a directory"),
-                            )),
-                            Err(err) => {
-                                AppContent::WelcomePage(WelcomePage::Error(err.to_string()))
-                            }
-                        }))
-                        .ok();
-                });
-
-                *self = Self::Loading("Loading files".into());
+                self.action_load_dir(inbox, folder);
             }
         };
+    }
+
+    fn action_load_dir(&mut self, inbox: &UiInbox<Message>, folder: PathBuf) {
+        let sender = inbox.sender();
+
+        std::thread::spawn(move || {
+            use geogroup_backend::HiearchyItem as HI;
+            let res = backend::load_directory(&folder);
+            // Send will return an error if the receiver has been dropped
+            // but unless you have a long running task that will send multiple messages
+            // you can just ignore the error
+            sender
+                .send(Message::SetContent(match res {
+                    Ok(HI::Group(hiearchy, _)) => {
+                        AppContent::MainPage(MainPage::new(hiearchy, folder))
+                    }
+                    Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(String::from(
+                        "Please choose a directory",
+                    ))),
+                    Err(err) => AppContent::WelcomePage(WelcomePage::Error(err.to_string())),
+                }))
+                .ok();
+        });
+
+        *self = Self::Loading("Loading files".into());
+    }
+}
+
+impl MainPage {
+    fn new(
+        hiearchy: Vec<geogroup_backend::HiearchyItem<PathBuf, PathBuf>>,
+        folder: PathBuf,
+    ) -> MainPage {
+        MainPage {
+            hiearchy: hiearchy
+                .into_iter()
+                .map(|h| {
+                    h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
+                        .map_leafs(&|path| {
+                            let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
+                            FileInHiearchy {
+                                name: filename_to_string(path.file_name()),
+                                path,
+                                pos: loc_data.as_ref().and_then(|loc_data| {
+                                    loc_data
+                                        .location
+                                        .as_ref()
+                                        .ok()
+                                        .map(|rect| rect.center().into())
+                                }),
+                                date: loc_data.as_ref().and_then(|loc_data| {
+                                    loc_data.time.as_ref().ok().map(|dates| dates[0])
+                                    // TODO: Don't use just the first one
+                                }),
+                            }
+                        })
+                })
+                .collect(),
+            pane: PaneContent::Sort,
+            src_dir: folder,
+            flatten_mode: None,
+            selection: Vec::new(),
+            image_scale: 48,
+            progress: None,
+            operation_config: Default::default(),
+            auto_sort: true,
+            sort_process: None,
+            // True to perform an initial sort
+            sort_pending: true,
+        }
     }
 }
 
