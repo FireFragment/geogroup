@@ -2,11 +2,12 @@
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use clap::Parser;
+use egui_extras::Size;
 use egui_inbox::UiInbox;
 use std::{
     ffi::OsStr,
     hash::{DefaultHasher, Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, RangeInclusive},
     path::{Path, PathBuf},
     thread,
 };
@@ -177,6 +178,41 @@ impl Default for AppContent {
     }
 }
 
+fn ribbon_slider<Num: emath::Numeric>(
+    ui: &mut Ui,
+    value: &mut Num,
+    range: RangeInclusive<Num>,
+    default: Num,
+    name: &str,
+    help_text: &str,
+    cfg_changed: Option<&mut bool>,
+) -> Response {
+    ui.horizontal(|ui| {
+        let label = ui
+            .label(name)
+            .on_hover_cursor(CursorIcon::Help)
+            .on_hover_text(help_text);
+
+        let mut changed = ui
+            .add(egui::Slider::new(value, range))
+            .labelled_by(label.id)
+            .changed();
+
+        #[allow(clippy::collapsible_if)]
+        if *value != default {
+            if ui.button("⟳").clicked() {
+                *value = default;
+                changed = true;
+            }
+        }
+
+        if let Some(cfg_changed) = cfg_changed {
+            *cfg_changed |= changed;
+        }
+    })
+    .response
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.all_styles_mut(|style| style.interaction.selectable_labels = false);
@@ -193,7 +229,7 @@ impl eframe::App for App {
                     ctx.request_repaint_after_secs(0.1);
                 }
 
-                egui::TopBottomPanel::top("operation configuration pane").show(ctx, |ui| {
+                egui::TopBottomPanel::top("operation configuration pane").min_height(96.0).show(ctx, |ui| {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
@@ -206,61 +242,87 @@ impl eframe::App for App {
 
                     match main_page.pane {
                         PaneContent::Sort => {
-                            egui::Grid::new("sort configuration grid").show(ui, |ui| {
-                                let label = ui.label("Depth").on_hover_cursor(CursorIcon::Help).on_hover_text("High values yield deeply nested folder structure. Low values lead to shallow structures");
+                            let mut sort_btn_clicked = false;
+                            let is_sort_process_idle = main_page
+                                    .sort_process
+                                    .as_ref()
+                                    .is_none_or(|p| p.is_finished());
 
-                                cfg_changed |= ui.add(egui::Slider::new(
+                            ui.horizontal_top(|ui| {
+                                ui.scope(|ui| {
+                                    ui.set_max_width(128.0);
+                                    egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
+
+                                        strip.cell(|ui| {
+                                            match is_sort_process_idle {
+                                                true => {
+                                                    if main_page.auto_sort {
+                                                        ui.disable();
+                                                    }
+                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort")).clicked();
+                                                },
+                                                false => {
+                                                    ui.horizontal_centered(|ui| {
+                                                        ui.spinner(); //.labelled_by(label.id);
+                                                        ui.label("Sorting...")
+                                                    });
+                                                }
+                                            }
+                                        });
+
+                                        strip.cell(|ui| {
+                                            ui.checkbox(&mut main_page.auto_sort, "Sort automatically");
+                                        });
+                                    });
+                                });
+
+
+                                ui.separator();
+
+                                ribbon_slider(
+                                    ui,
                                     &mut main_page.operation_config.geogroup_params.depth,
                                     0..=u8::MAX,
-                                )).labelled_by(label.id).changed();
+                                    backend::algorithm::Params::default().depth,
+                                    "Depth",
+                                    "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                    Some(&mut cfg_changed),
+                                );
 
-                                #[allow(clippy::collapsible_if)]
-                                if main_page.operation_config.geogroup_params.depth
-                                    != backend::algorithm::Params::default().depth
+
+                                if (cfg_changed && main_page.auto_sort)
+                                    | sort_btn_clicked
+                                    | main_page.sort_pending
                                 {
-                                    if ui.button("⟳").clicked() {
-                                        main_page.operation_config.geogroup_params.depth =
-                                            backend::algorithm::Params::default().depth;
+
+                                    if is_sort_process_idle {
+                                        main_page.sort_process = Some(action_sort(
+                                            &mut main_page.operation_config,
+                                            main_page.hiearchy.to_owned(),
+                                            &self.inbox,
+                                        ));
+                                        main_page.sort_pending = false;
+                                    } else {
+                                        main_page.sort_pending = true;
                                     }
                                 }
-                                ui.end_row();
                             });
                         }
                         PaneContent::Apply => {}
                         PaneContent::Name => {}
                         PaneContent::View => {
-                            egui::Slider::new(&mut main_page.image_scale, 32..=128)
-                                    .text("Image size")
-                                    .ui(ui);
+                            ribbon_slider(
+                                ui,
+                                &mut main_page.image_scale,
+                                32..=128,
+                                48,
+                                "Image size",
+                                "Height of image previews",
+                                Some(&mut cfg_changed),
+                            );
                         }
                     }
 
-                    ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
-
-                        let is_sort_process_idle = main_page.sort_process.as_ref().is_none_or(|p| p.is_finished());
-
-                        let sort_btn_clicked = match is_sort_process_idle {
-                            true => {
-                                ui.add_enabled(!main_page.auto_sort, Button::new("⛭ Sort")).clicked()
-                            },
-                            false => {
-                                let label = ui.label("Sorting...");
-                                ui.spinner().labelled_by(label.id);
-
-                                false
-                            }
-                        };
-                        ui.checkbox(&mut main_page.auto_sort, "Sort automatically");
-
-                        if (cfg_changed && main_page.auto_sort) | sort_btn_clicked | main_page.sort_pending {
-                            if is_sort_process_idle {
-                                main_page.sort_process = Some(action_sort(&mut main_page.operation_config, main_page.hiearchy.to_owned(), &self.inbox));
-                                main_page.sort_pending = false;
-                            } else {
-                                main_page.sort_pending = true;
-                            }
-                        }
-                    });
                 });
 
                 egui::CentralPanel::default().show(ctx, |ui| {
