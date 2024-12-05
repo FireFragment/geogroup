@@ -14,7 +14,7 @@ use std::{
 
 use eframe::*;
 use egui::*;
-use geogroup_backend::{self as backend, loaders::DataLoader as _};
+use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
 
 #[derive(clap::Parser)]
@@ -40,15 +40,24 @@ struct CliArgs {
 }
 
 fn main() -> eframe::Result {
-    let args = CliArgs::parse();
-
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+
+    let args = CliArgs::parse();
+    if !args.geocoding_cache.exists() {
+        std::fs::create_dir_all(&args.geocoding_cache).unwrap();
+    }
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_maximized(true),
         ..Default::default()
     };
 
-    let mut app = App::default();
+    let mut app = App {
+        content: AppContent::default(),
+        inbox: UiInbox::default(),
+        args,
+    };
+
     let AppContent::WelcomePage(ref mut welcome_page) = app.content else {
         panic!(
             "App::default().content has is not a welcome page, it's {:?}",
@@ -56,8 +65,8 @@ fn main() -> eframe::Result {
         )
     };
 
-    if let Some(dir) = args.dir {
-        welcome_page.action_load_dir(&app.inbox, dir);
+    if let Some(ref dir) = app.args.dir {
+        welcome_page.action_load_dir(&app.inbox, dir.to_owned());
     }
 
     eframe::run_native(
@@ -115,10 +124,10 @@ enum Message {
     SetProgress(Option<Progress>),
 }
 
-#[derive(Default)]
 struct App {
     content: AppContent,
     inbox: UiInbox<Message>,
+    args: CliArgs,
 }
 
 #[derive(Debug)]
@@ -160,6 +169,7 @@ enum ProgressAction {
 
 #[derive(Debug, PartialEq, Eq)]
 enum PaneContent {
+    Home,
     Grouping,
     Naming,
     View,
@@ -250,92 +260,106 @@ impl eframe::App for App {
                         ui.selectable_value(&mut main_page.pane, PaneContent::Naming, "🏷 Naming");
                         ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
                         ui.separator();
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Home, "🏠 Home");
                         ui.selectable_value(&mut main_page.pane, PaneContent::View, "👁 View");
                     });
 
-                    match main_page.pane {
-                        PaneContent::Grouping => {
-                            let mut sort_btn_clicked = false;
-                            let is_sort_process_idle = main_page
-                                    .sort_process
-                                    .as_ref()
-                                    .is_none_or(|p| p.is_finished());
+                    ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
+                        match main_page.pane {
+                            PaneContent::Grouping => {
+                                let mut sort_btn_clicked = false;
+                                let is_sort_process_idle = main_page
+                                        .sort_process
+                                        .as_ref()
+                                        .is_none_or(|p| p.is_finished());
 
-                            ui.horizontal_top(|ui| {
-                                ui.scope(|ui| {
-                                    ui.set_max_width(128.0);
-                                    egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
+                                    ui.scope(|ui| {
+                                        ui.set_max_width(128.0);
+                                        egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
 
-                                        strip.cell(|ui| {
-                                            match is_sort_process_idle {
-                                                true => {
-                                                    if main_page.auto_sort {
-                                                        ui.disable();
+                                            strip.cell(|ui| {
+                                                match is_sort_process_idle {
+                                                    true => {
+                                                        if main_page.auto_sort {
+                                                            ui.disable();
+                                                        }
+                                                        sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort")).clicked();
+                                                    },
+                                                    false => {
+                                                        ui.horizontal_centered(|ui| {
+                                                            ui.spinner(); //.labelled_by(label.id);
+                                                            ui.label("Sorting...")
+                                                        });
                                                     }
-                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort")).clicked();
-                                                },
-                                                false => {
-                                                    ui.horizontal_centered(|ui| {
-                                                        ui.spinner(); //.labelled_by(label.id);
-                                                        ui.label("Sorting...")
-                                                    });
                                                 }
-                                            }
-                                        });
+                                            });
 
-                                        strip.cell(|ui| {
-                                            cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
+                                            strip.cell(|ui| {
+                                                cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
+                                            });
                                         });
                                     });
-                                });
 
 
-                                ui.separator();
+                                    ui.separator();
 
+                                    ribbon_slider(
+                                        ui,
+                                        &mut main_page.operation_config.geogroup_params.depth,
+                                        0..=u8::MAX,
+                                        backend::algorithm::Params::default().depth,
+                                        "Depth",
+                                        "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                        Some(&mut cfg_changed),
+                                    );
+
+
+                                    if (cfg_changed && main_page.auto_sort)
+                                        | sort_btn_clicked
+                                        | main_page.sort_pending
+                                    {
+
+                                        if is_sort_process_idle {
+                                            main_page.sort_process = Some(action_sort(
+                                                &mut main_page.operation_config,
+                                                main_page.hiearchy.to_owned(),
+                                                &self.args,
+                                                &self.inbox,
+                                            ));
+                                            main_page.sort_pending = false;
+                                        } else {
+                                            main_page.sort_pending = true;
+                                        }
+                                    }
+                            }
+                            PaneContent::Apply => {}
+                            PaneContent::Naming => {}
+                            PaneContent::Home => {
+                                #[cfg(target_os = "linux")]
+                                if ui.button("🗖 New window").clicked() {
+                                    std::process::Command::new("/proc/self/exe").spawn().expect("failed to start myself");
+                                }
+
+                                if ui.button("🗙 Close directory").clicked() {
+                                    self.inbox.sender().send(Message::SetContent(AppContent::WelcomePage(WelcomePage::Normal))).unwrap();
+                                };
+                                if ui.button("🚪 Quit Geogroup").clicked() {
+                                    ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                                };
+                            }
+                            PaneContent::View => {
                                 ribbon_slider(
                                     ui,
-                                    &mut main_page.operation_config.geogroup_params.depth,
-                                    0..=u8::MAX,
-                                    backend::algorithm::Params::default().depth,
-                                    "Depth",
-                                    "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                    &mut main_page.image_scale,
+                                    32..=128,
+                                    48,
+                                    "Image size",
+                                    "Height of image previews",
                                     Some(&mut cfg_changed),
                                 );
-
-
-                                if (cfg_changed && main_page.auto_sort)
-                                    | sort_btn_clicked
-                                    | main_page.sort_pending
-                                {
-
-                                    if is_sort_process_idle {
-                                        main_page.sort_process = Some(action_sort(
-                                            &mut main_page.operation_config,
-                                            main_page.hiearchy.to_owned(),
-                                            &self.inbox,
-                                        ));
-                                        main_page.sort_pending = false;
-                                    } else {
-                                        main_page.sort_pending = true;
-                                    }
-                                }
-                            });
+                            }
                         }
-                        PaneContent::Apply => {}
-                        PaneContent::Naming => {}
-                        PaneContent::View => {
-                            ribbon_slider(
-                                ui,
-                                &mut main_page.image_scale,
-                                32..=128,
-                                48,
-                                "Image size",
-                                "Height of image previews",
-                                Some(&mut cfg_changed),
-                            );
-                        }
-                    }
-
+                    });
                 });
 
                 egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
@@ -373,9 +397,16 @@ impl eframe::App for App {
     }
 }
 
+impl CliArgs {
+    pub fn get_geocoder(&self) -> RevGeocoder<'static> {
+        RevGeocoder::from_env_key(self.geocoding_cache.to_owned())
+    }
+}
+
 fn action_sort(
     operation_config: &mut geogroup_backend::SortingCfg,
     hiearchy: Vec<geogroup_backend::HiearchyItem<FileInHiearchy, String>>,
+    args: &CliArgs,
     inbox: &UiInbox<Message>,
 ) -> thread::JoinHandle<()> {
     let sender = inbox.sender();
@@ -390,6 +421,8 @@ fn action_sort(
         .into_iter()
         .filter_map(|leaf| leaf.transform_for_sorting()) // TODO: Don't just filter out items without a position
         .collect();
+
+    let geocoder = args.get_geocoder();
 
     std::thread::spawn(move || {
         sender
@@ -411,8 +444,6 @@ fn action_sort(
                 progress: None,
             })))
             .unwrap();
-
-        let geocoder = backend::naming::RevGeocoder::from_env();
 
         geocoder
             .prefetch_places(
