@@ -31,13 +31,7 @@ pub mod place_op {
     pub fn intersection(a: &Place, b: &Place) -> Place {
         a.iter()
             .filter(|(comp, val)| b[*comp] == **val)
-            .filter_map(|(c, v)| {
-                if let Some(rv) = v {
-                    Some((c, rv.as_str()))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(c, v)| v.as_ref().map(|rv| (c, rv.as_str())))
             .into()
     }
 
