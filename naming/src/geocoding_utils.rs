@@ -16,6 +16,20 @@ pub struct RevGeocoder<'a> {
 }
 
 impl RevGeocoder<'_> {
+    pub fn from_env_key(cache: PathBuf) -> Self {
+        let mut ret =
+            Self {
+                cache,
+                opencage: Opencage::new(std::env::var("OPENCAGE_API_KEY").expect(
+                    "Please set OpenCage API key as en environment variable OPENCAGE_API_KEY",
+                )),
+            };
+
+        ret.opencage.parameters.limit = Some("1");
+        ret.opencage.parameters.language = Some("native");
+        ret
+    }
+
     pub fn from_env() -> Self {
         let mut ret =
             Self {
