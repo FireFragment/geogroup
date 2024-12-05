@@ -103,6 +103,13 @@ pub fn build_place<'a>(data: impl IntoIterator<Item = (&'a str, String)>) -> Pla
 }
 
 pub fn format_place(place: Place) -> String {
+    /*Useful for debugging formatting */
+    /*place
+    .iter()
+    .filter_map(|(key, value)| value.as_ref().map(|value| format!("{key}: {value}")))
+    .collect::<Vec<_>>()
+    .join("\n")*/
+
     address_formatter::FORMATTER
         .format_with_config(
             place,
