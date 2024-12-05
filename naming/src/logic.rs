@@ -36,9 +36,17 @@ pub mod place_op {
     }
 
     /// Removes the fields present in the second argument from the first argument
-    pub fn subtract(a: &mut Place, b: &Place) {
+    ///
+    /// Keeps some fields as an exception, hence the _almost_ in the name.
+    /// This is because [`address_formatter`] needs them to choose how to format addresses
+    /// in accordance with local customs.
+    pub fn almost_subtract(a: &mut Place, b: &Place) {
         for (component, _) in b.iter().filter(|(_, val)| val.is_some()) {
-            a[component] = None;
+            if component != address_formatter::Component::CountryCode
+                && component != address_formatter::Component::CountyCode
+            {
+                a[component] = None;
+            }
         }
     }
 }
@@ -51,13 +59,14 @@ fn prune_hiearchy_places<LeafData>(
     parent_place: &Place,
 ) {
     match hiearchy {
-        HiearchyItem::Item((place, _)) => place_op::subtract(place, parent_place),
+        HiearchyItem::Item((place, _)) => place_op::almost_subtract(place, parent_place),
         HiearchyItem::Group(children, place) => {
+            let mut parent_place_for_children = place.to_owned();
             for child in children {
                 prune_hiearchy_places(child, place)
             }
 
-            place_op::subtract(place, parent_place)
+            place_op::almost_subtract(place, parent_place)
         }
     }
 }
