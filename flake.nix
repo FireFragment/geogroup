@@ -27,9 +27,24 @@
             (import rust-overlay)
           ];
         };
-        cargoNix = crate2nix.tools.${system}.appliedCargoNix {
+
+        buildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
+          defaultCrateOverrides = pkgs.defaultCrateOverrides // {
+            rav1e = attrs: {
+              CARGO_ENCODED_RUSTFLAGS = "";
+            };
+          };
+        };
+
+        crate2nix-tools = pkgs.callPackage "${crate2nix}/tools.nix" {};
+
+        generatedCargoNix = crate2nix-tools.generatedCargoNix {
             name = "geogroup";
             src = ./.;
+        };
+
+        cargoNix = pkgs.callPackage "${generatedCargoNix}/default.nix" {
+          inherit buildRustCrateForPkgs;
         };
 
         # TODO: Is anything superflous here?
