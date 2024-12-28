@@ -256,12 +256,12 @@ impl eframe::App for App {
                     let mut cfg_changed = false;
 
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Grouping, "? Grouping");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Naming, "? Naming");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Grouping, "🗁 Grouping");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Naming, "🏷 Naming");
                         ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
                         ui.separator();
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Home, "? Home");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::View, "? View");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::Home, "🏠 Home");
+                        ui.selectable_value(&mut main_page.pane, PaneContent::View, "👁 View");
                     });
 
                     ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
@@ -336,14 +336,14 @@ impl eframe::App for App {
                             PaneContent::Naming => {}
                             PaneContent::Home => {
                                 #[cfg(target_os = "linux")]
-                                if ui.button("? New window").clicked() {
+                                if ui.button("🗖 New window").clicked() {
                                     std::process::Command::new("/proc/self/exe").spawn().expect("failed to start myself");
                                 }
 
-                                if ui.button("? Close directory").clicked() {
+                                if ui.button("❌ Close directory").clicked() {
                                     self.inbox.sender().send(Message::SetContent(AppContent::WelcomePage(WelcomePage::Normal))).unwrap();
                                 };
-                                if ui.button("? Quit Geogroup").clicked() {
+                                if ui.button("❎ Quit Geogroup").clicked() {
                                     ui.ctx().send_viewport_cmd(ViewportCommand::Close);
                                 };
                             }
@@ -575,7 +575,7 @@ impl WelcomePage {
     }
 
     fn pick_file_btn(&mut self, ui: &mut Ui, inbox: &UiInbox<Message>) {
-        let clicked = ui.button("? Pick folder").clicked();
+        let clicked = ui.button("🗁 Pick folder").clicked();
         if clicked {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 self.action_load_dir(inbox, folder);
@@ -722,7 +722,7 @@ fn show_hiearchy_inner(
                         row.col(|ui| {
                             match &hiearchy[idx] {
                                 geogroup_backend::HiearchyItem::Group(_, name) => {
-                                    ui.add(Label::new(format!("? {name}")).selectable(false));
+                                    ui.add(Label::new(format!("🗁 {name}")).selectable(false));
                                 }
                                 geogroup_backend::HiearchyItem::Item(item) => {
                                     ui.horizontal_top(|ui| {
