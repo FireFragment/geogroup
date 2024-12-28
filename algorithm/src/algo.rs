@@ -1,10 +1,26 @@
 use crate::*;
 
-/// Sort points with attached additional data by the geogroup algorithm
+/// Sort points with attached additional data by the geogroup algorithm.
+///
+/// This function is insensitive to order of the input points and reorders them by [time](SortItem::time) before passing them to [`sort`]
+pub fn sort_unordered<P: Point + Clone, T: Ord + Clone, D>(
+    mut points: Vec<SortItem<P, T, D>>,
+    params: &Params,
+) -> HiearchyItem<(P, D)> {
+    points.sort_unstable_by_key(|it| it.time.to_owned());
+    sort(
+        points.into_iter().map(|pt| (pt.point, pt.data)).collect(),
+        params,
+    )
+}
+
+/// Sort points with attached additional data by the geogroup algorithm.
+///
+/// This function is sensitive to order of the input points. For a function that is not, see [`sort_unordered`].
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
-pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> HiearchyItem<(P, D)> {
+pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: &Params) -> HiearchyItem<(P, D)> {
     flatten(sort_to_binary_tree(points), params.depth)
 }
 
@@ -13,7 +29,7 @@ pub fn sort<P: Point + Clone, D>(points: Vec<(P, D)>, params: Params) -> Hiearch
 /// If you need to attach some additional data to the points, use [`sort`].
 ///
 /// The generic argument `P: Point + Clone` should be fast to clone.
-pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: Params) -> HiearchyItem<P> {
+pub fn sort_just_points<P: Point + Clone>(points: Vec<P>, params: &Params) -> HiearchyItem<P> {
     sort(points.into_iter().map(|p| (p, ())).collect(), params).map_leafs(&|(p, _)| p)
 }
 
@@ -94,33 +110,38 @@ fn sort_to_binary_tree_with_distances<P>(
 /// `P` is the point the algorithm analyzes and `D` are additional data, eg. identifier of the item
 fn flatten<P: Point + Clone, D>(
     bintree: BinTree<(P, D), ()>,
-    depth: Depth,
+    depth_param: DepthParam,
 ) -> HiearchyItem<(P, D)> {
-    flatten_inner(bintree, depth).flattened_group
+    flatten_inner(bintree, depth_param).flattened_group
 }
 
 /// Flatten, but also return addidional data in [`FlattenRet`] useful for recursion
 fn flatten_inner<P: Point + Clone, D>(
     bintree: BinTree<(P, D), ()>,
-    depth: Depth,
+    depth_param: DepthParam,
 ) -> FlattenRet<P, D> {
     match bintree {
         BinTree::InnerNode { children, data: _ } => {
-            let [first, second] = children.map(|subtree| flatten_inner(subtree, depth));
+            let [first, second] = children.map(|subtree| flatten_inner(subtree, depth_param));
             let highest_inner_distance = first.last_point.distance(&second.first_point);
             let first_point = first.first_point.clone();
             let last_point = second.last_point.clone();
 
             let mut final_group = Vec::new();
 
-            dissolve_if_needed(first, &mut final_group, depth, highest_inner_distance);
-            dissolve_if_needed(second, &mut final_group, depth, highest_inner_distance);
+            dissolve_if_needed(first, &mut final_group, depth_param, highest_inner_distance);
+            dissolve_if_needed(
+                second,
+                &mut final_group,
+                depth_param,
+                highest_inner_distance,
+            );
 
             FlattenRet {
                 highest_inner_distance,
                 first_point,
                 last_point,
-                flattened_group: HiearchyItem::Group(final_group),
+                flattened_group: HiearchyItem::Group(final_group, ()),
             }
         }
         BinTree::Leaf(item) => FlattenRet {
@@ -135,19 +156,23 @@ fn flatten_inner<P: Point + Clone, D>(
 fn dissolve_if_needed<P: Point, D>(
     group_to_dissolve: FlattenRet<P, D>,
     final_group: &mut Vec<HiearchyItem<(P, D)>>,
-    depth: Depth,
+    depth: DepthParam,
     highest_inner_distance: Distance,
 ) {
     // How "weak" is group
-    let first_group_weakness = (Depth::MAX as u128
-        * group_to_dissolve.highest_inner_distance as u128
-        / highest_inner_distance as u128) as Depth;
+    let first_group_weakness = if highest_inner_distance == 0 {
+        0
+    } else {
+        (DepthParam::MAX as u128 * group_to_dissolve.highest_inner_distance as u128
+            / highest_inner_distance as u128) as u8
+    };
 
     // lower or equal condition to not trigger the panic in case that highest_inner_distance = 0
     if first_group_weakness <= depth {
         final_group.push(group_to_dissolve.flattened_group);
     } else {
-        let HiearchyItem::Group(mut group_to_dissolve_g) = group_to_dissolve.flattened_group else {
+        let HiearchyItem::Group(mut group_to_dissolve_g, _) = group_to_dissolve.flattened_group
+        else {
             panic!(
                 "
                     Probably faulty `FlattenRet` with highest_inner_distance != 0, but it's {}.

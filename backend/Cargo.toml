@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+geo = "0.29.1"
 geogroup_algo = { path = "../algorithm" }
-geogroup_loaders = { path = "../loaders" }
 geogroup_common = { path = "../common" }
+geogroup_loaders = { path = "../loaders" }
+geogroup_naming = { path = "../naming" }
 thiserror = "1.0.63"

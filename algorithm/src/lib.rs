@@ -9,21 +9,31 @@ pub use algo::sort_just_points;
 
 /// Distance between two [points](Point)
 pub type Distance = u64;
-pub type Depth = u8;
+pub type DepthParam = u8;
+
+/// One item as an input to the [`sort_unordered`] function
+pub struct SortItem<P: Point + Clone, T: Ord + Clone, D> {
+    /// Position of the item. Should be fast to [clone](Clone).
+    pub point: P,
+    /// Timestamp of the item. Should be fast to [clone](Clone).
+    pub time: T,
+    /// Additional data, the algorithm ignores theese
+    pub data: D,
+}
 
 /// Parameters of the algorithm influencing how it sorts
 #[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Params {
-    pub depth: Depth,
+    pub depth: DepthParam,
 }
 
 impl Default for Params {
     /// The setting of parameters I personally found reasonable (there's nothing deep in theese numbers)
     ///
-    /// Value: `Params { depth: 128 }`
+    /// Value: `Params { depth: 64 }`
     fn default() -> Self {
-        Params { depth: 128 }
+        Params { depth: 64 }
     }
 }
 
@@ -45,6 +55,14 @@ impl Point for geo::Coord {
     }
 }
 
+#[cfg(feature = "geo")]
+impl Point for geo::Point {
+    fn distance(&self, rhs: &Self) -> Distance {
+        use geo::EuclideanDistance;
+        (self.euclidean_distance(rhs) * 65536.0) as u64
+    }
+}
+
 pub enum BinTree<Leaf, InnerNode> {
     InnerNode {
         children: Box<[BinTree<Leaf, InnerNode>; 2]>,
@@ -57,7 +75,7 @@ impl<T> From<BinTree<T, ()>> for HiearchyItem<T> {
     fn from(value: BinTree<T, ()>) -> Self {
         match value {
             BinTree::InnerNode { children, data: _ } => {
-                HiearchyItem::Group(children.map(From::from).into())
+                HiearchyItem::Group(children.map(From::from).into(), ())
             }
             BinTree::Leaf(data) => HiearchyItem::Item(data),
         }
