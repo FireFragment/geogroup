@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
+mod style;
+mod tabbar;
+use tabbar::tabbar;
+
 use clap::Parser;
 use egui_extras::Size;
 use egui_inbox::UiInbox;
@@ -14,6 +18,7 @@ use std::{
 };
 
 use eframe::*;
+use egui::Frame;
 use egui::*;
 use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
@@ -56,6 +61,8 @@ fn main() -> eframe::Result {
     let mut app = App {
         content: AppContent::default(),
         inbox: UiInbox::default(),
+        style_params: Default::default(),
+        style_changed: false,
         args,
     };
 
@@ -75,6 +82,8 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            style::apply(&cc.egui_ctx, &app.style_params);
             Ok(Box::new(app))
         }),
     )
@@ -129,6 +138,8 @@ struct App {
     content: AppContent,
     inbox: UiInbox<Message>,
     args: CliArgs,
+    style_params: style::Params,
+    style_changed: bool,
 }
 
 #[derive(Debug)]
@@ -239,11 +250,10 @@ fn ribbon_slider<Num: emath::Numeric>(
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.all_styles_mut(|style| {
-            style.interaction.selectable_labels = false;
-            style.spacing.button_padding = Vec2::new(12.0, 6.0);
-            style.animation_time = 0.2;
-        });
+        if self.style_changed {
+            self.style_changed = false;
+            style::apply(ctx, &self.style_params);
+        }
 
         for message in self.inbox.read_without_ctx() {
             message.perform(self, ctx);
@@ -257,17 +267,26 @@ impl eframe::App for App {
                     ctx.request_repaint_after_secs(0.1);
                 }
 
-                egui::TopBottomPanel::top("operation configuration pane").min_height(96.0).show(ctx, |ui| {
-                    let mut cfg_changed = false;
-
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Grouping, "🗁 Grouping");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Naming, "🏷 Naming");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Apply, "☑ Apply");
-                        ui.separator();
-                        ui.selectable_value(&mut main_page.pane, PaneContent::Home, "🏠 Home");
-                        ui.selectable_value(&mut main_page.pane, PaneContent::View, "👁 View");
+                egui::TopBottomPanel::top("ribbon tab bar")
+                    .frame(Frame::none())
+                    .show_separator_line(false)
+                    .show(ctx, |ui| {
+                        tabbar(
+                            ui,
+                            &mut main_page.pane,
+                            [
+                                (PaneContent::Grouping, "🗁 Grouping"),
+                                (PaneContent::Naming, "🏷 Naming"),
+                                (PaneContent::Apply, "☑ Apply"),
+                                (PaneContent::Home, "🏠 Home"),
+                                (PaneContent::View, "👁 View"),
+                            ],
+                        );
                     });
+
+                egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show(ctx, |ui| {
+                    ui.add_space(4.0);
+                    let mut cfg_changed = false;
 
                     ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
                         animated_pager(ui, main_page.pane.clone(), &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
@@ -363,6 +382,23 @@ impl eframe::App for App {
                                         "Height of image previews",
                                         Some(&mut cfg_changed),
                                     );
+
+                                    ui.separator();
+
+                                    ui.vertical(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Accent color");
+                                            if ui.color_edit_button_srgba(&mut self.style_params.accent_color).changed() {
+                                                self.style_changed = true;
+                                            }
+                                        });
+
+                                        ui.horizontal_centered(|ui| {
+                                            ui.label("Color theme");
+                                            egui_theme_switch::global_theme_switch(ui)
+                                        });
+                                    });
+
                                 }
                             }
                         });
