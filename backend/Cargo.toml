@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 geo = "0.29.1"
+geogroup_apply = { path = "../apply" }
 geogroup_algo = { path = "../algorithm" }
 geogroup_common = { path = "../common" }
 geogroup_loaders = { path = "../loaders" }
