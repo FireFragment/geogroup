@@ -20,7 +20,7 @@ use std::{
 use eframe::*;
 use egui::Frame;
 use egui::*;
-use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
+use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder, HiearchyItem};
 use glow::{FALSE, RED};
 
 #[derive(clap::Parser)]
@@ -185,6 +185,7 @@ enum ProgressAction {
 enum PaneContent {
     Grouping,
     Naming,
+    ManualEdit,
     Apply,
     Home,
     View,
@@ -279,6 +280,7 @@ impl eframe::App for App {
                             [
                                 (PaneContent::Grouping, "🗁 Grouping"),
                                 (PaneContent::Naming, "🏷 Naming"),
+                                (PaneContent::ManualEdit, "✏ Manual edits"),
                                 (PaneContent::Apply, "☑ Apply"),
                                 (PaneContent::Home, "🏠 Home"),
                                 (PaneContent::View, "👁 View"),
@@ -359,6 +361,33 @@ impl eframe::App for App {
                                             }
                                         }
                                 }
+                                PaneContent::Naming => {}
+                                PaneContent::ManualEdit => {
+                                    if main_page.auto_sort {
+                                        ui.vertical(|ui| {
+                                            ui.strong("Automatic sorting is enabled");
+                                            ui.label("To make manual changes to the hiearchy, please disable automatic sorting.");
+                                            if ui.button("Disable automatic sorting").clicked() {
+                                                main_page.auto_sort = false;
+                                            }
+                                        });
+                                    } else if let Some(selected_item) = main_page.selected_item_mut() {
+                                        match selected_item {
+                                            HiearchyItem::Group(_, name) => {
+                                                ui.text_edit_singleline(name);
+                                                if ui.button("Dissolve").clicked() {
+                                                    // TODO: Report failure
+                                                    main_page.dissolve_selected();
+                                                }
+                                            }
+                                            HiearchyItem::Item(it) => {
+                                                ui.horizontal(|ui| {
+                                                    ui.text_edit_singleline(&mut it.name);
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
                                 PaneContent::Apply => {
                                     if ui.button("Apply by copying files").clicked() {
                                         let target_dir = rfd::FileDialog::new().pick_folder();
@@ -393,7 +422,6 @@ impl eframe::App for App {
                                         }
                                     };
                                 }
-                                PaneContent::Naming => {}
                                 PaneContent::Home => {
                                     #[cfg(target_os = "linux")]
                                     if ui.button("🗖 New window").clicked() {
@@ -732,6 +760,63 @@ impl MainPage {
             // True to perform an initial sort
             sort_pending: true,
         }
+    }
+    /// Returns [None] if either:
+    ///  - Nothing is selected
+    pub fn selected_item(&self) -> Option<&backend::HiearchyItem<FileInHiearchy, String>> {
+        let mut idx_iter = self.selection.iter();
+        let Some(first_idx) = idx_iter.next() else {return None};
+        let mut current_hiearchy =  &self.hiearchy[*first_idx];
+
+        for idx in idx_iter {
+            let HiearchyItem::Group(children, _) = current_hiearchy else {
+                panic!("Too many indices in selection - tried to probe contents of an item, it should be a group.");
+            };
+            current_hiearchy = &children[*idx];
+        };
+
+        Some(current_hiearchy)
+    }
+
+    /// Returns [None] if either:
+    ///  - Nothing is selected
+    pub fn selected_item_mut(&mut self) -> Option<&mut backend::HiearchyItem<FileInHiearchy, String>> {
+        let mut idx_iter = self.selection.iter();
+        let Some(first_idx) = idx_iter.next() else {return None};
+        let mut current_hiearchy = &mut self.hiearchy[*first_idx];
+
+        for idx in idx_iter {
+            let HiearchyItem::Group(children, _) = current_hiearchy else {
+                panic!("Too many indices in selection - tried to probe contents of an item, it should be a group.");
+            };
+            current_hiearchy = &mut children[*idx];
+        };
+
+        Some(current_hiearchy)
+    }
+    
+    /// Returns [false] if nothing was dissolved because a group was not selected
+    fn dissolve_selected(&mut self) -> bool {
+        let idx_of_dissolved = self.selection.pop().unwrap();
+
+        let target_items = if let Some(HiearchyItem::Group(target_items, _)) = self.selected_item_mut() {
+            target_items
+        } else { 
+            &mut self.hiearchy
+        }; 
+
+        let HiearchyItem::Group(dissolved_items, _) = target_items.remove(idx_of_dissolved) else {
+            return false;
+        };
+
+        target_items.reserve(dissolved_items.len());
+        
+        let mut v = target_items.split_off(idx_of_dissolved);
+        target_items.extend_from_slice(&dissolved_items);
+        target_items.append(&mut v);
+
+        return true;
+
     }
 }
 
