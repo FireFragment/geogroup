@@ -295,17 +295,13 @@ impl eframe::App for App {
                             match pane {
                                 PaneContent::Grouping => {
                                     let mut sort_btn_clicked = false;
-                                    let is_sort_process_idle = main_page
-                                            .sort_process
-                                            .as_ref()
-                                            .is_none_or(|p| p.is_finished());
 
                                         ui.scope(|ui| {
                                             ui.set_max_width(128.0);
                                             egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
 
                                                 strip.cell(|ui| {
-                                                    match is_sort_process_idle {
+                                                    match main_page.is_sort_process_idle() {
                                                         true => {
                                                             if main_page.auto_sort {
                                                                 ui.disable();
@@ -346,7 +342,7 @@ impl eframe::App for App {
                                             | main_page.sort_pending
                                         {
 
-                                            if is_sort_process_idle {
+                                            if main_page.is_sort_process_idle() {
                                                 main_page.sort_process = Some(action_sort(
                                                     &mut main_page.operation_config,
                                                     main_page.hiearchy.to_owned(),
@@ -753,6 +749,7 @@ impl MainPage {
             sort_pending: true,
         }
     }
+
     /// Returns [None] if either:
     ///  - Nothing is selected
     pub fn selected_item(&self) -> Option<&backend::HiearchyItem<FileInHiearchy, String>> {
@@ -787,6 +784,10 @@ impl MainPage {
         Some(current_hiearchy)
     }
     
+    fn is_sort_process_idle(self: &mut MainPage) -> bool {
+        self.sort_process.as_ref().is_none_or(|p| p.is_finished())
+    }
+
     /// Returns [false] if nothing was dissolved because a group was not selected
     fn dissolve_selected(&mut self) -> bool {
         let idx_of_dissolved = self.selection.pop().unwrap();
