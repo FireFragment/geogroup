@@ -128,8 +128,6 @@ enum Message {
     SetContent(AppContent),
     Sorted {
         new_hiearchy: Hiearchy,
-        /// [`backend::SortingCfg`] used for sorting
-        config_hash: u64,
     },
     SetProgress(Option<Progress>),
 }
@@ -601,12 +599,7 @@ fn action_sort(
                 new_hiearchy: match named_hiearchy {
                     backend::HiearchyItem::Group(g, _) => g,
                     backend::HiearchyItem::Item(it) => vec![backend::HiearchyItem::Item(it)],
-                },
-                config_hash: {
-                    let mut h = DefaultHasher::new();
-                    op_config.hash(&mut h);
-                    h.finish()
-                },
+                }
             })
             .unwrap();
     })
@@ -618,7 +611,6 @@ impl Message {
             Message::SetContent(content) => app.content = content,
             Message::Sorted {
                 new_hiearchy,
-                config_hash: config_hash_received,
             } => {
                 if let AppContent::MainPage(ref mut main_page) = app.content {
                     main_page.selection = Vec::new();
