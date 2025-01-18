@@ -385,8 +385,6 @@ impl eframe::App for App {
                                             thread::spawn(move || {
                                                 backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
 
-                                                println!("Done");
-
                                                 inbox_sender.send(
                                                     Message::SetProgress(None)
                                                 ).unwrap();
