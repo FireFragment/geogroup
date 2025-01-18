@@ -177,6 +177,8 @@ enum ProgressAction {
     Geocoding,
     Grouping,
     Naming,
+
+    Applying
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -357,7 +359,42 @@ impl eframe::App for App {
                                             }
                                         }
                                 }
-                                PaneContent::Apply => {}
+                                PaneContent::Apply => {
+                                    if ui.button("Apply by copying files").clicked() {
+                                        let target_dir = rfd::FileDialog::new().pick_folder();
+
+                                        if let Some(target_dir) = target_dir {
+                                            // This is here, because if there already was some progress, it would be erased by this
+                                            // TODO: Prevent this
+                                            debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
+
+                                            self.inbox.sender().send(
+                                                Message::SetProgress(Some(Progress {
+                                                    action: ProgressAction::Applying,
+                                                    progress: None,
+                                                }))
+                                            ).unwrap();
+
+                                            let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
+                                                target_name: file.name,
+                                                original_path: file.path
+                                            }); 
+
+                                            let inbox_sender = self.inbox.sender();
+
+                                            thread::spawn(move || {
+                                                backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
+
+                                                println!("Done");
+
+                                                inbox_sender.send(
+                                                    Message::SetProgress(None)
+                                                ).unwrap();
+                                            });
+
+                                        }
+                                    };
+                                }
                                 PaneContent::Naming => {}
                                 PaneContent::Home => {
                                     #[cfg(target_os = "linux")]
@@ -414,6 +451,8 @@ impl eframe::App for App {
                                 ProgressAction::Geocoding => "Geocoding",
                                 ProgressAction::Grouping => "Grouping",
                                 ProgressAction::Naming => "Naming",
+
+                                ProgressAction::Applying => "Applying",
                             });
 
                             if let Some(progress) = progress.progress {
