@@ -12,7 +12,8 @@ pub struct ApplyLeaf {
 pub fn apply_by_copy(hiearchy: HiearchyItem<ApplyLeaf, String>, target_dir: PathBuf) -> std::io::Result<()>  {
     apply_by_copy_inner(hiearchy, target_dir, 0)
 }
-pub fn apply_by_copy_inner(hiearchy: HiearchyItem<ApplyLeaf, String>, target_dir: PathBuf, idx: usize) -> std::io::Result<()>  {
+
+fn apply_by_copy_inner(hiearchy: HiearchyItem<ApplyLeaf, String>, target_dir: PathBuf, idx: usize) -> std::io::Result<()>  {
     if !target_dir.exists() {
         std::fs::create_dir_all(&target_dir)?;
     }
