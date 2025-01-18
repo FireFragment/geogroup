@@ -1847,6 +1847,7 @@ version = "0.1.0"
 dependencies = [
  "geo 0.29.3",
  "geogroup_algo",
+ "geogroup_apply",
  "geogroup_common",
  "geogroup_loaders",
  "geogroup_naming",
