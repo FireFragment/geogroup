@@ -263,240 +263,255 @@ impl eframe::App for App {
         match &mut self.content {
             AppContent::WelcomePage(welcome_page) => welcome_page.draw(ctx, &self.inbox),
 
-            AppContent::MainPage(main_page) => {
-                if main_page.progress.is_some() {
-                    ctx.request_repaint_after_secs(0.1);
-                }
+            AppContent::MainPage(_) => {
+                self.main_page(ctx);
+            }
+        }
+    }
+}
 
-                egui::TopBottomPanel::top("ribbon tab bar")
-                    .frame(Frame::none())
-                    .show_separator_line(false)
-                    .show(ctx, |ui| {
-                        tabbar(
-                            ui,
-                            &mut main_page.pane,
-                            [
-                                (PaneContent::Grouping, "🗁 Grouping"),
-                                (PaneContent::Naming, "🏷 Naming"),
-                                (PaneContent::ManualEdit, "✏ Manual edits"),
-                                (PaneContent::Apply, "☑ Apply"),
-                                (PaneContent::Home, "🏠 Home"),
-                                (PaneContent::View, "👁 View"),
-                            ],
-                        );
-                    });
+impl App {
+    /// Panics if `content` is not [`AppContent::MainPage`]
+    fn main_page(&mut self, ctx: &Context) {
+        let AppContent::MainPage(ref mut main_page) = self.content else {
+            panic!(
+                "AppContent is not `MainPage` when `App::main_page` was called.
+                It's the following instead: {:#?}",
+                self.content
+            )
+        };
 
-                egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show(ctx, |ui| {
-                    ui.add_space(4.0);
-                    let mut cfg_changed = false;
+        if main_page.progress.is_some() {
+            ctx.request_repaint_after_secs(0.1);
+        }
 
-                    ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
-                        animated_pager(ui, main_page.pane.clone(), &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
-                            match pane {
-                                PaneContent::Grouping => {
-                                    let mut sort_btn_clicked = false;
+        egui::TopBottomPanel::top("ribbon tab bar")
+            .frame(Frame::none())
+            .show_separator_line(false)
+            .show(ctx, |ui| {
+                tabbar(
+                    ui,
+                    &mut main_page.pane,
+                    [
+                        (PaneContent::Grouping, "🗁 Grouping"),
+                        (PaneContent::Naming, "🏷 Naming"),
+                        (PaneContent::ManualEdit, "✏ Manual edits"),
+                        (PaneContent::Apply, "☑ Apply"),
+                        (PaneContent::Home, "🏠 Home"),
+                        (PaneContent::View, "👁 View"),
+                    ],
+                );
+            });
 
-                                        ui.scope(|ui| {
-                                            ui.set_max_width(128.0);
-                                            egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
+        egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show(ctx, |ui| {
+            ui.add_space(4.0);
+            let mut cfg_changed = false;
 
-                                                strip.cell(|ui| {
-                                                    match main_page.is_sort_process_idle() {
-                                                        true => {
-                                                            if main_page.auto_sort {
-                                                                ui.disable();
-                                                            }
-                                                            sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").selected(true)).clicked();
-                                                        },
-                                                        false => {
-                                                            ui.horizontal_centered(|ui| {
-                                                                ui.spinner(); //.labelled_by(label.id);
-                                                                ui.label("Sorting...")
-                                                            });
-                                                        }
+            ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
+                animated_pager(ui, main_page.pane.clone(), &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
+                    match pane {
+                        PaneContent::Grouping => {
+                            let mut sort_btn_clicked = false;
+
+                                ui.scope(|ui| {
+                                    ui.set_max_width(128.0);
+                                    egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
+
+                                        strip.cell(|ui| {
+                                            match main_page.is_sort_process_idle() {
+                                                true => {
+                                                    if main_page.auto_sort {
+                                                        ui.disable();
                                                     }
-                                                });
-
-                                                strip.cell(|ui| {
-                                                    cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
-                                                });
-                                            });
-                                        });
-
-
-                                        ui.separator();
-
-                                        ribbon_slider(
-                                            ui,
-                                            &mut main_page.operation_config.geogroup_params.depth,
-                                            0..=u8::MAX,
-                                            backend::algorithm::Params::default().depth,
-                                            "Depth",
-                                            "High values yield deeply nested folder structure. Low values lead to shallow structures",
-                                            Some(&mut cfg_changed),
-                                        );
-
-
-                                        if (cfg_changed && main_page.auto_sort)
-                                            | sort_btn_clicked
-                                            | main_page.sort_pending
-                                        {
-
-                                            if main_page.is_sort_process_idle() {
-                                                main_page.sort_process = Some(action_sort(
-                                                    &mut main_page.operation_config,
-                                                    main_page.hiearchy.to_owned(),
-                                                    &self.args,
-                                                    &self.inbox,
-                                                ));
-                                                main_page.sort_pending = false;
-                                            } else {
-                                                main_page.sort_pending = true;
-                                            }
-                                        }
-                                }
-                                PaneContent::Naming => {}
-                                PaneContent::ManualEdit => {
-                                    if main_page.auto_sort {
-                                        ui.vertical(|ui| {
-                                            ui.strong("Automatic sorting is enabled");
-                                            ui.label("To make manual changes to the hiearchy, please disable automatic sorting.");
-                                            if ui.button("Disable automatic sorting").clicked() {
-                                                main_page.auto_sort = false;
-                                            }
-                                        });
-                                    } else if let Some(selected_item) = main_page.selected_item_mut() {
-                                        match selected_item {
-                                            HiearchyItem::Group(_, name) => {
-                                                ui.text_edit_singleline(name);
-                                                if ui.button("Dissolve").clicked() {
-                                                    // TODO: Report failure
-                                                    main_page.dissolve_selected();
+                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").selected(true)).clicked();
+                                                },
+                                                false => {
+                                                    ui.horizontal_centered(|ui| {
+                                                        ui.spinner(); //.labelled_by(label.id);
+                                                        ui.label("Sorting...")
+                                                    });
                                                 }
                                             }
-                                            HiearchyItem::Item(it) => {
-                                                ui.horizontal(|ui| {
-                                                    ui.text_edit_singleline(&mut it.name);
-                                                });
-                                            }
-                                        }
+                                        });
+
+                                        strip.cell(|ui| {
+                                            cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
+                                        });
+                                    });
+                                });
+
+
+                                ui.separator();
+
+                                ribbon_slider(
+                                    ui,
+                                    &mut main_page.operation_config.geogroup_params.depth,
+                                    0..=u8::MAX,
+                                    backend::algorithm::Params::default().depth,
+                                    "Depth",
+                                    "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                    Some(&mut cfg_changed),
+                                );
+
+
+                                if (cfg_changed && main_page.auto_sort)
+                                    | sort_btn_clicked
+                                    | main_page.sort_pending
+                                {
+
+                                    if main_page.is_sort_process_idle() {
+                                        main_page.sort_process = Some(action_sort(
+                                            &mut main_page.operation_config,
+                                            main_page.hiearchy.to_owned(),
+                                            &self.args,
+                                            &self.inbox,
+                                        ));
+                                        main_page.sort_pending = false;
+                                    } else {
+                                        main_page.sort_pending = true;
                                     }
                                 }
-                                PaneContent::Apply => {
-                                    if ui.button("Apply by copying files").clicked() {
-                                        let target_dir = rfd::FileDialog::new().pick_folder();
-
-                                        if let Some(target_dir) = target_dir {
-                                            // This is here, because if there already was some progress, it would be erased by this
-                                            // TODO: Prevent this
-                                            debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
-
-                                            self.inbox.sender().send(
-                                                Message::SetProgress(Some(Progress {
-                                                    action: ProgressAction::Applying,
-                                                    progress: None,
-                                                }))
-                                            ).unwrap();
-
-                                            let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
-                                                target_name: file.name,
-                                                original_path: file.path
-                                            }); 
-
-                                            let inbox_sender = self.inbox.sender();
-
-                                            thread::spawn(move || {
-                                                backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
-
-                                                inbox_sender.send(
-                                                    Message::SetProgress(None)
-                                                ).unwrap();
-                                            });
-
-                                        }
-                                    };
-                                }
-                                PaneContent::Home => {
-                                    #[cfg(target_os = "linux")]
-                                    if ui.button("🗖 New window").clicked() {
-                                        std::process::Command::new("/proc/self/exe").spawn().expect("failed to start myself");
+                        }
+                        PaneContent::Naming => {}
+                        PaneContent::ManualEdit => {
+                            if main_page.auto_sort {
+                                ui.vertical(|ui| {
+                                    ui.strong("Automatic sorting is enabled");
+                                    ui.label("To make manual changes to the hiearchy, please disable automatic sorting.");
+                                    if ui.button("Disable automatic sorting").clicked() {
+                                        main_page.auto_sort = false;
                                     }
-
-                                    if ui.button("❌ Close directory").clicked() {
-                                        self.inbox.sender().send(Message::SetContent(AppContent::WelcomePage(WelcomePage::Normal))).unwrap();
-                                    };
-                                    if ui.button("❎ Quit Geogroup").clicked() {
-                                        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-                                    };
-                                }
-                                PaneContent::View => {
-                                    ribbon_slider(
-                                        ui,
-                                        &mut main_page.image_scale,
-                                        32..=128,
-                                        48,
-                                        "Image size",
-                                        "Height of image previews",
-                                        Some(&mut cfg_changed),
-                                    );
-
-                                    ui.separator();
-
-                                    ui.vertical(|ui| {
+                                });
+                            } else if let Some(selected_item) = main_page.selected_item_mut() {
+                                match selected_item {
+                                    HiearchyItem::Group(_, name) => {
+                                        ui.text_edit_singleline(name);
+                                        if ui.button("Dissolve").clicked() {
+                                            // TODO: Report failure
+                                            main_page.dissolve_selected();
+                                        }
+                                    }
+                                    HiearchyItem::Item(it) => {
                                         ui.horizontal(|ui| {
-                                            ui.label("Accent color");
-                                            if ui.color_edit_button_srgba(&mut self.style_params.accent_color).changed() {
-                                                self.style_changed = true;
-                                            }
+                                            ui.text_edit_singleline(&mut it.name);
                                         });
+                                    }
+                                }
+                            }
+                        }
+                        PaneContent::Apply => {
+                            if ui.button("Apply by copying files").clicked() {
+                                let target_dir = rfd::FileDialog::new().pick_folder();
 
-                                        ui.horizontal_centered(|ui| {
-                                            ui.label("Color theme");
-                                            egui_theme_switch::global_theme_switch(ui)
-                                        });
+                                if let Some(target_dir) = target_dir {
+                                    // This is here, because if there already was some progress, it would be erased by this
+                                    // TODO: Prevent this
+                                    debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
+
+                                    self.inbox.sender().send(
+                                        Message::SetProgress(Some(Progress {
+                                            action: ProgressAction::Applying,
+                                            progress: None,
+                                        }))
+                                    ).unwrap();
+
+                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
+                                        target_name: file.name,
+                                        original_path: file.path
+                                    });
+
+                                    let inbox_sender = self.inbox.sender();
+
+                                    thread::spawn(move || {
+                                        backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
+
+                                        inbox_sender.send(
+                                            Message::SetProgress(None)
+                                        ).unwrap();
                                     });
 
                                 }
+                            };
+                        }
+                        PaneContent::Home => {
+                            #[cfg(target_os = "linux")]
+                            if ui.button("🗖 New window").clicked() {
+                                std::process::Command::new("/proc/self/exe").spawn().expect("failed to start myself");
                             }
-                        });
 
-                    });
-                });
+                            if ui.button("❌ Close directory").clicked() {
+                                self.inbox.sender().send(Message::SetContent(AppContent::WelcomePage(WelcomePage::Normal))).unwrap();
+                            };
+                            if ui.button("❎ Quit Geogroup").clicked() {
+                                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                            };
+                        }
+                        PaneContent::View => {
+                            ribbon_slider(
+                                ui,
+                                &mut main_page.image_scale,
+                                32..=128,
+                                48,
+                                "Image size",
+                                "Height of image previews",
+                                Some(&mut cfg_changed),
+                            );
 
-                egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
-                    if let Some(ref progress) = main_page.progress {
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label(match progress.action {
-                                ProgressAction::Geocoding => "Geocoding",
-                                ProgressAction::Grouping => "Grouping",
-                                ProgressAction::Naming => "Naming",
+                            ui.separator();
 
-                                ProgressAction::Applying => "Applying",
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label("Accent color");
+                                    if ui.color_edit_button_srgba(&mut self.style_params.accent_color).changed() {
+                                        self.style_changed = true;
+                                    }
+                                });
+
+                                ui.horizontal_centered(|ui| {
+                                    ui.label("Color theme");
+                                    egui_theme_switch::global_theme_switch(ui)
+                                });
                             });
 
-                            if let Some(progress) = progress.progress {
-                                ProgressBar::new(progress as f32 / u16::MAX as f32)
-                                    .show_percentage()
-                                    .ui(ui);
-                            }
-                        });
-                    } else {
-                        ui.label("Idle");
+                        }
                     }
                 });
 
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    show_hiearchy(
-                        ui,
-                        &main_page.hiearchy,
-                        &mut main_page.selection,
-                        &main_page.flatten_mode,
-                        main_page.image_scale,
-                    )
+            });
+        });
+
+        egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
+            if let Some(ref progress) = main_page.progress {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(match progress.action {
+                        ProgressAction::Geocoding => "Geocoding",
+                        ProgressAction::Grouping => "Grouping",
+                        ProgressAction::Naming => "Naming",
+
+                        ProgressAction::Applying => "Applying",
+                    });
+
+                    if let Some(progress) = progress.progress {
+                        ProgressBar::new(progress as f32 / u16::MAX as f32)
+                            .show_percentage()
+                            .ui(ui);
+                    }
                 });
+            } else {
+                ui.label("Idle");
             }
-        }
+        });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            show_hiearchy(
+                ui,
+                &main_page.hiearchy,
+                &mut main_page.selection,
+                &main_page.flatten_mode,
+                main_page.image_scale,
+            )
+        });
     }
 }
 
