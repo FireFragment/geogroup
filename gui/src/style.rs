@@ -26,7 +26,71 @@ pub fn set_fg_color(style: &mut Style, color: Color32) {
 }
 
 pub fn apply(ctx: &Context, params: &Params) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    // Install my own font (maybe supporting non-latin characters):
+    fonts.font_data.insert(
+        "Segoe UI".to_owned(),
+        // .ttf and .otf supported
+        egui::FontData::from_static(include_bytes!(
+            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui.otf"
+        )),
+    );
+
+    fonts.font_data.insert(
+        "Segoe UI Bold".to_owned(),
+        // .ttf and .otf supported
+        egui::FontData::from_static(include_bytes!(
+            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui-bold.otf"
+        )),
+    );
+
+    fonts.font_data.insert(
+        "Segoe UI Light".to_owned(),
+        // .ttf and .otf supported
+        egui::FontData::from_static(include_bytes!(
+            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui-light-2.ttf"
+        )),
+    );
+    fonts.font_data.insert(
+        "Figtree".to_owned(),
+        // .ttf and .otf supported
+        egui::FontData::from_static(include_bytes!(
+            "/nix/store/frkc22297c6z2rrl10m9p47lixl303fs-figtree/share/fonts/figtree/figtree-v6-latin_latin-ext-regular.ttf"
+        )),
+    );
+
+    fonts.font_data.insert(
+        "Figtree Bold".to_owned(),
+        // .ttf and .otf supported
+        egui::FontData::from_static(include_bytes!(
+            "/nix/store/frkc22297c6z2rrl10m9p47lixl303fs-figtree/share/fonts/figtree/figtree-v6-latin_latin-ext-800.ttf"
+        )),
+    );
+
+    fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .unwrap()
+        .insert(0, "Segoe UI".to_owned());
+
+    fonts.families.insert(
+        egui::FontFamily::Name("Light".into()),
+        vec!["Segoe UI Light".to_owned()],
+    );
+    fonts.families.insert(
+        egui::FontFamily::Name("Bold".into()),
+        vec!["Segoe UI Bold".to_owned()],
+    );
+
+    ctx.set_fonts(fonts);
+
     ctx.all_styles_mut(|style| {
+        style.text_styles.insert(
+            TextStyle::Heading,
+            FontId::new(18.0, FontFamily::Name("Bold".into())),
+        );
+
         if style.visuals.dark_mode {
             style.visuals.panel_fill = Color32::BLACK; //Color32::from_rgb(28, 28, 38);
 
@@ -75,5 +139,6 @@ pub fn apply(ctx: &Context, params: &Params) {
         // MISCELLANEOUS
         style.interaction.selectable_labels = false;
         style.animation_time = 0.2;
+        style.visuals.slider_trailing_fill = true;
     });
 }
