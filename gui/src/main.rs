@@ -20,7 +20,9 @@ use std::{
 use eframe::*;
 use egui::Frame;
 use egui::*;
-use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder, HiearchyItem};
+use geogroup_backend::{
+    self as backend, loaders::DataLoader as _, naming::RevGeocoder, HiearchyItem,
+};
 use glow::{FALSE, RED};
 
 #[derive(clap::Parser)]
@@ -126,9 +128,7 @@ type Hiearchy = Vec<backend::HiearchyItem<FileInHiearchy, String>>;
 #[derive(Debug)]
 enum Message {
     SetContent(AppContent),
-    Sorted {
-        new_hiearchy: Hiearchy,
-    },
+    Sorted { new_hiearchy: Hiearchy },
     SetProgress(Option<Progress>),
 }
 
@@ -176,7 +176,7 @@ enum ProgressAction {
     Grouping,
     Naming,
 
-    Applying
+    Applying,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -610,7 +610,7 @@ fn action_sort(
                 new_hiearchy: match named_hiearchy {
                     backend::HiearchyItem::Group(g, _) => g,
                     backend::HiearchyItem::Item(it) => vec![backend::HiearchyItem::Item(it)],
-                }
+                },
             })
             .unwrap();
     })
@@ -620,9 +620,7 @@ impl Message {
     pub fn perform(self, app: &mut App, ctx: &egui::Context) {
         match self {
             Message::SetContent(content) => app.content = content,
-            Message::Sorted {
-                new_hiearchy,
-            } => {
+            Message::Sorted { new_hiearchy } => {
                 if let AppContent::MainPage(ref mut main_page) = app.content {
                     main_page.selection = Vec::new();
                     main_page.hiearchy = new_hiearchy;
@@ -769,24 +767,30 @@ impl MainPage {
     ///  - Nothing is selected
     pub fn selected_item(&self) -> Option<&backend::HiearchyItem<FileInHiearchy, String>> {
         let mut idx_iter = self.selection.iter();
-        let Some(first_idx) = idx_iter.next() else {return None};
-        let mut current_hiearchy =  &self.hiearchy[*first_idx];
+        let Some(first_idx) = idx_iter.next() else {
+            return None;
+        };
+        let mut current_hiearchy = &self.hiearchy[*first_idx];
 
         for idx in idx_iter {
             let HiearchyItem::Group(children, _) = current_hiearchy else {
                 panic!("Too many indices in selection - tried to probe contents of an item, it should be a group.");
             };
             current_hiearchy = &children[*idx];
-        };
+        }
 
         Some(current_hiearchy)
     }
 
     /// Returns [None] if either:
     ///  - Nothing is selected
-    pub fn selected_item_mut(&mut self) -> Option<&mut backend::HiearchyItem<FileInHiearchy, String>> {
+    pub fn selected_item_mut(
+        &mut self,
+    ) -> Option<&mut backend::HiearchyItem<FileInHiearchy, String>> {
         let mut idx_iter = self.selection.iter();
-        let Some(first_idx) = idx_iter.next() else {return None};
+        let Some(first_idx) = idx_iter.next() else {
+            return None;
+        };
         let mut current_hiearchy = &mut self.hiearchy[*first_idx];
 
         for idx in idx_iter {
@@ -794,11 +798,11 @@ impl MainPage {
                 panic!("Too many indices in selection - tried to probe contents of an item, it should be a group.");
             };
             current_hiearchy = &mut children[*idx];
-        };
+        }
 
         Some(current_hiearchy)
     }
-    
+
     fn is_sort_process_idle(self: &mut MainPage) -> bool {
         self.sort_process.as_ref().is_none_or(|p| p.is_finished())
     }
@@ -807,24 +811,24 @@ impl MainPage {
     fn dissolve_selected(&mut self) -> bool {
         let idx_of_dissolved = self.selection.pop().unwrap();
 
-        let target_items = if let Some(HiearchyItem::Group(target_items, _)) = self.selected_item_mut() {
-            target_items
-        } else { 
-            &mut self.hiearchy
-        }; 
+        let target_items =
+            if let Some(HiearchyItem::Group(target_items, _)) = self.selected_item_mut() {
+                target_items
+            } else {
+                &mut self.hiearchy
+            };
 
         let HiearchyItem::Group(dissolved_items, _) = target_items.remove(idx_of_dissolved) else {
             return false;
         };
 
         target_items.reserve(dissolved_items.len());
-        
+
         let mut v = target_items.split_off(idx_of_dissolved);
         target_items.extend_from_slice(&dissolved_items);
         target_items.append(&mut v);
 
         return true;
-
     }
 }
 
