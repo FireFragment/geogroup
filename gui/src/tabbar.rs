@@ -3,7 +3,7 @@ use egui::Frame;
 
 pub fn tabbar<'a, TabId: PartialEq>(
     ui: &mut Ui,
-    selected_tab: &mut TabId,
+    selected_tab: &mut Option<TabId>,
     tabs: impl IntoIterator<Item = (TabId, &'a str)>,
 ) {
     let tab_bar_bg = ui.style().visuals.selection.bg_fill;
@@ -40,9 +40,18 @@ pub fn tabbar<'a, TabId: PartialEq>(
 
                 ui.horizontal(|ui| {
                     for (tab_id, label) in tabs {
-                        ui.selectable_value(selected_tab, tab_id, label);
+                        ui.selectable_value(selected_tab, Some(tab_id), label);
                     }
 
+                    if selected_tab.is_some() {
+                        ui.with_layout(Layout::right_to_left(Align::BOTTOM), |ui| {
+                            if ui.add(Button::new("⬆").frame(false)).clicked() {
+                                *selected_tab = None;
+                            }
+                        });
+                    }
+
+                    // Make the ribbon go full width even if there's no tab open
                     ui.allocate_space(ui.available_size());
                 });
             })

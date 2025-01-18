@@ -148,7 +148,7 @@ enum AppContent {
 
 #[derive(Debug)]
 struct MainPage {
-    pane: PaneContent,
+    pane: Option<PaneContent>,
     src_dir: PathBuf,
     hiearchy: Hiearchy,
     flatten_mode: Option<FlattenMode>,
@@ -303,12 +303,14 @@ impl App {
                 );
             });
 
-        egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show(ctx, |ui| {
+        egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show_animated(ctx, main_page.pane.is_some(), |ui| {
+            let Some(pane) = main_page.pane.clone() else { return };
+
             ui.add_space(4.0);
             let mut cfg_changed = false;
 
             ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
-                animated_pager(ui, main_page.pane.clone(), &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
+                animated_pager(ui, pane, &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
                             let mut sort_btn_clicked = false;
@@ -749,7 +751,7 @@ impl MainPage {
                         })
                 })
                 .collect(),
-            pane: PaneContent::Grouping,
+            pane: Some(PaneContent::Grouping),
             src_dir: folder,
             flatten_mode: None,
             selection: Vec::new(),
