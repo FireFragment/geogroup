@@ -306,7 +306,7 @@ impl eframe::App for App {
                                                             if main_page.auto_sort {
                                                                 ui.disable();
                                                             }
-                                                            sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort")).clicked();
+                                                            sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").selected(true)).clicked();
                                                         },
                                                         false => {
                                                             ui.horizontal_centered(|ui| {
