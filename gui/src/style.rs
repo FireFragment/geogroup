@@ -86,11 +86,14 @@ pub fn apply(ctx: &Context, params: &Params) {
     ctx.set_fonts(fonts);
 
     ctx.all_styles_mut(|style| {
-        style.text_styles.insert(
-            TextStyle::Heading,
-            FontId::new(18.0, FontFamily::Name("Bold".into())),
-        );
 
+        for ts in [TextStyle::Body, TextStyle::Button, TextStyle::Monospace] {
+            if let Some(s) = style.text_styles.get_mut(&ts) {
+                s.size = 16.0;
+            } else {
+                debug_assert!(false, "`ts` is missing in style??")
+            }
+        }
         if style.visuals.dark_mode {
             style.visuals.panel_fill = Color32::BLACK; //Color32::from_rgb(28, 28, 38);
 
