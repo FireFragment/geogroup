@@ -119,7 +119,7 @@ impl App {
                                                     if main_page.auto_sort {
                                                         ui.disable();
                                                     }
-                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").selected(true)).clicked();
+                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").fill(ui.style().visuals.selection.bg_fill)).clicked();
                                                 },
                                                 false => {
                                                     ui.horizontal_centered(|ui| {
