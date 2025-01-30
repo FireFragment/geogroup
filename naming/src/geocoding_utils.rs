@@ -52,18 +52,12 @@ impl RevGeocoder<'_> {
         let mut cache = self.cache.to_owned();
         cache.push(format!("{}_{}", point.0.x, point.0.y));
 
-        println!(" -- Querying cache...");
         if let Some(ret) = fs::read(&cache)
             .ok()
             .map(|cache_contents| Some(bincode::deserialize(&cache_contents[..]).ok()))
             .flatten()
             .flatten()
         {
-            //println!(" -- Using cache");
-            let mut all_geocode_cnt = ALL_GEOCODE_CNT.lock().unwrap();
-            println!("All: #{all_geocode_cnt}");
-            *all_geocode_cnt += 1;
-
             Ok(ret)
         } else {
             let ret = reverse_geocode_nocache(&self.opencage, point);
@@ -83,19 +77,10 @@ impl RevGeocoder<'_> {
     }
 }
 
-static REAL_GEOCODE_CNT: LazyLock<Mutex<u32>> = LazyLock::new(|| Mutex::new(0));
-static ALL_GEOCODE_CNT: LazyLock<Mutex<u32>> = LazyLock::new(|| Mutex::new(0));
-
 pub fn reverse_geocode_nocache(
     opencage: &Opencage,
     point: &Point,
 ) -> Result<HashMap<String, String>, GeocodingError> {
-    let mut real_geocode_cnt = REAL_GEOCODE_CNT.lock().unwrap();
-    let mut all_geocode_cnt = ALL_GEOCODE_CNT.lock().unwrap();
-    println!("Real: #{real_geocode_cnt} | All: #{all_geocode_cnt}");
-    *real_geocode_cnt += 1;
-    *all_geocode_cnt += 1;
-
     if let [result, ..] = &opencage.reverse_full(point)?.results[..] {
         Ok(result
             .components

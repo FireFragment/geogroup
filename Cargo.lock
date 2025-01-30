@@ -1835,11 +1835,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "geogroup_apply"
+version = "0.1.0"
+dependencies = [
+ "geogroup_common",
+ "log",
+ "sanitise-file-name",
+]
+
+[[package]]
 name = "geogroup_backend"
 version = "0.1.0"
 dependencies = [
  "geo 0.29.3",
  "geogroup_algo",
+ "geogroup_apply",
  "geogroup_common",
  "geogroup_loaders",
  "geogroup_naming",
@@ -2821,9 +2831,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.22"
+version = "0.4.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 
 [[package]]
 name = "loop9"
@@ -4076,6 +4086,12 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "sanitise-file-name"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d36299972b96b8ae7e8f04ecbf75fb41a27bf3781af00abcf57609774cb911"
 
 [[package]]
 name = "schannel"

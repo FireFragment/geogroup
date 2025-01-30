@@ -12,7 +12,7 @@ pub struct Params {
 impl Default for Params {
     fn default() -> Self {
         Params {
-            accent_color: Color32::from_rgb(0, 129, 184),
+            accent_color: Color32::from_rgb(186, 32, 68),
         }
     }
 }
