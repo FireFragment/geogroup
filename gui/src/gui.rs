@@ -350,6 +350,8 @@ fn show_hiearchy_inner(
     };
 
     ui.push_id(current_depth, |ui| {
+        let group_row_size =
+            ui.style().text_styles[&TextStyle::Body].size + ui.style().spacing.item_spacing.y * 2.0;
         TableBuilder::new(ui)
             .column(if selected_group.is_some() {
                 Column::exact(256.0)
@@ -362,7 +364,7 @@ fn show_hiearchy_inner(
                     hiearchy.iter().map(|item| {
                         use geogroup_backend::HiearchyItem as HI;
                         match item {
-                            HI::Group(_, _) => 16.0,
+                            HI::Group(_, _) => group_row_size,
                             HI::Item(_) => image_scale as f32,
                         }
                     }),
