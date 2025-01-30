@@ -27,6 +27,14 @@ pub fn set_fg_color(style: &mut Style, color: Color32) {
 
 pub fn apply(ctx: &Context, params: &Params) {
     ctx.all_styles_mut(|style| {
+
+        for ts in [TextStyle::Body, TextStyle::Button, TextStyle::Monospace] {
+            if let Some(s) = style.text_styles.get_mut(&ts) {
+                s.size = 16.0;
+            } else {
+                debug_assert!(false, "`ts` is missing in style??")
+            }
+        }
         if style.visuals.dark_mode {
             style.visuals.panel_fill = Color32::BLACK; //Color32::from_rgb(28, 28, 38);
 
