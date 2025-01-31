@@ -35,8 +35,6 @@ pub fn tabbar<'a, TabId: PartialEq>(
             ui.add_space(ui.style().spacing.item_spacing.x);
             ui.vertical(|ui| {
                 ui.add_space(8.0);
-                ui.heading("Geogroup");
-                ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
                     for (tab_id, label) in tabs {
@@ -54,6 +52,14 @@ pub fn tabbar<'a, TabId: PartialEq>(
                     // Make the ribbon go full width even if there's no tab open
                     ui.allocate_space(ui.available_size());
                 });
+
+                ui.add_space(
+                    ui.ctx().animate_value_with_time(
+                        "anim_ribbon_margin".into(),
+                        if selected_tab.is_none() { 8.0 } else { 0.0 },
+                        ui.style().animation_time / 2.0,
+                    ) - ui.style().spacing.item_spacing.y,
+                );
             })
         });
     });
