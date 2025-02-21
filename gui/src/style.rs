@@ -98,12 +98,20 @@ fn load_fonts(ctx: &Context) {
 
     fonts.families.insert(
         FontFamily::Name("Bold".into()),
-        vec![FONT_BOLD.into() /* , FONT_REGULAR.into()*/],
+        vec![
+            FONT_BOLD.into(),
+            FONT_REGULAR.into(),
+            "emoji-icon-font".into(),
+        ],
     );
 
     fonts.families.insert(
         FontFamily::Name("Light".into()),
-        vec![FONT_LIGHT.into() /* , FONT_REGULAR.into()*/],
+        vec![
+            FONT_LIGHT.into(),
+            FONT_REGULAR.into(),
+            "emoji-icon-font".into(),
+        ],
     );
 
     ctx.set_fonts(fonts);
