@@ -48,11 +48,12 @@
         };
 
         # TODO: Is anything superflous here?
-        eguiLibs = with pkgs; [
+        runtimeLibs = with pkgs; [
           wayland
           libxkbcommon
           libGL
           libGLU
+          fontconfig
         ] ++ (with pkgs.xorg; [
           libX11
           libxcb
@@ -68,7 +69,7 @@
           buildInputs = [ pkgs.makeWrapper ];
           postBuild = ''
             wrapProgram $out/bin/geogroup_gui \
-              --suffix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath eguiLibs}
+              --suffix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeLibs}
           '';
         };
         #;
@@ -79,10 +80,10 @@
                   extensions = [ "rust-src" "cargo" "rustc" ];
             })
             pkgs.gcc
-          ] ++ eguiLibs;
+          ] ++ runtimeLibs;
 
           shellHook = ''
-              export LD_LIBRARY_PATH=/run/opengl-driver/lib/:${pkgs.lib.makeLibraryPath eguiLibs}
+              export LD_LIBRARY_PATH=/run/opengl-driver/lib/:${pkgs.lib.makeLibraryPath runtimeLibs}
           '';
 
           RUST_SRC_PATH = "${pkgs.rust-bin.stable.latest.default.override {

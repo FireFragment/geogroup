@@ -25,67 +25,100 @@ pub fn set_fg_color(style: &mut Style, color: Color32) {
     style.visuals.widgets.open.fg_stroke.color = color;
 }
 
-pub fn apply(ctx: &Context, params: &Params) {
-    let mut fonts = egui::FontDefinitions::default();
+fn load_fonts(ctx: &Context) {
+    const FONT_REGULAR: &str = "System Sans Serif";
+    const FONT_BOLD: &str = "System Sans Serif Bold";
+    const FONT_LIGHT: &str = "System Sans Serif Light";
 
-    // Install my own font (maybe supporting non-latin characters):
-    fonts.font_data.insert(
-        "Segoe UI".to_owned(),
-        // .ttf and .otf supported
-        egui::FontData::from_static(include_bytes!(
-            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui.otf"
-        )),
-    );
+    use eframe::{
+        egui::{FontData, FontDefinitions},
+        epaint::FontFamily,
+    };
+    use font_kit::{
+        family_name::FamilyName, handle::Handle, properties::Properties, source::SystemSource,
+    };
 
-    fonts.font_data.insert(
-        "Segoe UI Bold".to_owned(),
-        // .ttf and .otf supported
-        egui::FontData::from_static(include_bytes!(
-            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui-bold.otf"
-        )),
-    );
+    let mut fonts = FontDefinitions::default();
 
-    fonts.font_data.insert(
-        "Segoe UI Light".to_owned(),
-        // .ttf and .otf supported
-        egui::FontData::from_static(include_bytes!(
-            "/nix/store/p5sizlrzxqxa2jp194xwzpgzka7mhkmf-Segoe-UI/share/fonts/Segoe UI/segoe-ui-light-2.ttf"
-        )),
-    );
-    fonts.font_data.insert(
-        "Figtree".to_owned(),
-        // .ttf and .otf supported
-        egui::FontData::from_static(include_bytes!(
-            "/nix/store/frkc22297c6z2rrl10m9p47lixl303fs-figtree/share/fonts/figtree/figtree-v6-latin_latin-ext-regular.ttf"
-        )),
-    );
+    {
+        let handle = SystemSource::new()
+            .select_best_match(
+                &[FamilyName::Title("Segoe UI".into()), FamilyName::SansSerif],
+                &Properties::new(),
+            )
+            .unwrap();
 
-    fonts.font_data.insert(
-        "Figtree Bold".to_owned(),
-        // .ttf and .otf supported
-        egui::FontData::from_static(include_bytes!(
-            "/nix/store/frkc22297c6z2rrl10m9p47lixl303fs-figtree/share/fonts/figtree/figtree-v6-latin_latin-ext-800.ttf"
-        )),
-    );
+        let buf: Vec<u8> = match handle {
+            Handle::Memory { bytes, .. } => bytes.to_vec(),
+            Handle::Path { path, .. } => std::fs::read(path).unwrap(),
+        };
 
-    fonts
-        .families
-        .get_mut(&egui::FontFamily::Proportional)
-        .unwrap()
-        .insert(0, "Segoe UI".to_owned());
+        fonts
+            .font_data
+            .insert(FONT_REGULAR.to_owned(), FontData::from_owned(buf));
+    }
+    {
+        let handle = SystemSource::new()
+            .select_best_match(
+                &[FamilyName::Title("Segoe UI".into()), FamilyName::SansSerif],
+                Properties::new().weight(font_kit::properties::Weight(700.0)),
+            )
+            .unwrap();
+
+        let buf: Vec<u8> = match handle {
+            Handle::Memory { bytes, .. } => bytes.to_vec(),
+            Handle::Path { path, .. } => std::fs::read(path).unwrap(),
+        };
+
+        fonts
+            .font_data
+            .insert(FONT_BOLD.to_owned(), FontData::from_owned(buf));
+    }
+    {
+        let handle = SystemSource::new()
+            .select_best_match(
+                &[FamilyName::Title("Segoe UI".into()), FamilyName::SansSerif],
+                Properties::new().weight(font_kit::properties::Weight(200.0)),
+            )
+            .unwrap();
+
+        let buf: Vec<u8> = match handle {
+            Handle::Memory { bytes, .. } => bytes.to_vec(),
+            Handle::Path { path, .. } => std::fs::read(path).unwrap(),
+        };
+
+        fonts
+            .font_data
+            .insert(FONT_LIGHT.to_owned(), FontData::from_owned(buf));
+    }
+
+    if let Some(vec) = fonts.families.get_mut(&FontFamily::Proportional) {
+        vec.insert(0, FONT_REGULAR.to_owned());
+    }
 
     fonts.families.insert(
-        egui::FontFamily::Name("Light".into()),
-        vec!["Segoe UI Light".to_owned()],
+        FontFamily::Name("Bold".into()),
+        vec![FONT_BOLD.into() /* , FONT_REGULAR.into()*/],
     );
+
     fonts.families.insert(
-        egui::FontFamily::Name("Bold".into()),
-        vec!["Segoe UI Bold".to_owned()],
+        FontFamily::Name("Light".into()),
+        vec![FONT_LIGHT.into() /* , FONT_REGULAR.into()*/],
     );
 
     ctx.set_fonts(fonts);
+}
+
+pub fn apply(ctx: &Context, params: &Params) {
+    //ctx.set_fonts(fonts);
+
+    load_fonts(ctx);
 
     ctx.all_styles_mut(|style| {
+        *style.text_styles.get_mut(&TextStyle::Heading).unwrap() = FontId {
+            size: 24.0,
+            family: FontFamily::Name("Bold".into()),
+        };
 
         for ts in [TextStyle::Body, TextStyle::Button, TextStyle::Monospace] {
             if let Some(s) = style.text_styles.get_mut(&ts) {

@@ -19,3 +19,5 @@ chrono = "0.4.38"
 clap = { version = "4.5.22", features = ["cargo", "derive", "env"] }
 egui_transition_animation = "0.1.1"
 egui-theme-switch = "=0.2.1"
+log = "0.4.26"
+font-kit = "0.14.2"

@@ -424,54 +424,182 @@ pub(crate) fn error_ui(ui: &mut Ui, error: &str) {
     ui.colored_label(ui.visuals().error_fg_color, format!("⊗ {}", error));
 }
 
+fn widgetvisuals_to_frame(
+    visuals: &egui::style::WidgetVisuals,
+    button_padding: Vec2,
+) -> egui::Frame {
+    egui::Frame {
+        fill: visuals.bg_fill,
+        stroke: visuals.bg_stroke,
+        inner_margin: Margin::symmetric(button_padding.x, button_padding.y),
+        rounding: visuals.rounding,
+        ..egui::Frame::none()
+    }
+}
+
+pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Response {
+    ui.scope_builder(UiBuilder::new().sense(Sense::click()), |ui| {
+        let response = ui.response();
+        let visuals = ui.style().interact(&response);
+
+        widgetvisuals_to_frame(visuals, ui.style().spacing.button_padding).show(ui, |ui| {
+            ui.set_width(256.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(icon)
+                        .size(32.0)
+                        .color(ui.style().visuals.selection.bg_fill),
+                );
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.label(heading);
+                    ui.weak(description);
+                });
+            });
+        });
+    })
+    .response
+}
+
 impl WelcomePage {
     fn draw(&mut self, ctx: &egui::Context, inbox: &UiInbox<Message>) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui_extras::StripBuilder::new(ui)
-                .size(egui_extras::Size::remainder())
-                .size(egui_extras::Size::remainder())
-                .vertical(|mut strip| {
-                    strip.cell(|ui| {
-                        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
-                            ui.label("Locate your photo collection to get started");
-                            ui.heading("Welcome to Geogroup");
+            ui.style_mut().spacing.button_padding *= 2.0;
+
+            /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+            ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                ui.style_mut().visuals.widgets.inactive.bg_fill;
+            ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                color: ui.style().visuals.selection.bg_fill,
+                width: 2.0,
+            };*/
+
+            //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+            /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+            ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                color: ui.style().visuals.selection.bg_fill,
+                width: 1.0,
+            };*/
+
+            //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
+            ui.style_mut().visuals.widgets.inactive.bg_fill = ui
+                .style_mut()
+                .visuals
+                .widgets
+                .inactive
+                .bg_fill
+                .gamma_multiply(0.7);
+
+            ui.style_mut().visuals.widgets.hovered.bg_fill =
+                ui.style_mut().visuals.widgets.inactive.bg_fill;
+            ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
+                color: ui.style().visuals.selection.bg_fill,
+                width: 1.0,
+            };
+
+            /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
+            ui.style().visuals.selection.bg_fill;*/
+
+            /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
+            ui.style_mut().visuals.widgets.hovered.bg_fill = ui
+                .style_mut()
+                .visuals
+                .widgets
+                .hovered
+                .bg_fill
+                .lerp_to_gamma(Color32::WHITE, 0.3);*/
+
+            /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                ui.style_mut().visuals.widgets.hovered.bg_fill;
+            ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+            ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
+
+            ui.horizontal_centered(|ui| {
+                ui.add_space(64.0);
+                egui_extras::StripBuilder::new(ui)
+                    .size(egui_extras::Size::remainder())
+                    .size(egui_extras::Size::remainder())
+                    .vertical(|mut strip| {
+                        strip.cell(|ui| {
+                            ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
+                                ui.label("Locate your photo collection to get started");
+                                //ui.add_space(16.0);
+                                ui.label(RichText::new("Welcome to Geogroup").font(FontId {
+                                    size: 64.0,
+                                    family: FontFamily::Name("Light".into()),
+                                }));
+                            });
+                        });
+
+                        strip.cell(|ui| {
+                            ui.vertical(|ui| {
+                                ui.add_space(16.0);
+
+                                // I can't use error from pattern match directly because of single-mut rule :(
+                                /*if let Self::WelcomePage {
+                                    error: Some(ref error),
+                                } = *self
+                                {
+                                    error_ui(ui, error);
+                                }*/
+
+                                if matches!(self, Self::Normal | Self::Error(_)) {
+                                    ui.with_layout(
+                                        Layout::left_to_right(Align::TOP).with_main_wrap(true),
+                                        |ui| {
+                                            self.pick_file_btn(ui, inbox);
+                                            let clicked = big_btn(
+                                                ui,
+                                                "🗋",
+                                                "Open GEGR file",
+                                                "Continue working on your saved project",
+                                            )
+                                            .clicked();
+
+                                            big_btn(
+                                                ui,
+                                                "🗋",
+                                                "Open GEGR file",
+                                                "Continue working on your saved project",
+                                            );
+
+                                            if clicked {
+                                                todo!()
+                                            }
+                                        },
+                                    );
+                                };
+
+                                ui.horizontal(|ui| ui.link(" GitHub"));
+
+                                match self {
+                                    Self::Normal => (),
+                                    Self::Loading(msg) => {
+                                        ui.horizontal(|ui| {
+                                            ui.spinner();
+                                            ui.label(&*msg);
+                                        });
+                                    }
+                                    Self::Error(err) => {
+                                        gui::error_ui(ui, err);
+                                    }
+                                }
+                            });
                         });
                     });
-
-                    strip.cell(|ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(16.0);
-
-                            // I can't use error from pattern match directly because of single-mut rule :(
-                            /*if let Self::WelcomePage {
-                                error: Some(ref error),
-                            } = *self
-                            {
-                                error_ui(ui, error);
-                            }*/
-
-                            if matches!(self, Self::Normal | Self::Error(_)) {
-                                self.pick_file_btn(ui, inbox);
-                            };
-
-                            match self {
-                                Self::Normal => (),
-                                Self::Loading(msg) => {
-                                    ui.spinner();
-                                    ui.label(&*msg);
-                                }
-                                Self::Error(err) => {
-                                    gui::error_ui(ui, err);
-                                }
-                            }
-                        });
-                    });
-                });
+            });
         });
     }
 
     fn pick_file_btn(&mut self, ui: &mut Ui, inbox: &UiInbox<Message>) {
-        let clicked = ui.button("🗁 Pick folder").clicked();
+        let clicked = big_btn(
+            ui,
+            "🗁",
+            "Pick a folder",
+            "Locate the photo collection you wish to sort",
+        )
+        .clicked();
         if clicked {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                 self.action_load_dir(inbox, folder);
