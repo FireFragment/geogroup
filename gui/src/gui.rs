@@ -97,7 +97,7 @@ impl App {
                 );
             });
 
-        egui::TopBottomPanel::top("ribbon content").min_height(64.0).show_separator_line(false).show_animated(ctx, main_page.pane.is_some(), |ui| {
+        egui::TopBottomPanel::top("ribbon content").max_height(96.0).min_height(96.0).show_separator_line(false).show_animated(ctx, main_page.pane.is_some(), |ui| {
             let Some(pane) = main_page.pane.clone() else { return };
 
             ui.add_space(4.0);
@@ -196,38 +196,6 @@ impl App {
                             }
                         }
                         PaneContent::Apply => {
-                            if ui.button("Apply by copying files").clicked() {
-                                let target_dir = rfd::FileDialog::new().pick_folder();
-
-                                if let Some(target_dir) = target_dir {
-                                    // This is here, because if there already was some progress, it would be erased by this
-                                    // TODO: Prevent this
-                                    debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
-
-                                    self.inbox.sender().send(
-                                        Message::SetProgress(Some(Progress {
-                                            action: ProgressAction::Applying,
-                                            progress: None,
-                                        }))
-                                    ).unwrap();
-
-                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
-                                        target_name: file.name,
-                                        original_path: file.path
-                                    });
-
-                                    let inbox_sender = self.inbox.sender();
-
-                                    thread::spawn(move || {
-                                        backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
-
-                                        inbox_sender.send(
-                                            Message::SetProgress(None)
-                                        ).unwrap();
-                                    });
-
-                                }
-                            };
                         }
                         PaneContent::Home => {
                             #[cfg(target_os = "linux")]
@@ -463,133 +431,117 @@ pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Res
 
 impl WelcomePage {
     fn draw(&mut self, ctx: &egui::Context, inbox: &UiInbox<Message>) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.style_mut().spacing.button_padding *= 2.0;
+        egui::CentralPanel::default()
+            .frame(
+                Frame::default()
+                    .fill(ctx.style().visuals.panel_fill)
+                    .inner_margin(Margin::same(32.0)),
+            )
+            .show(ctx, |ui| {
+                ui.style_mut().spacing.button_padding *= 2.0;
 
-            /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
-            ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
-                ui.style_mut().visuals.widgets.inactive.bg_fill;
-            ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
-                color: ui.style().visuals.selection.bg_fill,
-                width: 2.0,
-            };*/
+                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                    ui.style_mut().visuals.widgets.inactive.bg_fill;
+                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 2.0,
+                };*/
 
-            //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
-            /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
-            ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
-                color: ui.style().visuals.selection.bg_fill,
-                width: 1.0,
-            };*/
+                //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 1.0,
+                };*/
 
-            //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
-            ui.style_mut().visuals.widgets.inactive.bg_fill = ui
-                .style_mut()
-                .visuals
-                .widgets
-                .inactive
-                .bg_fill
-                .gamma_multiply(0.7);
+                //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.bg_fill = ui
+                    .style_mut()
+                    .visuals
+                    .widgets
+                    .inactive
+                    .bg_fill
+                    .gamma_multiply(0.7);
 
-            ui.style_mut().visuals.widgets.hovered.bg_fill =
-                ui.style_mut().visuals.widgets.inactive.bg_fill;
-            ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
-                color: ui.style().visuals.selection.bg_fill,
-                width: 1.0,
-            };
+                ui.style_mut().visuals.widgets.hovered.bg_fill =
+                    ui.style_mut().visuals.widgets.inactive.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 1.0,
+                };
 
-            /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
-            ui.style().visuals.selection.bg_fill;*/
+                /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
+                ui.style().visuals.selection.bg_fill;*/
 
-            /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
-            ui.style_mut().visuals.widgets.hovered.bg_fill = ui
-                .style_mut()
-                .visuals
-                .widgets
-                .hovered
-                .bg_fill
-                .lerp_to_gamma(Color32::WHITE, 0.3);*/
+                /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
+                ui.style_mut().visuals.widgets.hovered.bg_fill = ui
+                    .style_mut()
+                    .visuals
+                    .widgets
+                    .hovered
+                    .bg_fill
+                    .lerp_to_gamma(Color32::WHITE, 0.3);*/
 
-            /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
-            ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
-                ui.style_mut().visuals.widgets.hovered.bg_fill;
-            ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
-            ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
+                /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                    ui.style_mut().visuals.widgets.hovered.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+                ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
 
-            ui.horizontal_centered(|ui| {
-                ui.add_space(64.0);
-                egui_extras::StripBuilder::new(ui)
-                    .size(egui_extras::Size::remainder())
-                    .size(egui_extras::Size::remainder())
-                    .vertical(|mut strip| {
-                        strip.cell(|ui| {
-                            ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
-                                ui.label("Locate your photo collection to get started");
-                                //ui.add_space(16.0);
-                                ui.label(RichText::new("Welcome to Geogroup").font(FontId {
-                                    size: 64.0,
-                                    family: FontFamily::Name("Light".into()),
-                                }));
-                            });
+                ui.label(RichText::new("Welcome to Geogroup").font(FontId {
+                    size: 48.0,
+                    family: FontFamily::Name("Light".into()),
+                }));
+                ui.add_space(32.0);
+
+                if matches!(self, Self::Normal | Self::Error(_)) {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
+
+                            self.pick_file_btn(ui, inbox);
+                            let clicked = big_btn(
+                                ui,
+                                "🗋",
+                                "Open GEGR file",
+                                "Continue working on your saved project",
+                            )
+                            .clicked();
+
+                            if clicked {
+                                todo!()
+                            }
                         });
+                        ui.add_space(32.0);
+                        ui.vertical(|ui| {
+                            ui.heading("Recent projects");
 
-                        strip.cell(|ui| {
-                            ui.vertical(|ui| {
-                                ui.add_space(16.0);
-
-                                // I can't use error from pattern match directly because of single-mut rule :(
-                                /*if let Self::WelcomePage {
-                                    error: Some(ref error),
-                                } = *self
-                                {
-                                    error_ui(ui, error);
-                                }*/
-
-                                if matches!(self, Self::Normal | Self::Error(_)) {
-                                    ui.with_layout(
-                                        Layout::left_to_right(Align::TOP).with_main_wrap(true),
-                                        |ui| {
-                                            self.pick_file_btn(ui, inbox);
-                                            let clicked = big_btn(
-                                                ui,
-                                                "🗋",
-                                                "Open GEGR file",
-                                                "Continue working on your saved project",
-                                            )
-                                            .clicked();
-
-                                            big_btn(
-                                                ui,
-                                                "🗋",
-                                                "Open GEGR file",
-                                                "Continue working on your saved project",
-                                            );
-
-                                            if clicked {
-                                                todo!()
-                                            }
-                                        },
-                                    );
-                                };
-
-                                ui.horizontal(|ui| ui.link(" GitHub"));
-
-                                match self {
-                                    Self::Normal => (),
-                                    Self::Loading(msg) => {
-                                        ui.horizontal(|ui| {
-                                            ui.spinner();
-                                            ui.label(&*msg);
-                                        });
-                                    }
-                                    Self::Error(err) => {
-                                        gui::error_ui(ui, err);
-                                    }
-                                }
-                            });
+                            if ui.button("Item 1").clicked() {
+                                // Handle button click
+                            }
+                            if ui.button("Item 2").clicked() {
+                                // Handle button click
+                            }
                         });
                     });
+                };
+
+                ui.horizontal(|ui| ui.link(" GitHub"));
+
+                match self {
+                    Self::Normal => (),
+                    Self::Loading(msg) => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(&*msg);
+                        });
+                    }
+                    Self::Error(err) => {
+                        gui::error_ui(ui, err);
+                    }
+                }
             });
-        });
     }
 
     fn pick_file_btn(&mut self, ui: &mut Ui, inbox: &UiInbox<Message>) {
