@@ -431,10 +431,9 @@ pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Res
 
 impl WelcomePage {
     fn draw(&mut self, ctx: &egui::Context, inbox: &UiInbox<Message>) {
-        egui::CentralPanel::default()
+        egui::SidePanel::left("recents")
             .frame(
                 Frame::default()
-                    .fill(ctx.style().visuals.panel_fill)
                     .inner_margin(Margin::same(32.0)),
             )
             .show(ctx, |ui| {
@@ -496,35 +495,20 @@ impl WelcomePage {
                 ui.add_space(32.0);
 
                 if matches!(self, Self::Normal | Self::Error(_)) {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
+                    //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
 
-                            self.pick_file_btn(ui, inbox);
-                            let clicked = big_btn(
-                                ui,
-                                "🗋",
-                                "Open GEGR file",
-                                "Continue working on your saved project",
-                            )
-                            .clicked();
+                    self.pick_file_btn(ui, inbox);
+                    let clicked = big_btn(
+                        ui,
+                        "🗋",
+                        "Open GEGR file",
+                        "Continue working on your saved project",
+                    )
+                    .clicked();
 
-                            if clicked {
-                                todo!()
-                            }
-                        });
-                        ui.add_space(32.0);
-                        ui.vertical(|ui| {
-                            ui.heading("Recent projects");
-
-                            if ui.button("Item 1").clicked() {
-                                // Handle button click
-                            }
-                            if ui.button("Item 2").clicked() {
-                                // Handle button click
-                            }
-                        });
-                    });
+                    if clicked {
+                        todo!()
+                    }
                 };
 
                 ui.horizontal(|ui| ui.link(" GitHub"));
@@ -541,6 +525,18 @@ impl WelcomePage {
                         gui::error_ui(ui, err);
                     }
                 }
+            });
+
+        egui::CentralPanel::default()
+            .frame(
+                Frame::default()
+                    .fill(ctx.style().visuals.panel_fill)
+                    .inner_margin(Margin::same(32.0)),
+            )
+            .show(ctx, |ui| {
+                ui.heading("Recent projects");
+
+                ui.label("No recently opened projects\nUse the left panel to open a folder with your photos")
             });
     }
 
