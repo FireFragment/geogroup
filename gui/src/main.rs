@@ -51,6 +51,10 @@ struct CliArgs {
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
+    if let Err(error) = dotenv::dotenv() {
+        log::warn!("Failed to load .env file: {error}\nDeveloper info: {error:?}")
+    }
+
     let args = CliArgs::parse();
     if !args.geocoding_cache.exists() {
         std::fs::create_dir_all(&args.geocoding_cache).unwrap();
