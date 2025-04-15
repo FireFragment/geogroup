@@ -31,7 +31,15 @@
         buildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
           defaultCrateOverrides = pkgs.defaultCrateOverrides // {
             rav1e = attrs: {
-              CARGO_ENCODED_RUSTFLAGS = "";
+                CARGO_ENCODED_RUSTFLAGS = "";
+            };
+              /*pkg-config = attrs: {
+                  buildInputs = [ pkgs.pkg-config ];
+                  };*/
+
+            yeslogic-fontconfig-sys = attrs: {
+                nativeBuildInputs = [ pkgs.pkg-config ];
+                buildInputs = [ pkgs.fontconfig ];
             };
           };
         };
