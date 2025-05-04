@@ -52,6 +52,7 @@ pub mod place_op {
 }
 
 /// This will prune places in the [annotated hiearchy](PlaceAnnotatedHiearchy) so that they don't duplicate information already present in parent groups place
+///
 /// Eg. if there is an item with place `Rome, Piazza del Colloseo` under a group `Rome`, it will remove `Rome` from the items place
 /// and only keep `Piazza del Colloseo`, so that the information about `Rome` is not duplicated between the item and its parent.
 fn prune_hiearchy_places<LeafData>(
