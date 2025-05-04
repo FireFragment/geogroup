@@ -196,6 +196,38 @@ impl App {
                             }
                         }
                         PaneContent::Apply => {
+                            if ui.button("Apply by copying files").clicked() {
+                                let target_dir = rfd::FileDialog::new().pick_folder();
+
+                                if let Some(target_dir) = target_dir {
+                                    // This is here, because if there already was some progress, it would be erased by this
+                                    // TODO: Prevent this
+                                    debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
+
+                                    self.inbox.sender().send(
+                                        Message::SetProgress(Some(Progress {
+                                            action: ProgressAction::Applying,
+                                            progress: None,
+                                        }))
+                                    ).unwrap();
+
+                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
+                                        target_name: file.name,
+                                        original_path: file.path
+                                    });
+
+                                    let inbox_sender = self.inbox.sender();
+
+                                    thread::spawn(move || {
+                                        backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
+
+                                        inbox_sender.send(
+                                            Message::SetProgress(None)
+                                        ).unwrap();
+                                    });
+
+                                }
+                            };
                         }
                         PaneContent::Home => {
                             #[cfg(target_os = "linux")]
@@ -432,10 +464,7 @@ pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Res
 impl WelcomePage {
     fn draw(&mut self, ctx: &egui::Context, inbox: &UiInbox<Message>) {
         egui::SidePanel::left("recents")
-            .frame(
-                Frame::default()
-                    .inner_margin(Margin::same(32.0)),
-            )
+            .frame(Frame::default().inner_margin(Margin::same(32.0)))
             .show(ctx, |ui| {
                 ui.style_mut().spacing.button_padding *= 2.0;
 
