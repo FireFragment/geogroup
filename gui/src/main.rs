@@ -7,7 +7,7 @@ mod hiearchy;
 mod style;
 mod tabbar;
 use gui::Message;
-use hiearchy::Hiearchy;
+use hiearchy::TemplateHiearchy;
 use tabbar::tabbar;
 
 use clap::Parser;

@@ -1,21 +1,20 @@
 //! Code related to hiearchy.
 
 use super::*;
+pub mod template;
 pub use gui::show_hiearchy;
-
-pub type Hiearchy = Vec<backend::HiearchyItem<File, String>>;
+pub use template::TemplateHiearchy;
 
 pub type FileTime = chrono::DateTime<chrono::FixedOffset>;
 
 #[derive(Debug, Clone)]
-pub struct File {
-    pub name: String,
+pub struct FileInfo {
     pub path: PathBuf,
     pub pos: Option<backend::geo_lib::Point>,
     pub date: Option<FileTime>,
 }
 
-impl File {
+impl FileInfo {
     pub fn transform_for_sorting(
         self,
     ) -> Option<(backend::geo_lib::Point, (String, PathBuf, FileTime))> {

@@ -211,7 +211,7 @@ impl App {
                                         }))
                                     ).unwrap();
 
-                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), String::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
+                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), hiearchy::GroupData::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
                                         target_name: file.name,
                                         original_path: file.path
                                     });
@@ -313,7 +313,7 @@ impl App {
 
 pub fn show_hiearchy(
     ui: &mut Ui,
-    hiearchy: &Hiearchy,
+    hiearchy: &TemplateHiearchy,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
@@ -329,7 +329,7 @@ pub fn show_hiearchy(
 
 fn show_hiearchy_inner(
     ui: &mut Ui,
-    hiearchy: &Hiearchy,
+    hiearchy: &TemplateHiearchy,
     selected_vec: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
@@ -613,7 +613,9 @@ impl WelcomePage {
 #[derive(Debug)]
 pub enum Message {
     SetContent(AppContent),
-    Sorted { new_hiearchy: hiearchy::Hiearchy },
+    Sorted {
+        new_hiearchy: hiearchy::TemplateHiearchy,
+    },
     SetProgress(Option<Progress>),
 }
 
@@ -660,7 +662,7 @@ pub enum AppContent {
 struct MainPage {
     pane: Option<PaneContent>,
     src_dir: PathBuf,
-    hiearchy: hiearchy::Hiearchy,
+    hiearchy: hiearchy::TemplateHiearchy,
     flatten_mode: Option<FlattenMode>,
     selection: Vec<usize>,
     image_scale: u16,
@@ -746,7 +748,7 @@ impl MainPage {
                     h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
                         .map_leafs(&|path| {
                             let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
-                            hiearchy::File {
+                            hiearchy::FileInfo {
                                 name: filename_to_string(path.file_name()),
                                 path,
                                 pos: loc_data.as_ref().and_then(|loc_data| {
@@ -780,7 +782,7 @@ impl MainPage {
 
     /// Returns [None] if either:
     ///  - Nothing is selected
-    pub fn selected_item(&self) -> Option<&backend::HiearchyItem<hiearchy::File, String>> {
+    pub fn selected_item(&self) -> Option<&backend::HiearchyItem<hiearchy::FileInfo, String>> {
         let mut idx_iter = self.selection.iter();
         let Some(first_idx) = idx_iter.next() else {
             return None;
@@ -788,10 +790,10 @@ impl MainPage {
         let mut current_hiearchy = &self.hiearchy[*first_idx];
 
         for idx in idx_iter {
-            let HiearchyItem::Group(children, _) = current_hiearchy else {
+            let hiearchy::template::Node::Group(group) = current_hiearchy else {
                 panic!("Too many indices in selection - tried to probe contents of an item, it should be a group.");
             };
-            current_hiearchy = &children[*idx];
+            current_hiearchy = &group.body[*idx];
         }
 
         Some(current_hiearchy)
@@ -801,7 +803,7 @@ impl MainPage {
     ///  - Nothing is selected
     pub fn selected_item_mut(
         &mut self,
-    ) -> Option<&mut backend::HiearchyItem<hiearchy::File, String>> {
+    ) -> Option<&mut backend::HiearchyItem<hiearchy::FileInfo, String>> {
         let mut idx_iter = self.selection.iter();
         let Some(first_idx) = idx_iter.next() else {
             return None;
