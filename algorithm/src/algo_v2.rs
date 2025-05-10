@@ -10,28 +10,12 @@ impl<'a, P: Point + Clone, T: Ord + Clone, D: 'a> hiearchy::Lazy for Sorter<P, T
     type GroupRef = ();
     type LeafRef = usize;
     type GroupMetadata = ();
-    type LeafMetadata = SortItem<P, T, &'a D>;
     type NodeMetadata = ();
     type StructureErr = Infallible;
     type DoesLoading = Infallible;
 
     fn root(&self) -> Self::GroupRef {
         GroupRef::Root
-    }
-
-    fn get_children(
-        &self,
-        _group: Self::GroupRef,
-    ) -> hiearchy::lazy::LoadingResult<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
-    {
-    }
-
-    fn node_metadata(&self, _node: hiearchy::lazy::NodeRef<Self>) -> Self::NodeMetadata {}
-
-    fn group_metadata(&self, _group: Self::GroupRef) -> Self::GroupMetadata {}
-
-    fn leaf_metadata(&self, leaf: Self::LeafRef) -> Self::LeafMetadata {
-        self.points[leaf]
     }
 }
 

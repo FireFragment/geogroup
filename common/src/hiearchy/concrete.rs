@@ -1,201 +1,173 @@
 use crate::*;
-use core::fmt;
-use std::{collections::HashMap, convert::Infallible};
+use std::convert::Infallible;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum GroupRef {
-    Root,
-    Id(u64),
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LeafRef(u64);
-use hiearchy::lazy::LoadingResult;
 pub use hiearchy::lazy::NodeRef;
+use hiearchy::lazy::{GroupRef, LoadingResult};
 
 #[derive(Debug, Clone)]
-pub struct ConcreteHiearchy<LeafData: Clone, GroupData: Clone = ()> {
-    leaves: HashMap<LeafRef, LeafData>,
-    groups: HashMap<u64, (GroupData, Vec<NodeRef<Self>>)>,
-    /// To safely ensure there's always some root group
-    root_group: (GroupData, Vec<NodeRef<Self>>),
-
-    /// Key for which it's garantueed, that any higher key is not used for [`Self::leaves`] nor [`Self::groups`]
-    highest_used: u64,
+pub enum Node<G, L, N> {
+    Group(Group<G, L, N>),
+    Leaf(Leaf<L, N>),
 }
 
-impl<LeafData: Clone, GroupData: Clone> ConcreteHiearchy<LeafData, GroupData> {
-    pub fn new(root_group_data: GroupData) -> Self {
+impl<G, L, N> Node<G, L, N> {
+    pub fn new_group(g: Group<G, L, N>) -> Self {
+        Node::Group(g)
+    }
+
+    pub fn new_leaf(l: Leaf<L, N>) -> Self {
+        Node::Leaf(l)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Leaf<L, N> {
+    leaf_data: L,
+    node_data: N,
+}
+
+impl<L, N> Leaf<L, N> {
+    pub fn new(leaf_data: L, node_data: N) -> Self {
         Self {
-            leaves: HashMap::new(),
-            groups: HashMap::new(),
-            root_group: (root_group_data, Vec::new()),
-            highest_used: 0,
+            leaf_data,
+            node_data,
         }
     }
 
-    fn get_group_by_id_mut(
-        &mut self,
-        parent_group: GroupRef,
-    ) -> &mut (GroupData, Vec<NodeRef<Self>>) {
-        match parent_group {
-            GroupRef::Root => &mut self.root_group,
-            GroupRef::Id(id) => self.groups.get_mut(&id).expect("Group ID not found"),
-        }
+    pub fn leaf_data_mut(&mut self) -> &mut L {
+        &mut self.leaf_data
     }
 
-    /// Returns id of the new group
-    pub fn add_subgroup(&mut self, parent_group: GroupRef, subgroup: GroupData) -> GroupRef {
-        self.highest_used += 1;
-        let new_id = self.highest_used;
-        self.groups
-            .insert(new_id, (subgroup, Vec::new()))
-            .expect("There was a group with key highest_unused");
-        let new_group_ref = GroupRef::Id(new_id);
-        self.get_group_by_id_mut(parent_group)
-            .1
-            .push(NodeRef::Group(new_group_ref.clone()));
-        new_group_ref
-    }
-
-    pub fn add_leaf(&mut self, parent_group: GroupRef, leaf: LeafData) -> LeafRef {
-        self.highest_used += 1;
-        let new_id = self.highest_used;
-        let new_leaf_ref = LeafRef(new_id);
-        self.leaves.insert(new_leaf_ref.clone(), leaf);
-        self.get_group_by_id_mut(parent_group)
-            .1
-            .push(NodeRef::Leaf(new_leaf_ref.clone()));
-        new_leaf_ref
+    pub fn node_data_mut(&mut self) -> &mut N {
+        &mut self.node_data
     }
 }
 
-impl<LeafData: Clone, GroupData: Clone> hiearchy::Lazy for ConcreteHiearchy<LeafData, GroupData> {
-    type GroupRef = GroupRef;
-    type LeafRef = LeafRef;
-    type GroupMetadata = GroupData;
-    type LeafMetadata = LeafData;
-    type NodeMetadata = ();
+#[derive(Debug, Clone)]
+pub struct Group<G, L, N> {
+    children: Vec<Node<G, L, N>>,
+    group_data: G,
+    node_data: N,
+}
+
+impl<G, L, N> Group<G, L, N> {
+    pub fn new(children: Vec<Node<G, L, N>>, group_data: G, node_data: N) -> Self {
+        Self {
+            children,
+            group_data,
+            node_data,
+        }
+    }
+    pub fn children_mut(&mut self) -> &mut Vec<Node<G, L, N>> {
+        &mut self.children
+    }
+
+    pub fn group_data_mut(&mut self) -> &mut G {
+        &mut self.group_data
+    }
+
+    pub fn node_data_mut(&mut self) -> &mut N {
+        &mut self.node_data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConcreteHiearchy<G, L, N> {
+    root_group: Group<G, L, N>,
+}
+
+impl<G, L, N> ConcreteHiearchy<G, L, N> {
+    pub fn new(root_group: Group<G, L, N>) -> Self {
+        Self { root_group }
+    }
+
+    pub fn root_group(&self) -> &Group<G, L, N> {
+        &self.root_group
+    }
+
+    pub fn root_group_mut(&mut self) -> &mut Group<G, L, N> {
+        &mut self.root_group
+    }
+
+    pub fn set_root_group(&mut self, root_group: Group<G, L, N>) {
+        self.root_group = root_group;
+    }
+}
+
+impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
+    type GroupRef<'a>
+        = &'a Group<G, L, N>
+    where
+        G: 'a,
+        L: 'a,
+        N: 'a;
+    type LeafRef<'a>
+        = &'a Leaf<L, N>
+    where
+        Self: 'a;
+    type GroupMetadata<'a>
+        = &'a G
+    where
+        Self: 'a;
+    type NodeMetadata<'a>
+        = &'a N
+    where
+        Self: 'a;
+    type LeafMetadata<'a>
+        = &'a L
+    where
+        Self: 'a;
     type StructureErr = Infallible;
     type DoesLoading = Infallible;
 
-    fn root(&self) -> Self::GroupRef {
-        GroupRef::Root
+    fn root(&self) -> Self::GroupRef<'_> {
+        &self.root_group
+    }
+}
+
+impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
+    type Metadata = &'a L;
+    type NodeMetadata = &'a N;
+
+    fn leaf_metadata(&self) -> Self::Metadata {
+        &self.leaf_data
     }
 
-    fn get_children(
+    fn node_metadata(&self) -> Self::NodeMetadata {
+        &self.node_data
+    }
+}
+
+impl<'a, G: 'a, L: 'a, N: 'a> GroupRef<'a> for &'a Group<G, L, N> {
+    type Hiearchy = ConcreteHiearchy<G, L, N>;
+
+    fn get_children<'b>(
         &self,
-        group: Self::GroupRef,
-    ) -> hiearchy::lazy::LoadingResult<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
-    {
-        LoadingResult::new_ok(match group {
-            GroupRef::Root => self.root_group.1.iter().cloned(),
-            GroupRef::Id(id) => self.groups[&id].1.iter().cloned(),
-        })
-    }
-
-    fn node_metadata(&self, _node: hiearchy::lazy::NodeRef<Self>) -> Self::NodeMetadata {}
-
-    fn group_metadata(&self, group: Self::GroupRef) -> Self::GroupMetadata {
-        match group {
-            GroupRef::Root => self.root_group.0.clone(),
-            GroupRef::Id(id) => self.groups[&id].0.clone(),
-        }
-    }
-
-    fn leaf_metadata(&self, leaf: Self::LeafRef) -> Self::LeafMetadata {
-        self.leaves[&leaf].clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Node<LeafData, GroupData = ()> {
-    Group(Vec<Node<LeafData, GroupData>>, GroupData),
-    Item(LeafData),
-}
-
-// TODO: Remove theese
-impl<L, G> Node<L, G> {
-    #[deprecated]
-    pub fn map_leafs<Out, Fun: Fn(L) -> Out>(self, fun: &Fun) -> Node<Out, G> {
-        match self {
-            Node::Group(group, data) => Node::Group(
-                group.into_iter().map(|item| item.map_leafs(fun)).collect(),
-                data,
-            ),
-            Node::Item(it) => Node::Item(fun(it)),
-        }
-    }
-    #[deprecated]
-    pub fn map_group_data<Out, Fun: Fn(G) -> Out>(self, fun: &Fun) -> Node<L, Out> {
-        match self {
-            Node::Group(group, data) => Node::Group(
-                group
-                    .into_iter()
-                    .map(|item| item.map_group_data(fun))
-                    .collect(),
-                fun(data),
-            ),
-            Node::Item(it) => Node::Item(it),
-        }
-    }
-    pub fn leaves_mut<'s>(&'s mut self) -> Box<dyn Iterator<Item = &mut L> + 's> {
-        match self {
-            Node::Group(g, _) => Box::new(g.iter_mut().flat_map(|item| item.leaves_mut())),
-            Node::Item(it) => Box::new(std::iter::once(it)),
-        }
-    }
-    pub fn leaves<'s>(&'s self) -> Box<dyn Iterator<Item = &L> + 's> {
-        match self {
-            Node::Group(g, _) => Box::new(g.iter().flat_map(|item| item.leaves())),
-            Node::Item(it) => Box::new(std::iter::once(it)),
-        }
-    }
-    pub fn leaves_cloned<'s>(&'s self) -> impl Iterator<Item = L>
+    ) -> LoadingResult<
+        impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+        <Self::Hiearchy as hiearchy::Lazy>::StructureErr,
+        <Self::Hiearchy as hiearchy::Lazy>::DoesLoading,
+    >
     where
-        L: Clone,
+        'a: 'b,
     {
-        match self {
-            Node::Group(g, _) => g
-                .iter()
-                .map(|item| item.leaves_cloned())
-                .flatten()
-                .collect::<Vec<_>>()
-                .into_iter(),
-            Node::Item(it) => vec![it.to_owned()].into_iter(),
-        }
+        LoadingResult::new_ok(self.children.iter().map(|node| match node {
+            Node::Group(group) => NodeRef::Group(group),
+            Node::Leaf(leaf) => NodeRef::Leaf(leaf),
+        }))
     }
-}
 
-impl<L: fmt::Display, G: fmt::Debug> Node<L, G> {
-    /// Improvised and doesn't look good yet. Should be only used for debugging
-    pub fn print_tree(&self) -> String {
-        match self {
-            Self::Group(group, data) => format!(
-                "--* {data:?}\n{}",
-                group
-                    .iter()
-                    .map(|subitem| subitem.print_tree().replace("\n", "\n  |"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-            Self::Item(item) => format!("--{}", item),
-        }
+    fn group_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::GroupMetadata<'b>
+    where
+        'a: 'b,
+    {
+        &self.group_data
     }
-}
 
-impl<F: fmt::Display, D, G: fmt::Debug> Node<(F, D), G> {
-    /// Improvised and doesn't look good yet. Should be only used for debugging
-    pub fn print_tree_points_only(&self) -> String {
-        match self {
-            Self::Group(group, data) => format!(
-                "--* {data:?}\n{}",
-                group
-                    .iter()
-                    .map(|subitem| subitem.print_tree_points_only().replace("\n", "\n  |"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-            Self::Item(item) => format!("--{}", item.0),
-        }
+    fn node_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::NodeMetadata<'b>
+    where
+        'a: 'b,
+    {
+        &self.node_data
     }
 }
