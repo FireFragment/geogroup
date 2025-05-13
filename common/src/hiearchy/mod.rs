@@ -1,6 +1,9 @@
 pub mod concrete;
 pub mod lazy;
+use std::convert::Infallible;
+
 pub use concrete::ConcreteHiearchy as Concrete;
+use concrete::Group;
 pub use lazy::LazyHiearchy as Lazy;
 #[cfg(test)]
 mod tests {
@@ -24,10 +27,30 @@ mod tests {
 
         //let aa: Vec<_> = mh.root().get_children().to_result().unwrap().collect();
         let aa = mh.collect_to_concrete();
+        drop(aa);
 
+        drop(mh);
         //mh.map_groups(|n: &bool| !n);
     }
 
     #[test]
     fn test_lazy_hierarchy() {}
+}
+
+fn hello_outer() {
+    use lazy::LazyHiearchyUtils;
+    let original = Concrete::<(), (), ()>::new(Group::new(Vec::new(), (), ()));
+    let mapped = original.map_nodes(|()| ());
+
+    hello(mapped);
+}
+
+fn hello<
+    T: for<'a, 'b, 'c> Lazy<StructureErr = Infallible, DoesLoading = Infallible> + std::marker::Sized,
+>(
+    t: T,
+) {
+    use lazy::NoLoadingLazyHiearchyUtils;
+    let c = t.collect_to_concrete().unwrap();
+    //dbg!(c);
 }

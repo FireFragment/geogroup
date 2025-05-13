@@ -144,13 +144,15 @@ pub trait LazyHiearchyUtils: LazyHiearchy {
     {
         utils::MapGroups::new(self, mapping)
     }
-
+    /**/
     fn map_nodes<
         'a,
         'b,
         'c,
-        NewNodeMetadata: 'a + 'c + 'b,
-        F: Fn(Self::NodeMetadata<'_>) -> NewNodeMetadata + 'a + 'b + 'c,
+        'd,
+        'e,
+        NewNodeMetadata: 'a + 'c + 'b + 'd + 'e,
+        F: Fn(Self::NodeMetadata<'_>) -> NewNodeMetadata + 'a + 'b + 'c + 'd + 'e,
     >(
         self,
         mapping: F,
@@ -160,9 +162,13 @@ pub trait LazyHiearchyUtils: LazyHiearchy {
         LeafMetadata<'c> = Self::LeafMetadata<'c>,
         DoesLoading = Self::DoesLoading,
         NodeMetadata<'a> = NewNodeMetadata,
-    > + 'a + 'b + 'c
+        GroupRef<'d> = utils::MapNodesGroup<'d, Self, NewNodeMetadata, F>,
+        LeafRef<'e> = utils::MapNodesLeaf<'e, Self, NewNodeMetadata, F>,
+    > + std::marker::Sized
+           + 'a + 'b + 'c + 'd + 'e
+    //utils::MapNodes<Self, NewNodeMetadata, F>
     where
-        Self: std::marker::Sized + 'a + 'b + 'c,
+        Self: std::marker::Sized + 'a + 'b + 'c + 'd + 'e,
     {
         utils::MapNodes::new(self, mapping)
     }
@@ -246,4 +252,4 @@ impl<'a, T: GroupRef<'a, Hiearchy = H>, H: LazyHiearchy<DoesLoading = Infallible
 {
 }
 
-mod utils;
+pub mod utils;
