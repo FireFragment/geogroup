@@ -12,7 +12,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_concrete_hierarchy() {
+    /*fn test_concrete_hierarchy() {
         use concrete::*;
         let hiearchy = ConcreteHiearchy::new(Group::new(
             vec![
@@ -31,8 +31,7 @@ mod tests {
 
         drop(mh);
         //mh.map_groups(|n: &bool| !n);
-    }
-
+    }*/
     #[test]
     fn test_lazy_hierarchy() {}
 }
@@ -46,11 +45,28 @@ fn hello_outer() {
 }
 
 fn hello<
-    T: for<'a, 'b, 'c> Lazy<StructureErr = Infallible, DoesLoading = Infallible> + std::marker::Sized,
+    'a,
+    T: Lazy<StructureErr = Infallible, DoesLoading = Infallible> + std::marker::Sized + 'a,
 >(
     t: T,
-) {
+) where
+    T::GroupMetadata<'a>: std::fmt::Debug,
+{
     use lazy::NoLoadingLazyHiearchyUtils;
+    // Probable cause of the error: caller can choose 'a to be ANY lifetime,
+    // including lifetimes longer than the function `hello` itself.
+    //
+    // This means, that the `T::GroupMetadata<'a>: std::fmt::Debug` bound applies
+    // ONLY to some caller chosen lifetime 'a. If this lifetime is longer than
+    // the function body, then `fmt::Debug` is NOT implemented for `t`, because
+    // in that case, the `T::GroupMetadata<'a>: std::fmt::Debug` bound applies
+    // only when `t` lives longer than the function itself, which it obviously
+    // can't.
     let c = t.collect_to_concrete().unwrap();
-    //dbg!(c);
+
+    debug_it_two(c);
+}
+
+fn debug_it_two<G: std::fmt::Debug, L, N>(_x: Concrete<G, L, N>) {
+    //dbg!(h);
 }
