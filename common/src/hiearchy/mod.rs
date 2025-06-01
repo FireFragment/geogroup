@@ -9,7 +9,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_concrete_hierarchy() {
+    fn map_nodes_map_groups() {
         use concrete::*;
         let hiearchy = ConcreteHiearchy::new(Group::new(
             vec![
@@ -20,10 +20,29 @@ mod tests {
             String::from("root group"),
         ));
 
-        let mh = hiearchy.map_nodes(|g| format!("mapped {g}"));
+        let h = hiearchy
+            .map_nodes(|g| format!("mapped {g}"))
+            .map_groups(|g| !g);
+        let collected = h.collect_to_concrete().unwrap();
+
+        dbg!(&collected);
+
+        let target = ConcreteHiearchy::new(Group::new(
+            vec![
+                Node::new_leaf(Leaf::new(&10, String::from("mapped a leaf"))),
+                Node::new_group(Group::new(
+                    Vec::new(),
+                    false,
+                    String::from("mapped a subgroup"),
+                )),
+            ],
+            true,
+            String::from("mapped root group"),
+        ));
+
+        assert_eq!(collected, target);
 
         //let aa: Vec<_> = mh.root().get_children().to_result().unwrap().collect();
-        let aa = mh.collect_to_concrete();
 
         //mh.map_groups(|n: &bool| !n);
     }

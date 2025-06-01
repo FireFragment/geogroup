@@ -11,7 +11,7 @@ mod map {
     pub(crate) mod groups {
         use super::*;
 
-        pub(crate) struct MapGroups<
+        pub struct MapGroups<
             H: LazyHiearchy,
             NewGroupMetadata,
             F: Fn(H::GroupMetadata<'_>) -> NewGroupMetadata,
@@ -64,7 +64,7 @@ mod map {
             }
         }
 
-        pub(crate) struct MapGroupsGroup<
+        pub struct MapGroupsGroup<
             'a,
             H: LazyHiearchy + 'a,
             NewGroupMetadata,
@@ -117,7 +117,7 @@ mod map {
     pub(crate) mod nodes {
         use super::*;
 
-        pub(crate) struct MapNodes<
+        pub struct MapNodes<
             H: LazyHiearchy,
             NewNodeMetadata,
             F: Fn(H::NodeMetadata<'_>) -> NewNodeMetadata,
@@ -164,7 +164,7 @@ mod map {
             }
         }
 
-        pub(crate) struct MapNodesLeaf<
+        pub struct MapNodesLeaf<
             'a,
             H: LazyHiearchy + 'a,
             NewNodeMetadata,
@@ -191,7 +191,7 @@ mod map {
             }
         }
 
-        pub(crate) struct MapNodesGroup<
+        pub struct MapNodesGroup<
             'a,
             H: LazyHiearchy + 'a,
             NewNodeMetadata,

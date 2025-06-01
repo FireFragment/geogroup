@@ -123,46 +123,22 @@ impl<T, E, DoesLoading: UnitOrNever> LoadingResult<T, E, DoesLoading> {
 }
 
 pub trait LazyHiearchyUtils: LazyHiearchy {
-    fn map_groups<
-        'a,
-        'b,
-        'c,
-        NewGroupMetadata: 'a + 'c + 'b,
-        F: Fn(Self::GroupMetadata<'_>) -> NewGroupMetadata + 'a + 'c + 'b,
-    >(
+    fn map_groups<NewGroupMetadata, F: Fn(Self::GroupMetadata<'_>) -> NewGroupMetadata>(
         self,
         mapping: F,
-    ) -> impl LazyHiearchy<
-        GroupMetadata<'b> = NewGroupMetadata,
-        StructureErr = Self::StructureErr,
-        NodeMetadata<'c> = Self::NodeMetadata<'c>,
-        DoesLoading = Self::DoesLoading,
-        LeafMetadata<'a> = Self::LeafMetadata<'a>,
-    > + 'a + 'b + 'c
+    ) -> utils::MapGroups<Self, NewGroupMetadata, F>
     where
-        Self: std::marker::Sized + 'a + 'b + 'c,
+        Self: std::marker::Sized,
     {
         utils::MapGroups::new(self, mapping)
     }
 
-    fn map_nodes<
-        'a,
-        'b,
-        'c,
-        NewNodeMetadata: 'a + 'c + 'b,
-        F: Fn(Self::NodeMetadata<'_>) -> NewNodeMetadata + 'a + 'b + 'c,
-    >(
+    fn map_nodes<NewNodeMetadata, F: Fn(Self::NodeMetadata<'_>) -> NewNodeMetadata>(
         self,
         mapping: F,
-    ) -> impl LazyHiearchy<
-        GroupMetadata<'b> = Self::GroupMetadata<'b>,
-        StructureErr = Self::StructureErr,
-        LeafMetadata<'c> = Self::LeafMetadata<'c>,
-        DoesLoading = Self::DoesLoading,
-        NodeMetadata<'a> = NewNodeMetadata,
-    > + 'a + 'b + 'c
+    ) -> utils::MapNodes<Self, NewNodeMetadata, F>
     where
-        Self: std::marker::Sized + 'a + 'b + 'c,
+        Self: std::marker::Sized,
     {
         utils::MapNodes::new(self, mapping)
     }

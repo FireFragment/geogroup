@@ -4,7 +4,7 @@ use std::convert::Infallible;
 pub use hiearchy::lazy::NodeRef;
 use hiearchy::lazy::{GroupRef, LoadingResult};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Node<G, L, N> {
     Group(Group<G, L, N>),
     Leaf(Leaf<L, N>),
@@ -20,7 +20,7 @@ impl<G, L, N> Node<G, L, N> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Leaf<L, N> {
     leaf_data: L,
     node_data: N,
@@ -43,7 +43,7 @@ impl<L, N> Leaf<L, N> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Group<G, L, N> {
     children: Vec<Node<G, L, N>>,
     group_data: G,
@@ -71,7 +71,7 @@ impl<G, L, N> Group<G, L, N> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConcreteHiearchy<G, L, N> {
     root_group: Group<G, L, N>,
 }
