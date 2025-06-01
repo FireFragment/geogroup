@@ -41,27 +41,23 @@ fn hello_outer() {
     let original = Concrete::<(), (), ()>::new(Group::new(Vec::new(), (), ()));
     let mapped = original.map_nodes(|()| ());
 
+    // This doesn't work, here's my theory:
+    // map_nodes specifies in its signature that it returns `impl LazyHiearchy<GroupMetadata<'b> = Self::GroupMetadata<'b>>`
+    // for an arbitrary lifetime 'b chosen WHEN CALLING THE FUNCTION.
+    // However, this is different from `impl for<'a> LazyHiearchy<GroupMetadata<'a> = Self::GroupMetadata<'a>>`
+    // because that would be for _arbitrary_ lifetime 'a that could be chosen anytime GroupMetadata is used.
+    //
+    // Moreover, 'b is limited by map_nodes in some ways, such as requiring that 'b outlives NewNodeMetadata,
+    // so it can't be used here.
     hello(mapped);
 }
 
-fn hello<
-    'a,
-    T: Lazy<StructureErr = Infallible, DoesLoading = Infallible> + std::marker::Sized + 'a,
->(
-    t: T,
-) where
-    T::GroupMetadata<'a>: std::fmt::Debug,
+fn hello<T: Lazy<StructureErr = Infallible, DoesLoading = Infallible> + std::marker::Sized>(t: T)
+where
+    // Very relevant: https://sabrinajewson.org/blog/the-better-alternative-to-lifetime-gats
+    for<'a> T::GroupMetadata<'a>: std::fmt::Debug,
 {
     use lazy::NoLoadingLazyHiearchyUtils;
-    // Probable cause of the error: caller can choose 'a to be ANY lifetime,
-    // including lifetimes longer than the function `hello` itself.
-    //
-    // This means, that the `T::GroupMetadata<'a>: std::fmt::Debug` bound applies
-    // ONLY to some caller chosen lifetime 'a. If this lifetime is longer than
-    // the function body, then `fmt::Debug` is NOT implemented for `t`, because
-    // in that case, the `T::GroupMetadata<'a>: std::fmt::Debug` bound applies
-    // only when `t` lives longer than the function itself, which it obviously
-    // can't.
     let c = t.collect_to_concrete().unwrap();
 
     debug_it_two(c);
