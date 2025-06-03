@@ -1,7 +1,7 @@
 use geogroup_common::*;
 
-pub mod algo;
-pub mod algo_v2;
+//pub mod algo;
+pub mod deep_sorter;
 pub use algo::sort;
 pub use algo::sort_just_points;
 
@@ -65,9 +65,15 @@ impl Point for geo::Point {
 }
 
 pub enum BinTree<Leaf, InnerNode> {
-    InnerNode {
-        children: Box<[BinTree<Leaf, InnerNode>; 2]>,
-        data: InnerNode,
-    },
+    InnerNode(BTInnerNode<Leaf, InnerNode>),
     Leaf(Leaf),
+}
+
+/*impl<Leaf, InnerNode> BinTree<Leaf, InnerNode> {
+    pub type InnerNode = BTInnerNode<Leaf, InnerNode>;
+}*/
+
+pub struct BTInnerNode<Leaf, InnerNode> {
+    pub children: Box<[BinTree<Leaf, InnerNode>; 2]>,
+    pub data: InnerNode,
 }

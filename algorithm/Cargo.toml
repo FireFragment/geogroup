@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 geo = { version = "0.28.0", optional = true }
 geogroup_common = { path = "../common" }
+log = "0.4.27"
 
 [features]
 geo = ["dep:geo"]
