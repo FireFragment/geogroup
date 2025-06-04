@@ -1,6 +1,8 @@
-use std::{convert::Infallible, marker::PhantomData};
+use std::convert::Infallible;
+mod onetime;
 
 use crate::*;
+use onetime::*;
 pub struct DeepSorter<Item: SortableItem> {
     //points: Vec<Item>,
     bintree: BinTree<Item, GroupDataInner<Item>>,
@@ -47,16 +49,32 @@ impl<Item: SortableItem> hiearchy::Lazy for DeepSorter<Item> {
 }
 */
 
+/// Assumes `points` are sorted
+pub fn sort_to_bintree<Item: SortableItem, It>(
+    mut points: It,
+) -> BinTree<Item, GroupDataInner<Item>>
+where
+    for<'a> &'a It: IntoIterator<Item = Item>,
+{
+    let distances = points
+        .into_iter()
+        .zip(points.into_iter().skip(1))
+        .map(|(prev, next)| prev.distance(&next));
+
+    todo!()
+}
+
 impl<Item: SortableItem> DeepSorter<Item> {
     pub fn new(mut points: Vec<Item>, params: Params) -> Self {
         points.sort_unstable_by_key(|it| it.get_time());
+
         Self {
             bintree: todo!(),
             params,
         }
     }
 
-    pub fn add_items(&mut self, item: Item) {}
+    pub fn add_items(&mut self, item: impl IntoIterator<Item = Item>) {}
 
     /// Get the smallest group which still encapsulates a given time
     fn get_time_group_mut(
@@ -78,50 +96,33 @@ impl<Item: SortableItem> DeepSorter<Item> {
 ///
 /// This means that for `BinTree::Leaf` we always return [None]. May panic on invalid tree,
 /// eg. invalid values
-fn get_time_group_mut<'a, Item: SortableItem>(
+/*fn get_time_group_mut<'a, Item: SortableItem>(
     tree: &'a mut BinTree<Item, GroupDataInner<Item>>,
     time: &Item::Time,
 ) -> Option<&'a mut BTInnerNode<Item, GroupDataInner<Item>>> {
     match tree {
-        BinTree::Leaf(l) => None,
+        BinTree::Leaf(_) => None,
         BinTree::InnerNode(node) => {
             if node.data.lowest_time > *time || node.data.greatest_time < *time {
                 return None;
             }
 
             let [left_child, right_child] = &mut *node.children;
-            let left_res = get_time_group_mut(tree, time);
-            if left_res.is_some() {
-                let right_res = get_time_group_mut(tree, time);
-                if right_res.is_some() {
-                    // This should never happen since a single instant of time can't be included in both
-                    // children of a same group, as the children are chronological, ie. one is AFTER the other.
-                    //
-                    // If this happens, it might indicate overlapping groups, which should never happen
-                    //
-                    debug_assert!(false, "
-                        Both children of a group allegedly contain the same time instant.
-                        This should never happen since a single instant of time can't be included in both
-                        children of a same group, as the children are chronological, ie. one is AFTER the other.
+            let left_res = get_time_group_mut(left_child, time);
 
-                        If this happens, it might indicate overlapping groups, which should never happen
-                    ");
-
-                    log::error!(
-                        "
-                        Both children of a group allegedly contain the same time instant.
-                        This is a bug in the application, please report it.
-                    "
-                    );
+            match left_res {
+                Some(l) => Some(l),
+                None => {
+                    let right_res = get_time_group_mut(right_child, time);
+                    match right_res {
+                        Some(r) => Some(r),
+                        None => Some(node),
+                    }
                 }
-
-                left_res
             }
-
-            todo!()
         }
     }
-}
+}*/
 
 pub struct GroupRef<'a, Item: SortableItem>(&'a [Item]);
 
