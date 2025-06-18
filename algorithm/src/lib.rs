@@ -1,9 +1,12 @@
 use geogroup_common::*;
 
 //pub mod algo;
+pub mod bintree;
 pub mod deep_sorter;
-pub use algo::sort;
-pub use algo::sort_just_points;
+pub mod strength;
+pub use bintree::*;
+//pub use algo::sort;
+//pub use algo::sort_just_points;
 
 // Changing theese two may result in overflows!
 // Eg. increasing capacity of Depth is dangerous, because Depth::MAX is used in the program
@@ -62,18 +65,4 @@ impl Point for geo::Point {
         use geo::EuclideanDistance;
         (self.euclidean_distance(rhs) * 65536.0) as u64
     }
-}
-
-pub enum BinTree<Leaf, InnerNode> {
-    InnerNode(BTInnerNode<Leaf, InnerNode>),
-    Leaf(Leaf),
-}
-
-/*impl<Leaf, InnerNode> BinTree<Leaf, InnerNode> {
-    pub type InnerNode = BTInnerNode<Leaf, InnerNode>;
-}*/
-
-pub struct BTInnerNode<Leaf, InnerNode> {
-    pub children: Box<[BinTree<Leaf, InnerNode>; 2]>,
-    pub data: InnerNode,
 }

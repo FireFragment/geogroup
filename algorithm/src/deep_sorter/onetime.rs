@@ -1,12 +1,9 @@
 use super::*;
 
-/// Sort points to binary tree.
-///
-/// The algorithm always cuts points into two groups by the biggest distance
-/// and then it recurses again on theese two groups
+/// Same as [`sort_to_binary_tree`], but assumes that the points are ordered
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
+pub fn sort_ordered_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
     assert!(
         !points.is_empty(),
         "to_binary_tree called with empty vector",
@@ -22,7 +19,7 @@ pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
         //    If there wasn't one, the loop would be broken out of.
         let current_item = points_iter.next().unwrap();
         if let Some(next_item) = points_iter.peek() {
-            let distance_to_next = current_item.distance(&next_item);
+            let distance_to_next = current_item.distance(next_item);
             points_with_distances.push((current_item, distance_to_next));
         } else {
             break current_item;
@@ -30,6 +27,18 @@ pub fn sort_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
     };
 
     sort_to_binary_tree_with_distances(points_with_distances, last_point)
+}
+
+/// Sort points to binary tree.
+///
+/// The algorithm always cuts points into two groups by the biggest distance
+/// and then it recurses again on theese two groups
+///
+/// Panics on `input.is_empty()`
+pub fn sort_to_binary_tree<P: SortableItem>(mut points: Vec<P>) -> BinTree<P, ()> {
+    points.sort_by_key(|p| p.get_time());
+
+    sort_ordered_to_binary_tree(points)
 }
 
 /// The recursive part of [`to_binary_tree`]

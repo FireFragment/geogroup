@@ -2,7 +2,8 @@ use std::convert::Infallible;
 mod onetime;
 
 use crate::*;
-use onetime::*;
+pub use onetime::*;
+
 pub struct DeepSorter<Item: SortableItem> {
     //points: Vec<Item>,
     bintree: BinTree<Item, GroupDataInner<Item>>,
@@ -20,6 +21,8 @@ pub trait SortableItem: Point {
 
     fn get_time(&self) -> Self::Time;
 }
+
+pub trait GetTime {}
 
 /*
 impl<Item: SortableItem> hiearchy::Lazy for DeepSorter<Item> {
@@ -50,9 +53,7 @@ impl<Item: SortableItem> hiearchy::Lazy for DeepSorter<Item> {
 */
 
 /// Assumes `points` are sorted
-pub fn sort_to_bintree<Item: SortableItem, It>(
-    mut points: It,
-) -> BinTree<Item, GroupDataInner<Item>>
+/*pub fn sort_to_bintree<Item: SortableItem, It>(points: It) -> BinTree<Item, GroupDataInner<Item>>
 where
     for<'a> &'a It: IntoIterator<Item = Item>,
 {
@@ -62,7 +63,7 @@ where
         .map(|(prev, next)| prev.distance(&next));
 
     todo!()
-}
+}*/
 
 impl<Item: SortableItem> DeepSorter<Item> {
     pub fn new(mut points: Vec<Item>, params: Params) -> Self {

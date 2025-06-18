@@ -1,6 +1,7 @@
 pub mod concrete;
 pub mod lazy;
 pub use concrete::ConcreteHiearchy as Concrete;
+pub(crate) use either::Either;
 pub use lazy::LazyHiearchy as Lazy;
 #[cfg(test)]
 mod tests {

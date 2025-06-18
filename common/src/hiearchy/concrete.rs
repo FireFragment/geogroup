@@ -88,10 +88,6 @@ impl<G, L, N> ConcreteHiearchy<G, L, N> {
     pub fn root_group_mut(&mut self) -> &mut Group<G, L, N> {
         &mut self.root_group
     }
-
-    pub fn set_root_group(&mut self, root_group: Group<G, L, N>) {
-        self.root_group = root_group;
-    }
 }
 
 impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
@@ -122,6 +118,12 @@ impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
 
     fn root(&self) -> Self::GroupRef<'_> {
         &self.root_group
+    }
+
+    fn reborrow_groupref<'long: 'short, 'short>(
+        it: Self::GroupRef<'long>,
+    ) -> Self::GroupRef<'short> {
+        it
     }
 }
 

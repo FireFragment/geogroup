@@ -1,7 +1,13 @@
+use super::*;
 use std::convert::Infallible;
+use std::ops::Deref;
 
 use crate::hiearchy;
 use crate::UnitOrNever;
+
+/*pub trait Reborrow<'long> {
+    fn reborrow<'short>(self)
+}*/
 
 /// A hiearchy which is lazy, ie. it's not fully stored in RAM, but rather it initializes its parts
 /// only when reading them.
@@ -16,15 +22,25 @@ pub trait LazyHiearchy {
     where
         Self: 'a;
     /// Holds reference to a group
+    ///
+    /// **Note:** if you have problems with variance, such as
+    ///
+    /// > the struct `MyStruct<'a>` is invariant over the parameter `'a`
+    ///
+    /// then try using `reborrow_groupref`.
     type GroupRef<'a>: GroupRef<'a, Hiearchy = Self>
     where
         Self: 'a;
-    /// Additional data related to a node
+    /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
+    ///
+    /// `'a` is lifetime of references to the underlying [`LazyHiearchy`]
     type NodeMetadata<'a>
     where
         Self: 'a;
 
-    /// Additional data related to a leaf
+    /// Additional data related to a leaf. See also [`Self::NodeMetadata`](LazyHiearchy::NodeMetadata)
+    ///
+    /// `'a` is lifetime of references to the underlying [`LazyHiearchy`]
     type LeafMetadata<'a>
     where
         Self: 'a;
@@ -32,6 +48,8 @@ pub trait LazyHiearchy {
     type StructureErr;
 
     /// Additional data related to a group. See also [`Self::NodeMetadata`](LazyHiearchy::NodeMetadata)
+    ///
+    /// `'a` is lifetime of references to the underlying [`LazyHiearchy`]
     type GroupMetadata<'a>
     where
         Self: 'a;
@@ -42,6 +60,15 @@ pub trait LazyHiearchy {
 
     /// Get the root group of the hiearchy
     fn root(&self) -> Self::GroupRef<'_>;
+
+    /// Identity function. It's a trick to ensure that [`LazyHiearchy::GroupRef<'a>`] is covariant over `'a`.
+    /// See https://users.rust-lang.org/t/expressing-the-covariance-of-gats/65664/2
+    ///
+    /// **For implementors:** just implement it as identity function and pray the compiler accepts it.
+    /// If it doesn't, you may need to manually reborrow its fields, such as [here](utils::MapGroups::reborrow_groupref)
+    fn reborrow_groupref<'long: 'short, 'short>(
+        it: Self::GroupRef<'long>,
+    ) -> Self::GroupRef<'short>;
 }
 
 /// The lifetime parameter 'a is lifetime of the [hiearchy this group belongs to](`GroupRef::Hiearchy`).
@@ -142,6 +169,13 @@ pub trait LazyHiearchyUtils: LazyHiearchy {
     {
         utils::MapNodes::new(self, mapping)
     }
+
+    fn with_parent(self) -> utils::WithParent<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        utils::WithParent::new(self)
+    }
 }
 
 pub trait LazyGroupUtils<'a, H: LazyHiearchy<DoesLoading = Infallible>>:
@@ -223,3 +257,4 @@ impl<'a, T: GroupRef<'a, Hiearchy = H>, H: LazyHiearchy<DoesLoading = Infallible
 }
 
 mod utils;
+pub use utils::WithParentNodeMetadata;

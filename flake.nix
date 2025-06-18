@@ -70,6 +70,11 @@
           libXi
           pkg-config
         ]);
+
+        rust =
+            (pkgs.rust-bin.stable.latest.default.override {
+                  extensions = [ "rust-src" "cargo" "rustc" ];
+            });
       in {
         packages.default = pkgs.symlinkJoin {
           name = "geogroup_gui";
@@ -84,19 +89,15 @@
 
         devShell = pkgs.mkShell rec {
           nativeBuildInputs = [
-            (pkgs.rust-bin.stable.latest.default.override {
-                  extensions = [ "rust-src" "cargo" "rustc" ];
-            })
             pkgs.gcc
+            rust
           ] ++ runtimeLibs;
 
           shellHook = ''
               export LD_LIBRARY_PATH=/run/opengl-driver/lib/:${pkgs.lib.makeLibraryPath runtimeLibs}
           '';
 
-          RUST_SRC_PATH = "${pkgs.rust-bin.stable.latest.default.override {
-              extensions = [ "rust-src" ];
-          }}/lib/rustlib/src/rust/library";
+          RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
 
 
           buildInputs = with pkgs; [
