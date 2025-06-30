@@ -34,17 +34,10 @@ impl<'a, L> hiearchy::lazy::LeafRef for BTLeafRef<'a, L> {
 impl<'a, Leaf, InnerNode> hiearchy::lazy::GroupRef<'a> for &'a BTInnerNode<Leaf, InnerNode> {
     type Hiearchy = BinTree<Leaf, InnerNode>;
 
-    fn get_children<'b>(
+    fn get_children(
         &self,
-    ) -> hiearchy::lazy::LoadingResult<
-        impl Iterator<Item = hiearchy::lazy::NodeRef<'b, Self::Hiearchy>>,
-        <Self::Hiearchy as hiearchy::Lazy>::StructureErr,
-        <Self::Hiearchy as hiearchy::Lazy>::DoesLoading,
-    >
-    where
-        'a: 'b,
-    {
-        hiearchy::lazy::LoadingResult::new_ok(self.children.iter().map(|node| match node {
+    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<'a, Self::Hiearchy>>, Infallible> {
+        Ok(self.children.iter().map(|node| match node {
             BinTree::InnerNode(group) => hiearchy::lazy::NodeRef::Group(group),
             BinTree::Leaf(l) => hiearchy::lazy::NodeRef::Leaf(BTLeafRef(l)),
         }))
@@ -92,8 +85,6 @@ impl<Leaf, InnerNode> hiearchy::Lazy for BinTree<Leaf, InnerNode> {
     where
         Self: 'a;
 
-    type DoesLoading = Infallible;
-
     fn root(&self) -> Self::GroupRef<'_> {
         match self {
             BinTree::Leaf(_) => todo!(),
@@ -104,6 +95,12 @@ impl<Leaf, InnerNode> hiearchy::Lazy for BinTree<Leaf, InnerNode> {
     fn reborrow_groupref<'long: 'short, 'short>(
         it: Self::GroupRef<'long>,
     ) -> Self::GroupRef<'short> {
+        it
+    }
+
+    fn reborrow_leafref<'long: 'short, 'short>(
+        it: BTLeafRef<'long, Leaf>,
+    ) -> BTLeafRef<'short, Leaf> {
         it
     }
 }

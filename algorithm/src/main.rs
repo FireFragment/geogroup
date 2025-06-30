@@ -1,5 +1,5 @@
 use geogroup_algo::*;
-use geogroup_common::hiearchy::lazy::NoLoadingLazyHiearchyUtils;
+use geogroup_common::hiearchy::lazy::LazyHiearchyUtils;
 
 fn main() {
     println!(
