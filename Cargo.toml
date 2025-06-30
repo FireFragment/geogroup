@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    #"algorithm",
+    "algorithm",
     "common",
-    #"gui",
-    #"loaders",
-    #"backend",
-    #"naming",
-    #"apply",
+    "gui",
+    "loaders",
+    "backend",
+    "naming",
+    "apply",
 ]
-default-members = ["gui"]
+#default-members = ["gui"]

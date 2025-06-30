@@ -3,7 +3,6 @@ use std::convert::Infallible;
 use std::ops::Deref;
 
 use crate::hiearchy;
-use crate::UnitOrNever;
 
 /*pub trait Reborrow<'long> {
     fn reborrow<'short>(self)
@@ -54,10 +53,6 @@ pub trait LazyHiearchy {
     where
         Self: 'a;
 
-    /// Unit type if [`get_children`](GroupRef::get_children) may return [`LoadingResult::Loading`] in its methods
-    /// and [`Infallible`] if not.
-    type DoesLoading: UnitOrNever;
-
     /// Get the root group of the hiearchy
     fn root(&self) -> Self::GroupRef<'_>;
 
@@ -69,6 +64,13 @@ pub trait LazyHiearchy {
     fn reborrow_groupref<'long: 'short, 'short>(
         it: Self::GroupRef<'long>,
     ) -> Self::GroupRef<'short>;
+
+    /// Identity function. It's a trick to ensure that [`LazyHiearchy::LeafRef<'a>`] is covariant over `'a`.
+    /// See https://users.rust-lang.org/t/expressing-the-covariance-of-gats/65664/2
+    ///
+    /// **For implementors:** just implement it as identity function and pray the compiler accepts it.
+    /// If it doesn't, you may need to manually reborrow its fields, such as [here](utils::MapGroups::reborrow_groupref)
+    fn reborrow_leafref<'long: 'short, 'short>(it: Self::LeafRef<'long>) -> Self::LeafRef<'short>;
 }
 
 /// The lifetime parameter 'a is lifetime of the [hiearchy this group belongs to](`GroupRef::Hiearchy`).
@@ -77,15 +79,12 @@ pub trait GroupRef<'a> {
     type Hiearchy: LazyHiearchy + 'a;
 
     /// Returns children of a group.
-    fn get_children<'b>(
+    fn get_children(
         &self,
-    ) -> LoadingResult<
-        impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+    ) -> Result<
+        impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
         <Self::Hiearchy as LazyHiearchy>::StructureErr,
-        <Self::Hiearchy as LazyHiearchy>::DoesLoading,
-    >
-    where
-        'a: 'b;
+    >;
 
     /// Return value can't include references to self (to [`GroupRef`]),
     /// but can include references to the [hiearchy this group belongs to](`GroupRef::Hiearchy`)
@@ -112,41 +111,11 @@ pub trait LeafRef {
     fn node_metadata(&self) -> Self::NodeMetadata;
 }
 
+/// The lifetime parameter 'a is lifetime of the [hiearchy](`LazyHiearchy`). this node belongs to
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NodeRef<'a, H: LazyHiearchy + ?Sized + 'a> {
     Group(H::GroupRef<'a>),
     Leaf(H::LeafRef<'a>),
-}
-
-#[derive(Debug, Clone)]
-pub enum LoadingResult<T, E, DoesLoading: UnitOrNever> {
-    Ready(Result<T, E>),
-    Loading { message: String, guard: DoesLoading },
-}
-
-impl<T, E> LoadingResult<T, E, Infallible> {
-    /// Will never panic, because if this function can be called,
-    /// it has been garantueed on type level that this [`LoadingResult`] is always [ready](LoadingResult::Ready)
-    pub fn to_result(self) -> Result<T, E> {
-        match self {
-            LoadingResult::Loading { message: _, guard } => match guard {},
-            LoadingResult::Ready(r) => r,
-        }
-    }
-}
-
-impl<T, E, DoesLoading: UnitOrNever> LoadingResult<T, E, DoesLoading> {
-    pub fn new_ok(t: T) -> Self {
-        Self::Ready(Result::Ok(t))
-    }
-
-    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> LoadingResult<U, E, DoesLoading> {
-        match self {
-            LoadingResult::Ready(Ok(t)) => LoadingResult::Ready(Ok(f(t))),
-            LoadingResult::Ready(Err(e)) => LoadingResult::Ready(Err(e)),
-            LoadingResult::Loading { message, guard } => LoadingResult::Loading { message, guard },
-        }
-    }
 }
 
 pub trait LazyHiearchyUtils: LazyHiearchy {
@@ -176,15 +145,25 @@ pub trait LazyHiearchyUtils: LazyHiearchy {
     {
         utils::WithParent::new(self)
     }
+
+    /// Convert to concrete hiearchy by instantiating all the items
+    fn collect_to_concrete<'a: 'b, 'b>(
+        &'a self,
+    ) -> Result<
+        hiearchy::Concrete<Self::GroupMetadata<'b>, Self::LeafMetadata<'b>, Self::NodeMetadata<'b>>,
+        Self::StructureErr,
+    >
+    where
+        Self: std::marker::Sized,
+    {
+        Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
+    }
 }
 
-pub trait LazyGroupUtils<'a, H: LazyHiearchy<DoesLoading = Infallible>>:
-    GroupRef<'a, Hiearchy = H> + Sized
-{
+pub trait LazyGroupUtils<'a, H: LazyHiearchy>: GroupRef<'a, Hiearchy = H> + Sized {
     // 'a = lifetime of the hiearchy H
     // 'b = lifetime of the returned data, referring to H
     // 'c = lifetime of the GroupRef, can be arbitrarily short
-    /// For now works only when the [hiearchy](LazyHiearchy) doesn't [do loading](LazyHiearchy::DoesLoading)
     fn collect_to_concrete<'b, 'c>(
         &'c self,
     ) -> Result<
@@ -200,7 +179,7 @@ pub trait LazyGroupUtils<'a, H: LazyHiearchy<DoesLoading = Infallible>>:
     {
         let group_data = self.group_metadata();
         let node_data = self.node_metadata();
-        let children = self.get_children().to_result()?;
+        let children = self.get_children()?;
         Ok(hiearchy::concrete::Group::new(
             {
                 children
@@ -208,11 +187,15 @@ pub trait LazyGroupUtils<'a, H: LazyHiearchy<DoesLoading = Infallible>>:
                         Ok(match child {
                             NodeRef::Group(g) => {
                                 //let aa: () = g;
-                                hiearchy::concrete::Node::new_group(g.collect_to_concrete()?)
+                                todo!() //hiearchy::concrete::Node::new_group(g.collect_to_concrete()?)
                             }
-                            NodeRef::Leaf(l) => hiearchy::concrete::Node::new_leaf(
-                                hiearchy::concrete::Leaf::new(l.leaf_metadata(), l.node_metadata()),
-                            ),
+                            NodeRef::Leaf(l) => {
+                                let l = H::reborrow_leafref(l);
+                                hiearchy::concrete::Node::new_leaf(hiearchy::concrete::Leaf::new(
+                                    l.leaf_metadata(),
+                                    l.node_metadata(),
+                                ))
+                            }
                         })
                     })
                     .collect::<Result<_, _>>()?
@@ -234,27 +217,8 @@ pub trait LazyGroupUtils<'a, H: LazyHiearchy<DoesLoading = Infallible>>:
     }
 }
 
-pub trait NoLoadingLazyHiearchyUtils: LazyHiearchy<DoesLoading = Infallible> {
-    /// Convert to concrete hiearchy by instantiating all the items
-    fn collect_to_concrete<'a: 'b, 'b>(
-        &'a self,
-    ) -> Result<
-        hiearchy::Concrete<Self::GroupMetadata<'b>, Self::LeafMetadata<'b>, Self::NodeMetadata<'b>>,
-        Self::StructureErr,
-    >
-    where
-        Self: std::marker::Sized,
-    {
-        Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
-    }
-}
-
 impl<T: LazyHiearchy> LazyHiearchyUtils for T {}
-impl<T: LazyHiearchy<DoesLoading = Infallible>> NoLoadingLazyHiearchyUtils for T {}
-impl<'a, T: GroupRef<'a, Hiearchy = H>, H: LazyHiearchy<DoesLoading = Infallible>>
-    LazyGroupUtils<'a, H> for T
-{
-}
+impl<'a, T: GroupRef<'a, Hiearchy = H>, H: LazyHiearchy> LazyGroupUtils<'a, H> for T {}
 
 mod utils;
 pub use utils::WithParentNodeMetadata;

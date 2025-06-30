@@ -5,7 +5,7 @@ pub(crate) use either::Either;
 pub use lazy::LazyHiearchy as Lazy;
 #[cfg(test)]
 mod tests {
-    use lazy::{GroupRef, LazyHiearchyUtils, NoLoadingLazyHiearchyUtils};
+    use lazy::{GroupRef, LazyHiearchyUtils};
 
     use super::*;
 
@@ -42,10 +42,6 @@ mod tests {
         ));
 
         assert_eq!(collected, target);
-
-        //let aa: Vec<_> = mh.root().get_children().to_result().unwrap().collect();
-
-        //mh.map_groups(|n: &bool| !n);
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use crate::*;
 use std::convert::Infallible;
 
+use hiearchy::lazy::GroupRef;
 pub use hiearchy::lazy::NodeRef;
-use hiearchy::lazy::{GroupRef, LoadingResult};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Node<G, L, N> {
@@ -114,7 +114,6 @@ impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
     where
         Self: 'a;
     type StructureErr = Infallible;
-    type DoesLoading = Infallible;
 
     fn root(&self) -> Self::GroupRef<'_> {
         &self.root_group
@@ -123,6 +122,10 @@ impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
     fn reborrow_groupref<'long: 'short, 'short>(
         it: Self::GroupRef<'long>,
     ) -> Self::GroupRef<'short> {
+        it
+    }
+
+    fn reborrow_leafref<'long: 'short, 'short>(it: &'long Leaf<L, N>) -> &'short Leaf<L, N> {
         it
     }
 }
@@ -143,17 +146,13 @@ impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
 impl<'a, G: 'a, L: 'a, N: 'a> GroupRef<'a> for &'a Group<G, L, N> {
     type Hiearchy = ConcreteHiearchy<G, L, N>;
 
-    fn get_children<'b>(
+    fn get_children(
         &self,
-    ) -> LoadingResult<
-        impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+    ) -> Result<
+        impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
         <Self::Hiearchy as hiearchy::Lazy>::StructureErr,
-        <Self::Hiearchy as hiearchy::Lazy>::DoesLoading,
-    >
-    where
-        'a: 'b,
-    {
-        LoadingResult::new_ok(self.children.iter().map(|node| match node {
+    > {
+        Ok(self.children.iter().map(|node| match node {
             Node::Group(group) => NodeRef::Group(group),
             Node::Leaf(leaf) => NodeRef::Leaf(leaf),
         }))

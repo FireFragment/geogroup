@@ -62,7 +62,7 @@ mod map {
                 = H::LeafMetadata<'a>
             where
                 Self: 'a;
-            type DoesLoading = H::DoesLoading;
+
             fn root(&self) -> Self::GroupRef<'_> {
                 MapGroupsGroup(self.original.root(), &self.mapping)
             }
@@ -71,6 +71,12 @@ mod map {
                 it: MapGroupsGroup<'long, H, NewGroupMetadata, F>,
             ) -> MapGroupsGroup<'short, H, NewGroupMetadata, F> {
                 MapGroupsGroup(H::reborrow_groupref(it.0), it.1)
+            }
+
+            fn reborrow_leafref<'long: 'short, 'short>(
+                it: H::LeafRef<'long>,
+            ) -> H::LeafRef<'short> {
+                H::reborrow_leafref(it)
             }
         }
 
@@ -90,22 +96,16 @@ mod map {
         {
             type Hiearchy = MapGroups<H, NewGroupMetadata, F>;
 
-            fn get_children<'b>(
+            fn get_children(
                 &self,
-            ) -> LoadingResult<
-                impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+            ) -> Result<
+                impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
                 <Self::Hiearchy as LazyHiearchy>::StructureErr,
-                <Self::Hiearchy as LazyHiearchy>::DoesLoading,
-            >
-            where
-                'a: 'b,
-            {
-                self.0.get_children().map(|children| {
-                    children.map(|child| match child {
-                        NodeRef::Group(g) => NodeRef::Group(MapGroupsGroup(g, self.1)),
-                        NodeRef::Leaf(l) => NodeRef::Leaf(l),
-                    })
-                })
+            > {
+                Ok(self.0.get_children()?.map(|child| match child {
+                    NodeRef::Group(g) => NodeRef::Group(MapGroupsGroup(g, self.1)),
+                    NodeRef::Leaf(l) => NodeRef::Leaf(l),
+                }))
             }
 
             fn group_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::GroupMetadata<'b>
@@ -168,7 +168,7 @@ mod map {
                 = H::LeafMetadata<'a>
             where
                 Self: 'a;
-            type DoesLoading = H::DoesLoading;
+
             fn root(&self) -> Self::GroupRef<'_> {
                 MapNodesGroup(self.original.root(), &self.mapping)
             }
@@ -177,6 +177,12 @@ mod map {
                 it: MapNodesGroup<'long, H, NewNodeMetadata, F>,
             ) -> MapNodesGroup<'short, H, NewNodeMetadata, F> {
                 MapNodesGroup(H::reborrow_groupref(it.0), it.1)
+            }
+
+            fn reborrow_leafref<'long: 'short, 'short>(
+                it: MapNodesLeaf<'long, H, NewNodeMetadata, F>,
+            ) -> MapNodesLeaf<'short, H, NewNodeMetadata, F> {
+                MapNodesLeaf(H::reborrow_leafref(it.0), it.1)
             }
         }
 
@@ -223,22 +229,16 @@ mod map {
         {
             type Hiearchy = MapNodes<H, NewNodeMetadata, F>;
 
-            fn get_children<'b>(
+            fn get_children(
                 &self,
-            ) -> LoadingResult<
-                impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+            ) -> Result<
+                impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
                 <Self::Hiearchy as LazyHiearchy>::StructureErr,
-                <Self::Hiearchy as LazyHiearchy>::DoesLoading,
-            >
-            where
-                'a: 'b,
-            {
-                self.0.get_children().map(|children| {
-                    children.map(|child| match child {
-                        NodeRef::Group(g) => NodeRef::Group(MapNodesGroup(g, self.1)),
-                        NodeRef::Leaf(l) => NodeRef::Leaf(MapNodesLeaf(l, self.1)),
-                    })
-                })
+            > {
+                Ok(self.0.get_children()?.map(|child| match child {
+                    NodeRef::Group(g) => NodeRef::Group(MapNodesGroup(g, self.1)),
+                    NodeRef::Leaf(l) => NodeRef::Leaf(MapNodesLeaf(l, self.1)),
+                }))
             }
 
             fn group_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::GroupMetadata<'b>
@@ -328,25 +328,21 @@ mod with_parent {
             self.this.group_metadata()
         }
 
-        fn get_children<'b>(
+        fn get_children(
             &self,
-        ) -> LoadingResult<
-            impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+        ) -> Result<
+            impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
             <Self::Hiearchy as LazyHiearchy>::StructureErr,
-            <Self::Hiearchy as LazyHiearchy>::DoesLoading,
-        >
-        where
-            'a: 'b,
-        {
+        > {
             self.this.get_children().map(move |it| {
                 it.map(|child| match child {
                     NodeRef::Group(group) => NodeRef::Group(WithParentGroupRef {
                         this: group,
-                        parent: Some(H::reborrow_groupref(self.this.clone())),
+                        parent: Some(self.this.clone()),
                     }),
                     NodeRef::Leaf(leaf) => NodeRef::Leaf(WithParentLeafRef {
                         this: leaf,
-                        parent: Some(H::reborrow_groupref(self.this.clone())),
+                        parent: Some(self.this.clone()),
                     }),
                 })
             })
@@ -359,7 +355,6 @@ mod with_parent {
     where
         for<'x> <H as hiearchy::lazy::LazyHiearchy>::GroupRef<'x>: std::clone::Clone,
     {
-        type DoesLoading = H::DoesLoading;
         type GroupMetadata<'a>
             = H::GroupMetadata<'a>
         where
@@ -402,6 +397,15 @@ mod with_parent {
                 parent: it.parent.map(H::reborrow_groupref),
             }
         }
+
+        fn reborrow_leafref<'long: 'short, 'short>(
+            it: WithParentLeafRef<'long, H>,
+        ) -> WithParentLeafRef<'short, H> {
+            WithParentLeafRef {
+                this: H::reborrow_leafref(it.this),
+                parent: it.parent.map(H::reborrow_groupref),
+            }
+        }
     }
 }
 
@@ -420,39 +424,34 @@ mod flatten_by_key {
     {
         type Hiearchy = FlattenByKey<H, F>;
 
-        fn get_children<'b>(
+        fn get_children(
             &self,
-        ) -> LoadingResult<
-            std::iter::Once<NodeRef<'b, Self::Hiearchy>>,
-            //impl Iterator<Item = NodeRef<'b, Self::Hiearchy>>,
+        ) -> Result<
+            std::iter::Once<NodeRef<'a, Self::Hiearchy>>,
             <Self::Hiearchy as LazyHiearchy>::StructureErr,
-            <Self::Hiearchy as LazyHiearchy>::DoesLoading,
-        >
-        where
-            'a: 'b,
-        {
+        > {
             todo!()
-            /*self.this.get_children().map(|children| {
-                children.flat_map(|child| match child {
-                    NodeRef::Group(group) => {
-                        if (self.map_fn)(&group) {
-                            Either::Left(group.get_children().map(|v| {
-                                v.map(|child| match child {
-                                    NodeRef::Group(_) => todo!(),
-                                    NodeRef::Leaf(_) => todo!(),
-                                })
-                            }))
-                        } else {
-                            Either::Right(std::iter::once(NodeRef::Group(FlattenByKeyGroup {
-                                this: group,
-                                map_fn: self.map_fn, // Preserve group without flattening
-                            })))
-                        }
-                    }
-                    NodeRef::Leaf(leaf) => todo!(), //NodeRef::Leaf(leaf),
-                })
-            })*/
         }
+        /*self.this.get_children().map(|children| {
+            children.flat_map(|child| match child {
+                NodeRef::Group(group) => {
+                    if (self.map_fn)(&group) {
+                        group.get_children().map(|v| {
+                            v.map(|child| match child {
+                                NodeRef::Group(_) => todo!(),
+                                NodeRef::Leaf(_) => todo!(),
+                            })
+                        })
+                    } else {
+                        std::iter::once(NodeRef::Group(FlattenByKeyGroup {
+                            this: group,
+                            map_fn: self.map_fn, // Preserve group without flattening
+                        }))
+                    }
+                }
+                NodeRef::Leaf(leaf) => todo!(), //NodeRef::Leaf(leaf),
+            })
+        })*/
 
         fn group_metadata<'b>(&self) -> <Self::Hiearchy as LazyHiearchy>::GroupMetadata<'b>
         where
@@ -495,8 +494,6 @@ mod flatten_by_key {
         where
             Self: 'x;
 
-        type DoesLoading = H::DoesLoading;
-
         fn root(&self) -> Self::GroupRef<'_> {
             FlattenByKeyGroup {
                 this: self.0.root(),
@@ -511,6 +508,10 @@ mod flatten_by_key {
                 this: H::reborrow_groupref(it.this),
                 map_fn: it.map_fn,
             }
+        }
+
+        fn reborrow_leafref<'long: 'short, 'short>(it: H::LeafRef<'long>) -> H::LeafRef<'short> {
+            H::reborrow_leafref(it)
         }
     }
 }
