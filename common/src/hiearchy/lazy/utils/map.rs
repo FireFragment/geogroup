@@ -14,16 +14,29 @@ pub fn map_group_data<
 >(
     gr: &'orig_gr OrigGr,
     fun: F,
-) -> impl AsGroupRef<
+) -> AsMappedGroupRef<
     'a,
-    GroupRef = impl GroupRef<
-        'a,
-        NodeMetadata = <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        LeafMetadata = <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        GroupMetadata = GroupDataNew,
-        StructureErr = <OrigGr::GroupRef as GroupRef<'a>>::StructureErr,
-    >,
-> + 'a {
+    GroupDataNew,
+    <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+    <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    OrigGr,
+    impl Fn(
+        <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
+        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> GroupDataNew,
+    impl Fn(
+        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+    impl Fn(
+        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    impl Fn(
+        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+> {
     AsMappedGroupRef {
         original: gr,
         map_groups_fn: move |gr, _| fun(gr),
@@ -33,7 +46,7 @@ pub fn map_group_data<
     }
 }
 
-struct AsMappedGroupRef<
+pub struct AsMappedGroupRef<
     'a,
     GroupDataNew: 'a,
     LeafDataNew: 'a,
@@ -122,7 +135,7 @@ impl<
     }
 }
 
-struct MappedGroupRef<
+pub struct MappedGroupRef<
     'a,
     GroupDataNew: 'a,
     LeafDataNew: 'a,
@@ -159,7 +172,7 @@ struct MappedGroupRef<
     >,
 }
 
-struct MappedLeafRef<
+pub struct MappedLeafRef<
     'a,
     OrigGr: AsGroupRef<'a>,
     NewGr: GroupRef<'a>,

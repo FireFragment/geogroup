@@ -84,16 +84,29 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
     >(
         &'a self,
         fun: F,
-    ) -> impl AsGroupRef<
+    ) -> utils::map::AsMappedGroupRef<
         'a,
-        GroupRef = impl GroupRef<
-            'a,
-            NodeMetadata = <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            LeafMetadata = <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-            GroupMetadata = GroupDataNew,
-            StructureErr = <Self::GroupRef as GroupRef<'a>>::StructureErr,
-        >,
-    > + 'a
+        GroupDataNew,
+        <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+        <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        Self,
+        impl Fn(
+            <<Self as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> GroupDataNew,
+        impl Fn(
+            <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+        impl Fn(
+            <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        impl Fn(
+            <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+    >
     where
         Self: Sized, // TODO: Is this bound really needed?
     {
