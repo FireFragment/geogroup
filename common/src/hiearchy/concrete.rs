@@ -1,7 +1,6 @@
 use crate::*;
 use std::convert::Infallible;
 
-use hiearchy::lazy::GroupRef;
 pub use hiearchy::lazy::NodeRef;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -90,43 +89,11 @@ impl<G, L, N> ConcreteHiearchy<G, L, N> {
     }
 }
 
-impl<L, G, N> hiearchy::Lazy for ConcreteHiearchy<G, L, N> {
-    type GroupRef<'a>
-        = &'a Group<G, L, N>
-    where
-        G: 'a,
-        L: 'a,
-        N: 'a;
-    type LeafRef<'a>
-        = &'a Leaf<L, N>
-    where
-        Self: 'a;
-    type GroupMetadata<'a>
-        = &'a G
-    where
-        Self: 'a;
-    type NodeMetadata<'a>
-        = &'a N
-    where
-        Self: 'a;
-    type LeafMetadata<'a>
-        = &'a L
-    where
-        Self: 'a;
-    type StructureErr = Infallible;
+impl<'a, L: 'a, G: 'a, N: 'a> hiearchy::lazy::AsGroupRef<'a> for ConcreteHiearchy<G, L, N> {
+    type GroupRef = &'a Group<G, L, N>;
 
-    fn root(&self) -> Self::GroupRef<'_> {
+    fn root<'s: 'a>(&'s self) -> Self::GroupRef {
         &self.root_group
-    }
-
-    fn reborrow_groupref<'long: 'short, 'short>(
-        it: Self::GroupRef<'long>,
-    ) -> Self::GroupRef<'short> {
-        it
-    }
-
-    fn reborrow_leafref<'long: 'short, 'short>(it: &'long Leaf<L, N>) -> &'short Leaf<L, N> {
-        it
     }
 }
 
@@ -143,32 +110,27 @@ impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
     }
 }
 
-impl<'a, G: 'a, L: 'a, N: 'a> GroupRef<'a> for &'a Group<G, L, N> {
-    type Hiearchy = ConcreteHiearchy<G, L, N>;
+impl<'a, G, L, N> hiearchy::lazy::GroupRef<'a> for &'a Group<G, L, N> {
+    type NodeMetadata = &'a N;
+    type LeafMetadata = &'a L;
+    type GroupMetadata = &'a G;
+    type StructureErr = Infallible;
+    type LeafRef = &'a Leaf<L, N>;
 
     fn get_children(
         &self,
-    ) -> Result<
-        impl Iterator<Item = NodeRef<'a, Self::Hiearchy>>,
-        <Self::Hiearchy as hiearchy::Lazy>::StructureErr,
-    > {
+    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<'a, Self>>, Self::StructureErr> {
         Ok(self.children.iter().map(|node| match node {
-            Node::Group(group) => NodeRef::Group(group),
-            Node::Leaf(leaf) => NodeRef::Leaf(leaf),
+            Node::Group(group) => hiearchy::lazy::NodeRef::Group(group),
+            Node::Leaf(leaf) => hiearchy::lazy::NodeRef::Leaf(leaf),
         }))
     }
 
-    fn group_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::GroupMetadata<'b>
-    where
-        'a: 'b,
-    {
+    fn group_metadata(&self) -> Self::GroupMetadata {
         &self.group_data
     }
 
-    fn node_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::NodeMetadata<'b>
-    where
-        'a: 'b,
-    {
+    fn node_metadata(&self) -> Self::NodeMetadata {
         &self.node_data
     }
 }
