@@ -4,6 +4,8 @@ pub use concrete::ConcreteHiearchy as Concrete;
 pub use lazy::AsGroupRef as Lazy;
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use lazy::AsGroupRefUtils;
 
     use super::*;
@@ -39,38 +41,41 @@ mod tests {
         assert_eq!(collected, target);
     }
 
-    fn test_map() {
-        use concrete::*;
-        let hierarchy = ConcreteHiearchy::new(Group::new(
-            vec![
-                Node::new_leaf(Leaf::new(10, String::from("a leaf"))),
-                Node::new_group(Group::new(Vec::new(), true, String::from("a subgroup"))),
-            ],
-            false,
-            String::from("root group"),
-        ));
+    /// Simple reproduction of the lifetime error
+    fn err_repro() {
+        pub trait ExperimentTr<'a>: Sized {
+            type InnerType;
 
-        let binding = hierarchy.map_group_data(|g| !g);
-        let collected = binding.map_group_data(|g| !g); //.unwrap();
+            fn map<New: 'a, F: Fn(Self::InnerType) -> New>(
+                &'a self,
+                fun: F,
+            ) -> impl ExperimentTr<'a, InnerType = New> {
+                Mapper { orig: self, fun }
+            }
+        }
 
-        drop(collected);
-        drop(binding);
+        pub struct Base<'a>(&'a u8);
 
-        /*dbg!(&collected);
+        impl<'a> ExperimentTr<'a> for Base<'a> {
+            type InnerType = u8;
+        }
 
-        let str_leaf = String::from("a leaf");
-        let str_subgroup = String::from("a subgroup");
-        let str_root_group = String::from("root group");
-        let target = ConcreteHiearchy::new(Group::new(
-            vec![
-                Node::new_leaf(Leaf::new(&10, &str_leaf)),
-                Node::new_group(Group::new(Vec::new(), false, &str_subgroup)),
-            ],
-            true,
-            &str_root_group,
-        ));
+        pub struct Mapper<'a, Orig: ExperimentTr<'a>, New: 'a, F: Fn(Orig::InnerType) -> New> {
+            pub orig: &'a Orig,
+            pub fun: F,
+        }
 
-        assert_eq!(collected, target);*/
+        impl<'a, Orig: ExperimentTr<'a>, New: 'a, F: Fn(Orig::InnerType) -> New> ExperimentTr<'a>
+            for Mapper<'a, Orig, New, F>
+        {
+            type InnerType = New;
+        }
+
+        let reference = &8;
+
+        let binding = Base(reference);
+        let mapped_1 = binding.map(|f| f); //.unwrap();
+        let mapped_2 = mapped_1.map(|f| f); //.unwrap();
     }
 
     #[test]
