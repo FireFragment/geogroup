@@ -46,11 +46,15 @@ mod tests {
         pub trait ExperimentTr<'a>: Sized {
             type InnerType;
 
-            fn map<New: 'a, F: Fn(Self::InnerType) -> New>(
+            fn map<New: 'a, F1: Fn(Self::InnerType) -> New>(
                 &'a self,
-                fun: F,
-            ) -> impl ExperimentTr<'a, InnerType = New> {
-                Mapper { orig: self, fun }
+                fun: F1,
+            ) -> Mapper<'a, Self, New, F1, impl Fn(u8) -> u8> {
+                Mapper {
+                    orig: self,
+                    fun_1: fun,
+                    fun_2: |n| n + 1,
+                }
             }
         }
 
@@ -60,13 +64,25 @@ mod tests {
             type InnerType = u8;
         }
 
-        pub struct Mapper<'a, Orig: ExperimentTr<'a>, New: 'a, F: Fn(Orig::InnerType) -> New> {
+        pub struct Mapper<
+            'a,
+            Orig: ExperimentTr<'a>,
+            New: 'a,
+            F1: Fn(Orig::InnerType) -> New,
+            F2: Fn(u8) -> u8,
+        > {
             pub orig: &'a Orig,
-            pub fun: F,
+            pub fun_1: F1,
+            pub fun_2: F2,
         }
 
-        impl<'a, Orig: ExperimentTr<'a>, New: 'a, F: Fn(Orig::InnerType) -> New> ExperimentTr<'a>
-            for Mapper<'a, Orig, New, F>
+        impl<
+                'a,
+                Orig: ExperimentTr<'a>,
+                New: 'a,
+                F1: Fn(Orig::InnerType) -> New,
+                F2: Fn(u8) -> u8,
+            > ExperimentTr<'a> for Mapper<'a, Orig, New, F1, F2>
         {
             type InnerType = New;
         }
