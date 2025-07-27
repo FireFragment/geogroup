@@ -5,12 +5,16 @@
 
 use super::*;
 
-pub fn map_group_data<
+pub fn map_groups<
     'a,
     'orig_gr: 'a,
     OrigGr: AsGroupRef<'a> + 'a,
     GroupDataNew: 'a,
-    F: Fn(<OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
+    F: Fn(
+            <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> GroupDataNew
+        + 'a,
 >(
     gr: &'orig_gr OrigGr,
     fun: F,
@@ -20,11 +24,7 @@ pub fn map_group_data<
     <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
     <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
     OrigGr,
-    impl Fn(
-            <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> GroupDataNew
-        + 'a,
+    F,
     impl Fn(
             <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
             <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
@@ -43,8 +43,53 @@ pub fn map_group_data<
 > {
     AsMappedGroupRef {
         original: gr,
-        map_groups_fn: move |gr, _| fun(gr),
+        map_groups_fn: fun,
         map_leaves_fn: move |l, _| l,
+        map_groups_node_data_fn: move |_, n| n,
+        map_leaves_node_data_fn: move |_, n| n,
+    }
+}
+
+pub fn map_leaves<
+    'a,
+    'orig_gr: 'a,
+    OrigGr: AsGroupRef<'a> + 'a,
+    LeafDataNew: 'a,
+    F: Fn(
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> LeafDataNew
+        + 'a,
+>(
+    gr: &'orig_gr OrigGr,
+    fun: F,
+) -> AsMappedGroupRef<
+    'a,
+    <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+    LeafDataNew,
+    <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+    OrigGr,
+    impl Fn(
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata
+        + 'static,
+    F,
+    impl Fn(
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
+        + 'static,
+    impl Fn(
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
+        + 'static,
+> {
+    AsMappedGroupRef {
+        original: gr,
+        map_groups_fn: move |g, _| g,
+        map_leaves_fn: fun,
         map_groups_node_data_fn: move |_, n| n,
         map_leaves_node_data_fn: move |_, n| n,
     }

@@ -78,9 +78,13 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
     }
 
-    fn map_group_data<
+    fn map_groups<
         GroupDataNew: 'a,
-        F: Fn(<Self::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
+        F: Fn(
+                <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> GroupDataNew
+            + 'a,
     >(
         &'a self,
         fun: F,
@@ -90,11 +94,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
         <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
         Self,
-        impl Fn(
-                <<Self as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> GroupDataNew
-            + 'a,
+        F,
         impl Fn(
                 <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
                 <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
@@ -114,7 +114,46 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
     where
         Self: Sized, // TODO: Is this bound really needed?
     {
-        utils::map::map_group_data(self, fun)
+        utils::map::map_groups(self, fun)
+    }
+
+    fn map_leaves<
+        LeafDataNew: 'a,
+        F: Fn(
+                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> LeafDataNew
+            + 'a,
+    >(
+        &'a self,
+        fun: F,
+    ) -> utils::map::AsMappedGroupRef<
+        'a,
+        <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
+        LeafDataNew,
+        <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+        Self,
+        impl Fn(
+                <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> <Self::GroupRef as GroupRef<'a>>::GroupMetadata
+            + 'static,
+        F,
+        impl Fn(
+                <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata
+            + 'static,
+        impl Fn(
+                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata
+            + 'static,
+    >
+    where
+        Self: Sized, // TODO: Is this bound really needed?
+    {
+        utils::map::map_leaves(self, fun)
     }
 }
 
