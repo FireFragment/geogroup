@@ -94,6 +94,23 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
     {
         utils::map::map_group_data(self, fun)
     }
+
+    fn map_leaf_data<
+        LeafDataNew: 'a,
+        F: Fn(
+                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
+                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            ) -> LeafDataNew
+            + 'a,
+    >(
+        &'a self,
+        fun: F,
+    ) -> utils::map::AsMappedGroupRef<'a, Self, utils::map::LeafDataMapper<F>>
+    where
+        Self: Sized,
+    {
+        utils::map::map_leaf_data(self, fun)
+    }
 }
 
 impl<'a, T: GroupRef<'a>> GroupRefUtils<'a> for T {}

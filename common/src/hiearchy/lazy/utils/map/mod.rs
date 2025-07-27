@@ -1,6 +1,6 @@
 use super::*;
-pub mod convinience;
-pub use convinience::*;
+pub mod convenience;
+pub use convenience::*;
 
 /// A trait that defines how to map metadata between different hierarchy representations.
 ///
@@ -80,30 +80,12 @@ pub trait Mapper<'a, Original: AsGroupRef<'a>> {
     ) -> Self::NodeDataNew;
 }
 
-/// Creates a mapped hierarchy that transforms group data while preserving other metadata types.
-///
-/// This is a convenience function that creates a `GroupDataMapper` internally, allowing
-/// you to transform only group metadata while leaving leaf and node metadata unchanged.
-/// This maintains backward compatibility with the original API.
+/// Creates a mapped hierarchy that transforms group data.
 ///
 /// # Parameters
 ///
 /// * `gr` - The original hierarchy to transform
-/// * `fun` - A function that maps group metadata to the new type
-///
-/// # Returns
-///
-/// A new hierarchy wrapper that applies the transformation
-///
-/// # Example
-///
-/// ```rust
-/// let original_hierarchy = /* ... */;
-/// let mapped = map_group_data(&original_hierarchy, |group_meta, node_meta| {
-///     format!("Transformed: {:?}", group_meta)
-/// });
-/// ```
-
+/// * `fun` - A function that maps group data
 pub fn map_group_data<
     'a,
     'orig_gr: 'a,
@@ -121,6 +103,32 @@ pub fn map_group_data<
     AsMappedGroupRef {
         original: gr,
         mapper: GroupDataMapper::new(fun),
+    }
+}
+
+/// Creates a mapped hierarchy that transforms leaf data.
+///
+/// # Parameters
+///
+/// * `gr` - The original hierarchy to transform
+/// * `fun` - A function that maps leaf metadata
+pub fn map_leaf_data<
+    'a,
+    'orig_gr: 'a,
+    OrigGr: AsGroupRef<'a> + 'a,
+    LeafDataNew: 'a,
+    F: Fn(
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> LeafDataNew
+        + 'a,
+>(
+    gr: &'orig_gr OrigGr,
+    fun: F,
+) -> AsMappedGroupRef<'a, OrigGr, LeafDataMapper<F>> {
+    AsMappedGroupRef {
+        original: gr,
+        mapper: LeafDataMapper::new(fun),
     }
 }
 
