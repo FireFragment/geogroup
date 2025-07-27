@@ -39,6 +39,7 @@ mod tests {
         assert_eq!(collected, target);
     }
 
+    #[test]
     fn test_map() {
         use concrete::*;
         let hierarchy = ConcreteHiearchy::new(Group::new(
@@ -50,12 +51,11 @@ mod tests {
             String::from("root group"),
         ));
 
-        let binding = hierarchy.map_group_data(|g| !g);
-        let collected = binding.map_group_data(|g| !g);
+        let ext_var: Vec<i32> = Vec::new(); // Test that the code compiles even if the closure references an external variable
+        let binding = hierarchy.map_group_data(|g, _| !g && ext_var.len() == 0);
+        let collected = binding.collect_to_concrete().unwrap();
 
-        drop(binding);
-
-        /*dbg!(&collected);
+        dbg!(&collected);
 
         let str_leaf = String::from("a leaf");
         let str_subgroup = String::from("a subgroup");
@@ -69,9 +69,6 @@ mod tests {
             &str_root_group,
         ));
 
-        assert_eq!(collected, target);*/
+        assert_eq!(collected, target);
     }
-
-    #[test]
-    fn test_lazy_hierarchy() {}
 }

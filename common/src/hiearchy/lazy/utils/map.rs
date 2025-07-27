@@ -1,274 +1,182 @@
-//! Creates a new hiearchy where every node holds a [reference](GroupRef) to its parent.
-//!
-//! **Performance:** for every call to `leaf_metadata` and `group_metadata`, it also additionally calls `node_metadata`, regardless
-//! of whether it's needed
-
 use super::*;
+pub mod convinience;
+pub use convinience::*;
+
+/// A trait that defines how to map metadata between different hierarchy representations.
+///
+/// # Type Parameters
+///
+/// * `'a` - The lifetime parameter for the hierarchy references
+/// * `OrigGr` - The original hierarchy type
+///
+/// # Associated Types
+///
+/// * `GroupDataNew` - The new type for group metadata after transformation
+/// * `LeafDataNew` - The new type for leaf metadata after transformation
+/// * `NodeDataNew` - The new type for node metadata after transformation
+pub trait Mapper<'a, Original: AsGroupRef<'a>> {
+    type GroupDataNew: 'a;
+    type LeafDataNew: 'a;
+    type NodeDataNew: 'a;
+
+    /// Transform group metadata into the new group data type.
+    ///
+    /// This method is called whenever group metadata needs to be accessed
+    /// in the transformed hierarchy.
+    ///
+    /// # Parameters
+    ///
+    /// * `group_metadata` - The original group metadata
+    /// * `node_metadata` - The associated node metadata for context
+    fn map_group_data(
+        &self,
+        group_metadata: <Original::GroupRef as GroupRef<'a>>::GroupMetadata,
+        node_metadata: <Original::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> Self::GroupDataNew;
+
+    /// Transform leaf metadata into the new leaf data type.
+    ///
+    /// This method is called whenever leaf metadata needs to be accessed
+    /// in the transformed hierarchy.
+    ///
+    /// # Parameters
+    ///
+    /// * `leaf_metadata` - The original leaf metadata
+    /// * `node_metadata` - The associated node metadata for context
+    fn map_leaf_data(
+        &self,
+        leaf_metadata: <Original::GroupRef as GroupRef<'a>>::LeafMetadata,
+        node_metadata: <Original::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> Self::LeafDataNew;
+
+    /// Transform group metadata into node data for group nodes.
+    ///
+    /// This method is called when accessing node metadata for group nodes
+    /// in the transformed hierarchy.
+    ///
+    /// # Parameters
+    ///
+    /// * `group_metadata` - The original group metadata
+    /// * `node_metadata` - The associated node metadata for context
+    fn map_group_node_data(
+        &self,
+        group_metadata: <Original::GroupRef as GroupRef<'a>>::GroupMetadata,
+        node_metadata: <Original::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> Self::NodeDataNew;
+
+    /// Transform leaf metadata into node data for leaf nodes.
+    ///
+    /// This method is called when accessing node metadata for leaf nodes
+    /// in the transformed hierarchy.
+    ///
+    /// # Parameters
+    ///
+    /// * `leaf_metadata` - The original leaf metadata
+    /// * `node_metadata` - The associated node metadata for context
+    fn map_leaf_node_data(
+        &self,
+        leaf_metadata: <Original::GroupRef as GroupRef<'a>>::LeafMetadata,
+        node_metadata: <Original::GroupRef as GroupRef<'a>>::NodeMetadata,
+    ) -> Self::NodeDataNew;
+}
+
+/// Creates a mapped hierarchy that transforms group data while preserving other metadata types.
+///
+/// This is a convenience function that creates a `GroupDataMapper` internally, allowing
+/// you to transform only group metadata while leaving leaf and node metadata unchanged.
+/// This maintains backward compatibility with the original API.
+///
+/// # Parameters
+///
+/// * `gr` - The original hierarchy to transform
+/// * `fun` - A function that maps group metadata to the new type
+///
+/// # Returns
+///
+/// A new hierarchy wrapper that applies the transformation
+///
+/// # Example
+///
+/// ```rust
+/// let original_hierarchy = /* ... */;
+/// let mapped = map_group_data(&original_hierarchy, |group_meta, node_meta| {
+///     format!("Transformed: {:?}", group_meta)
+/// });
+/// ```
 
 pub fn map_group_data<
     'a,
     'orig_gr: 'a,
     OrigGr: AsGroupRef<'a> + 'a,
     GroupDataNew: 'a,
-    F: Fn(<OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
->(
-    gr: &'orig_gr OrigGr,
-    fun: F,
-) -> AsMappedGroupRef<
-    'a,
-    GroupDataNew,
-    <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-    <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    OrigGr,
-    impl Fn(
+    F: Fn(
             <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
             <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
         ) -> GroupDataNew
         + 'a,
-    impl Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata
-        + 'static,
-    impl Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
-        + 'static,
-    impl Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
-        + 'static,
-> {
+>(
+    gr: &'orig_gr OrigGr,
+    fun: F,
+) -> AsMappedGroupRef<'a, OrigGr, GroupDataMapper<F>> {
     AsMappedGroupRef {
         original: gr,
-        map_groups_fn: move |gr, _| fun(gr),
-        map_leaves_fn: move |l, _| l,
-        map_groups_node_data_fn: move |_, n| n,
-        map_leaves_node_data_fn: move |_, n| n,
+        mapper: GroupDataMapper::new(fun),
     }
 }
 
-pub struct AsMappedGroupRef<
-    'a,
-    GroupDataNew: 'a,
-    LeafDataNew: 'a,
-    NodeDataNew: 'a,
-    OrigGr: AsGroupRef<'a>,
-    FnGroupData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> GroupDataNew
-        + 'a,
-    FnLeafData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> LeafDataNew
-        + 'static,
-    FnNodeDataGroup: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew
-        + 'static,
-    FnNodeDataLeaf: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew
-        + 'static,
-> {
+pub struct AsMappedGroupRef<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> {
     original: &'a OrigGr,
-    map_groups_fn: FnGroupData,
-    map_leaves_fn: FnLeafData,
-    map_groups_node_data_fn: FnNodeDataGroup,
-    map_leaves_node_data_fn: FnNodeDataLeaf,
+    mapper: M,
 }
 
-impl<
-        'a,
-        GroupDataNew: 'a,
-        LeafDataNew: 'a,
-        NodeDataNew: 'a,
-        OrigGr: AsGroupRef<'a>,
-        FnGroupData: Fn(
-                <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-                <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> GroupDataNew
-            + 'a,
-        FnLeafData: Fn(
-                <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-                <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> LeafDataNew
-            + 'a,
-        FnNodeDataGroup: Fn(
-                <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-                <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> NodeDataNew
-            + 'a,
-        FnNodeDataLeaf: Fn(
-                <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-                <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> NodeDataNew
-            + 'a,
-    > AsGroupRef<'a>
-    for AsMappedGroupRef<
-        'a,
-        GroupDataNew,
-        LeafDataNew,
-        NodeDataNew,
-        OrigGr,
-        FnGroupData,
-        FnLeafData,
-        FnNodeDataGroup,
-        FnNodeDataLeaf,
-    >
+impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> AsGroupRef<'a>
+    for AsMappedGroupRef<'a, OrigGr, M>
 {
-    type GroupRef = MappedGroupRef<
-        'a,
-        GroupDataNew,
-        LeafDataNew,
-        NodeDataNew,
-        OrigGr,
-        FnGroupData,
-        FnLeafData,
-        FnNodeDataGroup,
-        FnNodeDataLeaf,
-    >;
+    type GroupRef = MappedGroupRef<'a, OrigGr, M>;
 
     fn root<'s: 'a>(&'s self) -> Self::GroupRef {
         MappedGroupRef {
             this: self.original.root(),
-            root: &self,
+            root: self,
         }
     }
 }
 
-pub struct MappedGroupRef<
-    'a,
-    GroupDataNew: 'a,
-    LeafDataNew: 'a,
-    NodeDataNew: 'a,
-    OrigGr: AsGroupRef<'a>,
-    FnGroupData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> GroupDataNew
-        + 'a,
-    FnLeafData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> LeafDataNew
-        + 'static,
-    FnNodeDataGroup: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew
-        + 'static,
-    FnNodeDataLeaf: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew
-        + 'static,
-> {
+pub struct MappedGroupRef<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> {
     this: OrigGr::GroupRef,
-    root: &'a AsMappedGroupRef<
-        'a,
-        GroupDataNew,
-        LeafDataNew,
-        NodeDataNew,
-        OrigGr,
-        FnGroupData,
-        FnLeafData,
-        FnNodeDataGroup,
-        FnNodeDataLeaf,
-    >,
+    root: &'a AsMappedGroupRef<'a, OrigGr, M>,
 }
 
-pub struct MappedLeafRef<
-    'a,
-    OrigGr: AsGroupRef<'a>,
-    NewGr: GroupRef<'a>,
-    FnLeafData: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NewGr::LeafMetadata,
-    FnNodeDataLeaf: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NewGr::NodeMetadata,
-> {
+pub struct MappedLeafRef<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> {
     this: <OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
-    map_leaves_fn: &'a FnLeafData,
-    map_leaves_node_data_fn: &'a FnNodeDataLeaf,
-    phantom_data: PhantomData<&'a NewGr>,
+    mapper: &'a M,
 }
 
-impl<
-        'a,
-        OrigGr: AsGroupRef<'a>,
-        NewGr: GroupRef<'a>,
-        FnLeafData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NewGr::LeafMetadata,
-        FnNodeDataLeaf: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NewGr::NodeMetadata,
-    > LeafRef for MappedLeafRef<'a, OrigGr, NewGr, FnLeafData, FnNodeDataLeaf>
+impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> LeafRef
+    for MappedLeafRef<'a, OrigGr, M>
 {
-    type Metadata = NewGr::LeafMetadata;
-    type NodeMetadata = NewGr::NodeMetadata;
+    type Metadata = M::LeafDataNew;
+    type NodeMetadata = M::NodeDataNew;
 
-    fn leaf_metadata(&self) -> NewGr::LeafMetadata {
-        (self.map_leaves_fn)(self.this.leaf_metadata(), self.this.node_metadata())
+    fn leaf_metadata(&self) -> M::LeafDataNew {
+        self.mapper
+            .map_leaf_data(self.this.leaf_metadata(), self.this.node_metadata())
     }
 
     fn node_metadata(&self) -> Self::NodeMetadata {
-        (self.map_leaves_node_data_fn)(self.this.leaf_metadata(), self.this.node_metadata())
+        self.mapper
+            .map_leaf_node_data(self.this.leaf_metadata(), self.this.node_metadata())
     }
 }
 
-impl<
-        'a,
-        GroupDataNew: 'a,
-        LeafDataNew: 'a,
-        NodeDataNew: 'a,
-        OrigGr: AsGroupRef<'a>,
-        FnGroupData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> GroupDataNew,
-        FnLeafData: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> LeafDataNew,
-        FnNodeDataGroup: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew,
-        FnNodeDataLeaf: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> NodeDataNew,
-    > GroupRef<'a>
-    for MappedGroupRef<
-        'a,
-        GroupDataNew,
-        LeafDataNew,
-        NodeDataNew,
-        OrigGr,
-        FnGroupData,
-        FnLeafData,
-        FnNodeDataGroup,
-        FnNodeDataLeaf,
-    >
+impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> GroupRef<'a>
+    for MappedGroupRef<'a, OrigGr, M>
 {
-    type NodeMetadata = NodeDataNew;
-    type LeafMetadata = LeafDataNew;
-    type GroupMetadata = GroupDataNew;
+    type NodeMetadata = M::NodeDataNew;
+    type LeafMetadata = M::LeafDataNew;
+    type GroupMetadata = M::GroupDataNew;
     type StructureErr = <OrigGr::GroupRef as GroupRef<'a>>::StructureErr;
-    type LeafRef = MappedLeafRef<'a, OrigGr, Self, FnLeafData, FnNodeDataLeaf>;
+    type LeafRef = MappedLeafRef<'a, OrigGr, M>;
 
     fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<'a, Self>>, Self::StructureErr>
     where
@@ -282,19 +190,21 @@ impl<
                 }),
                 NodeRef::Leaf(leaf) => NodeRef::Leaf(MappedLeafRef {
                     this: leaf,
-                    map_leaves_fn: &self.root.map_leaves_fn,
-                    map_leaves_node_data_fn: &self.root.map_leaves_node_data_fn,
-                    phantom_data: PhantomData,
+                    mapper: &self.root.mapper,
                 }),
             })
         })
     }
 
     fn group_metadata(&self) -> Self::GroupMetadata {
-        (self.root.map_groups_fn)(self.this.group_metadata(), self.this.node_metadata())
+        self.root
+            .mapper
+            .map_group_data(self.this.group_metadata(), self.this.node_metadata())
     }
 
     fn node_metadata<'b>(&self) -> Self::NodeMetadata {
-        (self.root.map_groups_node_data_fn)(self.this.group_metadata(), self.this.node_metadata())
+        self.root
+            .mapper
+            .map_group_node_data(self.this.group_metadata(), self.this.node_metadata())
     }
 }

@@ -80,37 +80,15 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
 
     fn map_group_data<
         GroupDataNew: 'a,
-        F: Fn(<Self::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
-    >(
-        &'a self,
-        fun: F,
-    ) -> utils::map::AsMappedGroupRef<
-        'a,
-        GroupDataNew,
-        <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-        Self,
-        impl Fn(
+        F: Fn(
                 <<Self as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
                 <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
             ) -> GroupDataNew
             + 'a,
-        impl Fn(
-                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> <Self::GroupRef as GroupRef<'a>>::LeafMetadata
-            + 'static,
-        impl Fn(
-                <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata
-            + 'static,
-        impl Fn(
-                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> <Self::GroupRef as GroupRef<'a>>::NodeMetadata
-            + 'static,
-    >
+    >(
+        &'a self,
+        fun: F,
+    ) -> utils::map::AsMappedGroupRef<'a, Self, utils::map::GroupDataMapper<F>>
     where
         Self: Sized, // TODO: Is this bound really needed?
     {
