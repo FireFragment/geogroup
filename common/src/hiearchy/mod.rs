@@ -49,7 +49,7 @@ mod tests {
             fn map<New: 'a, F1: Fn(Self::InnerType) -> New>(
                 &'a self,
                 fun: F1,
-            ) -> Mapper<'a, Self, New, F1, impl Fn(u8) -> u8> {
+            ) -> Mapper<'a, Self, New, F1, impl Fn(&'a u8) -> u8> {
                 Mapper {
                     orig: self,
                     fun_1: fun,
@@ -69,7 +69,7 @@ mod tests {
             Orig: ExperimentTr<'a>,
             New: 'a,
             F1: Fn(Orig::InnerType) -> New,
-            F2: Fn(u8) -> u8,
+            F2: Fn(&'a u8) -> u8,
         > {
             pub orig: &'a Orig,
             pub fun_1: F1,
@@ -81,7 +81,7 @@ mod tests {
                 Orig: ExperimentTr<'a>,
                 New: 'a,
                 F1: Fn(Orig::InnerType) -> New,
-                F2: Fn(u8) -> u8,
+                F2: Fn(&'a u8) -> u8,
             > ExperimentTr<'a> for Mapper<'a, Orig, New, F1, F2>
         {
             type InnerType = New;
