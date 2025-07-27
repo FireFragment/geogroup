@@ -10,7 +10,7 @@ pub fn map_group_data<
     'orig_gr: 'a,
     OrigGr: AsGroupRef<'a> + 'a,
     GroupDataNew: 'a,
-    F: Fn(<OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
+    F: Fn(<OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'static,
 >(
     gr: &'orig_gr OrigGr,
     fun: F,
@@ -21,21 +21,25 @@ pub fn map_group_data<
     <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
     OrigGr,
     impl Fn(
-        <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> GroupDataNew,
+            <<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> GroupDataNew
+        + 'static,
     impl Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata
+        + 'static,
     impl Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
+        + 'static,
     impl Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata
+        + 'static,
 > {
     AsMappedGroupRef {
         original: gr,
@@ -53,21 +57,25 @@ pub struct AsMappedGroupRef<
     NodeDataNew: 'a,
     OrigGr: AsGroupRef<'a>,
     FnGroupData: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> GroupDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> GroupDataNew
+        + 'static,
     FnLeafData: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> LeafDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> LeafDataNew
+        + 'static,
     FnNodeDataGroup: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NodeDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> NodeDataNew
+        + 'static,
     FnNodeDataLeaf: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NodeDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> NodeDataNew
+        + 'static,
 > {
     original: &'a OrigGr,
     map_groups_fn: FnGroupData,
@@ -142,21 +150,25 @@ pub struct MappedGroupRef<
     NodeDataNew: 'a,
     OrigGr: AsGroupRef<'a>,
     FnGroupData: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> GroupDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> GroupDataNew
+        + 'static,
     FnLeafData: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> LeafDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> LeafDataNew
+        + 'static,
     FnNodeDataGroup: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NodeDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> NodeDataNew
+        + 'static,
     FnNodeDataLeaf: Fn(
-        <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> NodeDataNew,
+            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
+            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        ) -> NodeDataNew
+        + 'static,
 > {
     this: OrigGr::GroupRef,
     root: &'a AsMappedGroupRef<
