@@ -80,7 +80,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
 
     fn map_group_data<
         GroupDataNew: 'a,
-        F: Fn(<Self::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'static,
+        F: Fn(<Self::GroupRef as GroupRef<'a>>::GroupMetadata) -> GroupDataNew + 'a,
     >(
         &'a self,
         fun: F,
@@ -94,7 +94,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
                 <<Self as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
                 <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
             ) -> GroupDataNew
-            + 'static,
+            + 'a,
         impl Fn(
                 <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
                 <Self::GroupRef as GroupRef<'a>>::NodeMetadata,

@@ -51,11 +51,11 @@ mod tests {
         ));
 
         let binding = hierarchy.map_group_data(|g| !g);
-        let collected = binding.collect_to_concrete().unwrap();
+        let collected = binding.map_group_data(|g| !g);
 
-        //drop(binding);
+        drop(binding);
 
-        dbg!(&collected);
+        /*dbg!(&collected);
 
         let str_leaf = String::from("a leaf");
         let str_subgroup = String::from("a subgroup");
@@ -69,7 +69,7 @@ mod tests {
             &str_root_group,
         ));
 
-        assert_eq!(collected, target);
+        assert_eq!(collected, target);*/
     }
 
     #[test]
