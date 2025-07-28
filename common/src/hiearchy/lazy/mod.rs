@@ -80,11 +80,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
 
     fn map_group_data<
         GroupDataNew: 'a,
-        F: Fn(
-                <<Self as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::GroupMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> GroupDataNew
-            + 'a,
+        F: Fn(&<Self as AsGroupRef<'a>>::GroupRef) -> GroupDataNew + 'a,
     >(
         &'a self,
         fun: F,
@@ -97,11 +93,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
 
     fn map_leaf_data<
         LeafDataNew: 'a,
-        F: Fn(
-                <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-                <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
-            ) -> LeafDataNew
-            + 'a,
+        F: Fn(&<Self::GroupRef as GroupRef<'a>>::LeafRef) -> LeafDataNew + 'a,
     >(
         &'a self,
         fun: F,
@@ -110,6 +102,14 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         Self: Sized,
     {
         utils::map::map_leaf_data(self, fun)
+    }
+
+    fn with_parent(&'a self) -> utils::with_parent::WithParent<'a, Self>
+    where
+        <Self as hiearchy::lazy::AsGroupRef<'a>>::GroupRef: Clone,
+        Self: Sized,
+    {
+        utils::with_parent::with_parent(self)
     }
 }
 

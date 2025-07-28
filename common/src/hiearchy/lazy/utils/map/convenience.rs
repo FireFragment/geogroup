@@ -1,6 +1,6 @@
 use super::*;
 
-/// A `Mapper` implementation that only transforms group data.
+/// A [`Mapper`] implementation that only transforms group data.
 pub struct GroupDataMapper<F> {
     map_fn: F,
 }
@@ -18,11 +18,7 @@ impl<F> GroupDataMapper<F> {
 
 impl<'a, OrigGr: AsGroupRef<'a>, GroupDataNew: 'a, F> Mapper<'a, OrigGr> for GroupDataMapper<F>
 where
-    F: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> GroupDataNew
-        + 'a,
+    F: Fn(&<OrigGr as AsGroupRef<'a>>::GroupRef) -> GroupDataNew + 'a,
     <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata: 'a,
     <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata: 'a,
 {
@@ -30,36 +26,26 @@ where
     type LeafDataNew = <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata;
     type NodeDataNew = <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata;
 
-    fn map_group_data(
-        &self,
-        group_metadata: <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> Self::GroupDataNew {
-        (self.map_fn)(group_metadata, node_metadata)
+    fn map_group_data(&self, group_ref: &OrigGr::GroupRef) -> Self::GroupDataNew {
+        (self.map_fn)(group_ref)
     }
 
     fn map_leaf_data(
         &self,
-        leaf_metadata: <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        _node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        leaf_ref: &<OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
     ) -> Self::LeafDataNew {
-        leaf_metadata
+        leaf_ref.leaf_metadata()
     }
 
-    fn map_group_node_data(
-        &self,
-        _group_metadata: <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> Self::NodeDataNew {
-        node_metadata
+    fn map_group_node_data(&self, group_ref: &OrigGr::GroupRef) -> Self::NodeDataNew {
+        group_ref.node_metadata()
     }
 
     fn map_leaf_node_data(
         &self,
-        _leaf_metadata: <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        leaf_ref: &<OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
     ) -> Self::NodeDataNew {
-        node_metadata
+        leaf_ref.node_metadata()
     }
 }
 
@@ -81,11 +67,7 @@ impl<F> LeafDataMapper<F> {
 
 impl<'a, OrigGr: AsGroupRef<'a>, LeafDataNew: 'a, F> Mapper<'a, OrigGr> for LeafDataMapper<F>
 where
-    F: Fn(
-            <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-        ) -> LeafDataNew
-        + 'a,
+    F: Fn(&<OrigGr::GroupRef as GroupRef<'a>>::LeafRef) -> LeafDataNew + 'a,
     <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata: 'a,
     <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata: 'a,
 {
@@ -93,35 +75,25 @@ where
     type LeafDataNew = LeafDataNew;
     type NodeDataNew = <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata;
 
-    fn map_group_data(
-        &self,
-        group_metadata: <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        _node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> Self::GroupDataNew {
-        group_metadata
+    fn map_group_data(&self, group_ref: &OrigGr::GroupRef) -> Self::GroupDataNew {
+        group_ref.group_metadata()
     }
 
     fn map_leaf_data(
         &self,
-        leaf_metadata: <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        leaf_ref: &<OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
     ) -> Self::LeafDataNew {
-        (self.map_fn)(leaf_metadata, node_metadata)
+        (self.map_fn)(leaf_ref)
     }
 
-    fn map_group_node_data(
-        &self,
-        _group_metadata: <OrigGr::GroupRef as GroupRef<'a>>::GroupMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
-    ) -> Self::NodeDataNew {
-        node_metadata
+    fn map_group_node_data(&self, group_ref: &OrigGr::GroupRef) -> Self::NodeDataNew {
+        group_ref.node_metadata()
     }
 
     fn map_leaf_node_data(
         &self,
-        _leaf_metadata: <OrigGr::GroupRef as GroupRef<'a>>::LeafMetadata,
-        node_metadata: <OrigGr::GroupRef as GroupRef<'a>>::NodeMetadata,
+        leaf_ref: &<OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
     ) -> Self::NodeDataNew {
-        node_metadata
+        leaf_ref.node_metadata()
     }
 }

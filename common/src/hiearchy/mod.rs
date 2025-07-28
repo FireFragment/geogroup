@@ -4,7 +4,7 @@ pub use concrete::ConcreteHiearchy as Concrete;
 pub use lazy::AsGroupRef as Lazy;
 #[cfg(test)]
 mod tests {
-    use lazy::AsGroupRefUtils;
+    use lazy::{AsGroupRefUtils, GroupRef, LeafRef};
 
     use super::*;
 
@@ -52,7 +52,8 @@ mod tests {
         ));
 
         let ext_var: Vec<i32> = Vec::new(); // Test that the code compiles even if the closure references an external variable
-        let binding = hierarchy.map_group_data(|g, _| !g && ext_var.len() == 0);
+        let binding =
+            hierarchy.map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
         let collected = binding.collect_to_concrete().unwrap();
 
         dbg!(&collected);
@@ -89,7 +90,7 @@ mod tests {
         ));
 
         let ext_coeficient = 2; // Test that the code compiles even if the closure references an external variable
-        let binding = hierarchy.map_leaf_data(|leaf_data, _| leaf_data * ext_coeficient);
+        let binding = hierarchy.map_leaf_data(|leaf_ref| leaf_ref.leaf_metadata() * ext_coeficient);
         let collected = binding.collect_to_concrete().unwrap();
 
         dbg!(&collected);
