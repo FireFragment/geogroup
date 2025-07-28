@@ -2,6 +2,8 @@
 
 use std::marker::PhantomData;
 
+use crate::hiearchy::concrete::Group;
+
 use super::*;
 pub mod map;
 pub mod with_parent;
@@ -38,6 +40,34 @@ pub trait GroupRefUtils: GroupRef {
             group_data,
             node_data,
         ))
+    }
+
+    fn map_group_data<'a, GroupDataNew, F: Fn(&Self) -> GroupDataNew + 'a>(
+        self,
+        fun: F,
+    ) -> impl AsGroupRef<
+        'a,
+        GroupRef = impl GroupRef<
+            GroupMetadata = GroupDataNew,
+            LeafMetadata = Self::LeafMetadata,
+            NodeMetadata = Self::NodeMetadata,
+        >,
+    >
+    where
+        Self: Sized, // TODO: Is this bound really needed?
+        Self: 'a,
+    {
+        utils::map::map_group_data(self, fun)
+    }
+
+    fn map_leaf_data<'a, LeafDataNew, F: Fn(&Self::LeafRef) -> LeafDataNew + 'a>(
+        self,
+        fun: F,
+    ) -> utils::map::AsMappedGroupRef<Self, utils::map::LeafDataMapper<F>>
+    where
+        Self: Sized,
+    {
+        utils::map::map_leaf_data(self, fun)
     }
 
     /* TODO: WTF is this?

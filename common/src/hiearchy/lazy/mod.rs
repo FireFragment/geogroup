@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use crate::hiearchy;
-use utils::GroupRefUtils;
+pub use utils::GroupRefUtils;
 
 /// A trait for types that can provide a root group reference
 ///
@@ -14,7 +14,7 @@ pub trait AsGroupRef<'a> {
     fn root<'s: 'a>(&'s self) -> Self::GroupRef;
 }
 
-pub trait GroupRef {
+pub trait GroupRef: Clone {
     /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
     type NodeMetadata;
 
@@ -76,29 +76,6 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         Self: std::marker::Sized,
     {
         Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
-    }
-
-    fn map_group_data<GroupDataNew: 'a, F: Fn(&Self::GroupRef) -> GroupDataNew + 'a>(
-        &'a self,
-        fun: F,
-    ) -> utils::map::AsMappedGroupRef<'a, Self, utils::map::GroupDataMapper<F>>
-    where
-        Self: Sized, // TODO: Is this bound really needed?
-    {
-        utils::map::map_group_data(self, fun)
-    }
-
-    fn map_leaf_data<
-        LeafDataNew: 'a,
-        F: Fn(&<Self::GroupRef as GroupRef>::LeafRef) -> LeafDataNew + 'a,
-    >(
-        &'a self,
-        fun: F,
-    ) -> utils::map::AsMappedGroupRef<'a, Self, utils::map::LeafDataMapper<F>>
-    where
-        Self: Sized,
-    {
-        utils::map::map_leaf_data(self, fun)
     }
 
     fn with_parent(&'a self) -> utils::with_parent::WithParent<'a, Self>
