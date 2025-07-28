@@ -43,31 +43,23 @@ mod tests {
 
     /// Simple reproduction of the lifetime error
     fn err_repro() {
-        pub trait ExperimentTr<'a>: Sized {
-            fn map(&'a self) -> Mapper<'a, Self, impl Fn(&'a u8) -> u8> {
-                Mapper {
-                    orig: self,
-                    fun_2: |n| n + 1,
-                }
-            }
+        pub trait ExperimentTrait<'a>: Sized {}
+
+        fn my_fun<'a, T: ExperimentTrait<'a>>(_: &'a T) -> impl ExperimentTrait<'a> {
+            ExperimentInstance
         }
 
         pub struct Base<'a>(&'a u8);
 
-        impl<'a> ExperimentTr<'a> for Base<'a> {}
+        impl<'a> ExperimentTrait<'a> for Base<'a> {}
 
-        pub struct Mapper<'a, Orig: ExperimentTr<'a>, F2: Fn(&'a u8) -> u8> {
-            pub orig: &'a Orig,
-            pub fun_2: F2,
-        }
+        pub struct ExperimentInstance;
 
-        impl<'a, Orig: ExperimentTr<'a>, F2: Fn(&'a u8) -> u8> ExperimentTr<'a> for Mapper<'a, Orig, F2> {}
+        impl<'a> ExperimentTrait<'a> for ExperimentInstance {}
 
-        let reference = &8;
-
-        let binding = Base(reference);
-        let mapped_1 = binding.map(); //.unwrap();
-        let mapped_2 = mapped_1.map(); //.unwrap();
+        let binding = ExperimentInstance;
+        let mapped_1 = my_fun(&binding);
+        let mapped_2 = my_fun(&mapped_1);
     }
 
     #[test]
