@@ -30,25 +30,25 @@ where
 }
 
 #[derive(Clone)]
-pub struct WithParentGroupRef<'a, G: GroupRef<'a> + Clone> {
+pub struct WithParentGroupRef<'a, G: GroupRef + Clone> {
     this: G,
     parent: Option<G>,
     phantom_data: PhantomData<&'a ()>,
 }
 
-pub struct WithParentNodeMetadata<'a, G: GroupRef<'a>> {
+pub struct WithParentNodeMetadata<G: GroupRef> {
     pub data: G::NodeMetadata,
     pub parent: Option<G>,
 }
 
-pub struct WithParentLeafRef<'a, G: GroupRef<'a> + Clone> {
+pub struct WithParentLeafRef<G: GroupRef + Clone> {
     this: G::LeafRef,
     parent: Option<G>,
 }
 
-impl<'a, G: GroupRef<'a> + Clone> LeafRef for WithParentLeafRef<'a, G> {
+impl<G: GroupRef + Clone> LeafRef for WithParentLeafRef<G> {
     type Metadata = G::LeafMetadata;
-    type NodeMetadata = WithParentNodeMetadata<'a, G>;
+    type NodeMetadata = WithParentNodeMetadata<G>;
 
     fn leaf_metadata(&self) -> Self::Metadata {
         self.this.leaf_metadata()
@@ -62,14 +62,14 @@ impl<'a, G: GroupRef<'a> + Clone> LeafRef for WithParentLeafRef<'a, G> {
     }
 }
 
-impl<'a, G: GroupRef<'a> + Clone> GroupRef<'a> for WithParentGroupRef<'a, G> {
-    type NodeMetadata = WithParentNodeMetadata<'a, G>;
+impl<'a, G: GroupRef + Clone> GroupRef for WithParentGroupRef<'a, G> {
+    type NodeMetadata = WithParentNodeMetadata<G>;
     type LeafMetadata = G::LeafMetadata;
     type GroupMetadata = G::GroupMetadata;
     type StructureErr = G::StructureErr;
-    type LeafRef = WithParentLeafRef<'a, G>;
+    type LeafRef = WithParentLeafRef<G>;
 
-    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<'a, Self>>, Self::StructureErr>
+    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
         Self: Sized,
     {

@@ -39,7 +39,7 @@ pub trait Mapper<'a, Original: AsGroupRef<'a>> {
     /// * `leaf_ref` - Reference to the original leaf
     fn map_leaf_data(
         &self,
-        leaf_ref: &<Original::GroupRef as GroupRef<'a>>::LeafRef,
+        leaf_ref: &<Original::GroupRef as GroupRef>::LeafRef,
     ) -> Self::LeafDataNew;
 
     /// Transform group metadata into node data for group nodes.
@@ -62,7 +62,7 @@ pub trait Mapper<'a, Original: AsGroupRef<'a>> {
     /// * `leaf_ref` - Reference to the original leaf
     fn map_leaf_node_data(
         &self,
-        leaf_ref: &<Original::GroupRef as GroupRef<'a>>::LeafRef,
+        leaf_ref: &<Original::GroupRef as GroupRef>::LeafRef,
     ) -> Self::NodeDataNew;
 }
 
@@ -99,7 +99,7 @@ pub fn map_leaf_data<
     'orig_gr: 'a,
     OrigGr: AsGroupRef<'a> + 'a,
     LeafDataNew: 'a,
-    F: Fn(&<<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef<'a>>::LeafRef) -> LeafDataNew + 'a,
+    F: Fn(&<<OrigGr as AsGroupRef<'a>>::GroupRef as GroupRef>::LeafRef) -> LeafDataNew + 'a,
 >(
     gr: &'orig_gr OrigGr,
     fun: F,
@@ -134,7 +134,7 @@ pub struct MappedGroupRef<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a
 }
 
 pub struct MappedLeafRef<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> {
-    this: <OrigGr::GroupRef as GroupRef<'a>>::LeafRef,
+    this: <OrigGr::GroupRef as GroupRef>::LeafRef,
     mapper: &'a M,
 }
 
@@ -153,16 +153,16 @@ impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> LeafRef
     }
 }
 
-impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> GroupRef<'a>
+impl<'a, OrigGr: AsGroupRef<'a>, M: Mapper<'a, OrigGr> + 'a> GroupRef
     for MappedGroupRef<'a, OrigGr, M>
 {
     type NodeMetadata = M::NodeDataNew;
     type LeafMetadata = M::LeafDataNew;
     type GroupMetadata = M::GroupDataNew;
-    type StructureErr = <OrigGr::GroupRef as GroupRef<'a>>::StructureErr;
+    type StructureErr = <OrigGr::GroupRef as GroupRef>::StructureErr;
     type LeafRef = MappedLeafRef<'a, OrigGr, M>;
 
-    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<'a, Self>>, Self::StructureErr>
+    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
         Self: Sized,
     {

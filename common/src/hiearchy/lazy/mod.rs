@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::hiearchy;
 use utils::GroupRefUtils;
 
@@ -6,14 +8,13 @@ use utils::GroupRefUtils;
 /// `'a` is a equal to or shorter than lifetime of how long is `Self` valid
 pub trait AsGroupRef<'a> {
     /// The type of group reference this hierarchy provides
-    type GroupRef: GroupRef<'a>;
+    type GroupRef: GroupRef;
 
     /// Get the root group of the hierarchy
     fn root<'s: 'a>(&'s self) -> Self::GroupRef;
 }
 
-/// The lifetime parameter 'a is lifetime of the hierarchy this group belongs to.
-pub trait GroupRef<'a> {
+pub trait GroupRef {
     /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
     type NodeMetadata;
 
@@ -24,13 +25,13 @@ pub trait GroupRef<'a> {
     type GroupMetadata;
 
     /// Error encountered while trying to construct the group structure
-    type StructureErr;
+    type StructureErr: Error;
 
     /// The type of leaf reference
     type LeafRef: LeafRef<Metadata = Self::LeafMetadata, NodeMetadata = Self::NodeMetadata>;
 
     /// Returns children of a group.
-    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<'a, Self>>, Self::StructureErr>
+    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
         Self: Sized;
 
@@ -53,9 +54,8 @@ pub trait LeafRef {
     fn node_metadata(&self) -> Self::NodeMetadata;
 }
 
-/// The lifetime parameter 'a is lifetime of the hierarchy this node belongs to
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeRef<'a, G: GroupRef<'a>> {
+pub enum NodeRef<G: GroupRef> {
     Group(G),
     Leaf(G::LeafRef),
 }
@@ -66,11 +66,11 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         &'a self,
     ) -> Result<
         hiearchy::Concrete<
-            <Self::GroupRef as GroupRef<'a>>::GroupMetadata,
-            <Self::GroupRef as GroupRef<'a>>::LeafMetadata,
-            <Self::GroupRef as GroupRef<'a>>::NodeMetadata,
+            <Self::GroupRef as GroupRef>::GroupMetadata,
+            <Self::GroupRef as GroupRef>::LeafMetadata,
+            <Self::GroupRef as GroupRef>::NodeMetadata,
         >,
-        <Self::GroupRef as GroupRef<'a>>::StructureErr,
+        <Self::GroupRef as GroupRef>::StructureErr,
     >
     where
         Self: std::marker::Sized,
@@ -78,10 +78,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
     }
 
-    fn map_group_data<
-        GroupDataNew: 'a,
-        F: Fn(&<Self as AsGroupRef<'a>>::GroupRef) -> GroupDataNew + 'a,
-    >(
+    fn map_group_data<GroupDataNew: 'a, F: Fn(&Self::GroupRef) -> GroupDataNew + 'a>(
         &'a self,
         fun: F,
     ) -> utils::map::AsMappedGroupRef<'a, Self, utils::map::GroupDataMapper<F>>
@@ -93,7 +90,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
 
     fn map_leaf_data<
         LeafDataNew: 'a,
-        F: Fn(&<Self::GroupRef as GroupRef<'a>>::LeafRef) -> LeafDataNew + 'a,
+        F: Fn(&<Self::GroupRef as GroupRef>::LeafRef) -> LeafDataNew + 'a,
     >(
         &'a self,
         fun: F,
@@ -113,7 +110,7 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
     }
 }
 
-impl<'a, T: GroupRef<'a>> GroupRefUtils<'a> for T {}
+impl<T: GroupRef> GroupRefUtils for T {}
 impl<'a, T: AsGroupRef<'a>> AsGroupRefUtils<'a> for T {}
 
 mod utils;

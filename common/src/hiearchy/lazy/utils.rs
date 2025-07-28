@@ -6,7 +6,7 @@ use super::*;
 pub mod map;
 pub mod with_parent;
 
-pub trait GroupRefUtils<'a>: GroupRef<'a> {
+pub trait GroupRefUtils: GroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
     fn collect_to_concrete<'c>(
         &'c self,

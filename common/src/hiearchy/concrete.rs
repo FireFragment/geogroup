@@ -110,7 +110,7 @@ impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
     }
 }
 
-impl<'a, G, L, N> hiearchy::lazy::GroupRef<'a> for &'a Group<G, L, N> {
+impl<'a, G, L, N> hiearchy::lazy::GroupRef for &'a Group<G, L, N> {
     type NodeMetadata = &'a N;
     type LeafMetadata = &'a L;
     type GroupMetadata = &'a G;
@@ -119,7 +119,7 @@ impl<'a, G, L, N> hiearchy::lazy::GroupRef<'a> for &'a Group<G, L, N> {
 
     fn get_children(
         &self,
-    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<'a, Self>>, Self::StructureErr> {
+    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<Self>>, Self::StructureErr> {
         Ok(self.children.iter().map(|node| match node {
             Node::Group(group) => hiearchy::lazy::NodeRef::Group(group),
             Node::Leaf(leaf) => hiearchy::lazy::NodeRef::Leaf(leaf),
