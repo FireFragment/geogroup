@@ -3,7 +3,6 @@
 use super::*;
 use crate::{Params, Point};
 use geogroup_common::hiearchy::lazy::{AsGroupRef, GroupRef as _, LeafRef as _};
-use geogroup_common::hiearchy::Lazy;
 
 /// Simple test item that implements SortableItem
 #[derive(Debug, Clone, PartialEq)]
@@ -89,22 +88,16 @@ where
         Item: std::fmt::Debug,
     {
         let group_data = group_ref.group_metadata();
-        let strength_desc = match &group_data.strength {
-            StrengthInfo::Root => "Root".to_string(),
-            StrengthInfo::LessThan2Children => "LessThan2Children".to_string(),
-            StrengthInfo::NoSiblings => "NoSiblings".to_string(),
-            StrengthInfo::Ok(val) => format!("Ok({:.2})", val),
-        };
 
         groups.push((
             group_data.separation,
             format!(
-                "Depth{}: {} ({})",
+                "Depth{}: {} ({:?})",
                 depth,
                 group_data
                     .separation
                     .map_or("None".to_string(), |d| d.to_string()),
-                strength_desc
+                group_data.strength
             ),
         ));
 
