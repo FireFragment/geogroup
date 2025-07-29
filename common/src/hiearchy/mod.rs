@@ -47,7 +47,8 @@ mod tests {
         /// Simple reproduction of the lifetime error
         fn err_repro() {
             pub trait AsGroupRef {
-                type GroupRef<'a>: GroupRef
+                type AssocType;
+                type GroupRef<'a>: GroupRef<AssocType = Self::AssocType>
                 where
                     Self: 'a;
 
@@ -71,6 +72,7 @@ mod tests {
             }
 
             impl<Gr: GroupRef, T> AsGroupRef for AsGrMapper<Gr, T> {
+                type AssocType = T;
                 type GroupRef<'a>
                     = GrMapper<'a, Gr, T>
                 where
@@ -81,17 +83,13 @@ mod tests {
                 }
             }
 
-            fn map<'a, Gr: GroupRef + 'a, T: 'a>(
-                gr: Gr,
-                t: T,
-            ) -> impl AsGroupRef<GroupRef<'a> = impl GroupRef<AssocType = T> + use<'a, Gr, T>>
-            {
+            fn map<'a, Gr: GroupRef + 'a, T: 'a>(gr: Gr, t: T) -> impl AsGroupRef<AssocType = T> {
                 AsGrMapper(gr, t)
             }
 
             let binding = Base;
             let mapped_1 = map(binding, 8);
-            let gr = mapped_1.as_group_ref();
+            let gr = map(mapped_1.as_group_ref(), 8);
         }
     }
 
