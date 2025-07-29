@@ -101,12 +101,13 @@ pub struct AsMappedGroupRef<OrigGr: GroupRef, M: Mapper<OrigGr>> {
     mapper: M,
 }
 
-impl<'a, OrigGr: GroupRef + 'a, M: Mapper<OrigGr> + 'a> AsGroupRef<'a>
-    for AsMappedGroupRef<OrigGr, M>
-{
-    type GroupRef = MappedGroupRef<'a, OrigGr, M>;
+impl<OrigGr: GroupRef, M: Mapper<OrigGr>> AsGroupRef for AsMappedGroupRef<OrigGr, M> {
+    type GroupRef<'root>
+        = MappedGroupRef<'root, OrigGr, M>
+    where
+        Self: 'root;
 
-    fn root<'s: 'a>(&'s self) -> Self::GroupRef {
+    fn root<'s>(&'s self) -> MappedGroupRef<'s, OrigGr, M> {
         MappedGroupRef {
             this: self.original.clone(),
             root: self,

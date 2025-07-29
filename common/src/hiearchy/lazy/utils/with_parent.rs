@@ -2,38 +2,31 @@
 
 use super::*;
 
-pub fn with_parent<'a, H: hiearchy::lazy::AsGroupRef<'a> + 'a>(hiearchy: &'a H) -> WithParent<'a, H>
-where
-    <H as hiearchy::lazy::AsGroupRef<'a>>::GroupRef: Clone,
-{
-    WithParent(hiearchy, PhantomData)
+pub fn with_parent<H: hiearchy::lazy::GroupRef>(hiearchy: H) -> WithParent<H> {
+    WithParent(hiearchy)
 }
 
 #[derive(Clone)]
-pub struct WithParent<'a, G: AsGroupRef<'a>>(&'a G, PhantomData<&'a ()>)
-where
-    <G as hiearchy::lazy::AsGroupRef<'a>>::GroupRef: Clone;
+pub struct WithParent<G: GroupRef>(G);
 
-impl<'a, G: AsGroupRef<'a>> AsGroupRef<'a> for WithParent<'a, G>
-where
-    <G as hiearchy::lazy::AsGroupRef<'a>>::GroupRef: Clone,
-{
-    type GroupRef = WithParentGroupRef<'a, G::GroupRef>;
+impl<G: GroupRef> AsGroupRef for WithParent<G> {
+    type GroupRef<'a>
+        = WithParentGroupRef<G>
+    where
+        Self: 'a;
 
-    fn root<'s: 'a>(&'s self) -> Self::GroupRef {
+    fn root(&self) -> Self::GroupRef<'_> {
         WithParentGroupRef {
-            this: self.0.root(),
+            this: self.0.clone(),
             parent: None,
-            phantom_data: PhantomData,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct WithParentGroupRef<'a, G: GroupRef + Clone> {
+pub struct WithParentGroupRef<G: GroupRef> {
     this: G,
     parent: Option<G>,
-    phantom_data: PhantomData<&'a ()>,
 }
 
 pub struct WithParentNodeMetadata<G: GroupRef> {
@@ -62,7 +55,7 @@ impl<G: GroupRef + Clone> LeafRef for WithParentLeafRef<G> {
     }
 }
 
-impl<'a, G: GroupRef + Clone> GroupRef for WithParentGroupRef<'a, G> {
+impl<G: GroupRef + Clone> GroupRef for WithParentGroupRef<G> {
     type NodeMetadata = WithParentNodeMetadata<G>;
     type LeafMetadata = G::LeafMetadata;
     type GroupMetadata = G::GroupMetadata;
@@ -78,7 +71,6 @@ impl<'a, G: GroupRef + Clone> GroupRef for WithParentGroupRef<'a, G> {
                 NodeRef::Group(group) => NodeRef::Group(WithParentGroupRef {
                     this: group,
                     parent: Some(self.this.clone()),
-                    phantom_data: PhantomData,
                 }),
                 NodeRef::Leaf(leaf) => NodeRef::Leaf(WithParentLeafRef {
                     this: leaf,

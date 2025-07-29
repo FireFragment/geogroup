@@ -89,10 +89,13 @@ impl<G, L, N> ConcreteHiearchy<G, L, N> {
     }
 }
 
-impl<'a, L: 'a, G: 'a, N: 'a> hiearchy::lazy::AsGroupRef<'a> for ConcreteHiearchy<G, L, N> {
-    type GroupRef = &'a Group<G, L, N>;
+impl<L, G, N> hiearchy::lazy::AsGroupRef for ConcreteHiearchy<G, L, N> {
+    type GroupRef<'a>
+        = &'a Group<G, L, N>
+    where
+        Self: 'a;
 
-    fn root<'s: 'a>(&'s self) -> Self::GroupRef {
+    fn root(&self) -> Self::GroupRef<'_> {
         &self.root_group
     }
 }

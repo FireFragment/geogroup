@@ -6,12 +6,14 @@ pub use utils::GroupRefUtils;
 /// A trait for types that can provide a root group reference
 ///
 /// `'a` is a equal to or shorter than lifetime of how long is `Self` valid
-pub trait AsGroupRef<'a> {
+pub trait AsGroupRef {
     /// The type of group reference this hierarchy provides
-    type GroupRef: GroupRef;
+    type GroupRef<'a>: GroupRef
+    where
+        Self: 'a;
 
     /// Get the root group of the hierarchy
-    fn root<'s: 'a>(&'s self) -> Self::GroupRef;
+    fn root<'s>(&'s self) -> Self::GroupRef<'s>;
 }
 
 pub trait GroupRef: Clone {
@@ -60,10 +62,10 @@ pub enum NodeRef<G: GroupRef> {
     Leaf(G::LeafRef),
 }
 
-pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
-    /// Convert to concrete hierarchy by instantiating all the items
+pub trait AsGroupRefUtils: AsGroupRef {
+    /*/// Convert to concrete hierarchy by instantiating all the items
     fn collect_to_concrete(
-        &'a self,
+        &self,
     ) -> Result<
         hiearchy::Concrete<
             <Self::GroupRef as GroupRef>::GroupMetadata,
@@ -76,18 +78,10 @@ pub trait AsGroupRefUtils<'a>: AsGroupRef<'a> {
         Self: std::marker::Sized,
     {
         Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
-    }
-
-    fn with_parent(&'a self) -> utils::with_parent::WithParent<'a, Self>
-    where
-        <Self as hiearchy::lazy::AsGroupRef<'a>>::GroupRef: Clone,
-        Self: Sized,
-    {
-        utils::with_parent::with_parent(self)
-    }
+    }*/
 }
 
 impl<T: GroupRef> GroupRefUtils for T {}
-impl<'a, T: AsGroupRef<'a>> AsGroupRefUtils<'a> for T {}
+impl<T: AsGroupRef> AsGroupRefUtils for T {}
 
 mod utils;

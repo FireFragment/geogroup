@@ -42,20 +42,19 @@ pub trait GroupRefUtils: GroupRef {
         ))
     }
 
-    fn map_group_data<'a, GroupDataNew, F: Fn(&Self) -> GroupDataNew + 'a>(
+    fn map_group_data<'x, GroupDataNew: 'x, F: Fn(&Self) -> GroupDataNew + 'x>(
         self,
         fun: F,
     ) -> impl AsGroupRef<
-        'a,
-        GroupRef = impl GroupRef<
+        GroupRef<'x> = impl GroupRef<
             GroupMetadata = GroupDataNew,
             LeafMetadata = Self::LeafMetadata,
             NodeMetadata = Self::NodeMetadata,
-        >,
-    >
+        > + 'x,
+    > + 'x
     where
         Self: Sized, // TODO: Is this bound really needed?
-        Self: 'a,
+        Self: 'x,
     {
         utils::map::map_group_data(self, fun)
     }
@@ -68,6 +67,13 @@ pub trait GroupRefUtils: GroupRef {
         Self: Sized,
     {
         utils::map::map_leaf_data(self, fun)
+    }
+
+    fn with_parent(self) -> utils::with_parent::WithParent<Self>
+    where
+        Self: Sized,
+    {
+        utils::with_parent::with_parent(self)
     }
 
     /* TODO: WTF is this?
