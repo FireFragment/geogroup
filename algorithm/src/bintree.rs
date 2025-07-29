@@ -2,105 +2,80 @@ use std::convert::Infallible;
 
 use geogroup_common::hiearchy;
 
-pub enum BinTree<Leaf, InnerNode> {
-    InnerNode(BTInnerNode<Leaf, InnerNode>),
-    Leaf(Leaf),
+pub enum BinTree<Leaf, InnerNode, Node> {
+    InnerNode(BTInnerNode<Leaf, InnerNode, Node>),
+    Leaf(Leaf, Node),
 }
 
-/*impl<Leaf, InnerNode> BinTree<Leaf, InnerNode> {
-    pub type InnerNode = BTInnerNode<Leaf, InnerNode>;
-}*/
+impl<Leaf, InnerNode, Node> BinTree<Leaf, InnerNode, Node> {
+    pub fn get_node_data(&self) -> &Node {
+        match self {
+            BinTree::InnerNode(node) => &node.node_data,
+            BinTree::Leaf(_, node) => node,
+        }
+    }
+}
 
-pub struct BTInnerNode<Leaf, InnerNode> {
-    pub children: Box<[BinTree<Leaf, InnerNode>; 2]>,
-    pub data: InnerNode,
+pub struct BTInnerNode<Leaf, InnerNode, Node> {
+    pub children: Box<[BinTree<Leaf, InnerNode, Node>; 2]>,
+    pub inner_node_data: InnerNode,
+    pub node_data: Node,
 }
 
 /// [`hiearchy::lazy::LeafRef`] implementation for [`BinTree`]
-pub struct BTLeafRef<'a, L>(&'a L);
+pub struct BTLeafRef<'a, L, N>(&'a L, &'a N);
 
-impl<'a, L> hiearchy::lazy::LeafRef for BTLeafRef<'a, L> {
+impl<'a, L, N> hiearchy::lazy::LeafRef for BTLeafRef<'a, L, N> {
     type Metadata = &'a L;
 
-    type NodeMetadata = ();
+    type NodeMetadata = &'a N;
 
     fn leaf_metadata(&self) -> Self::Metadata {
         &self.0
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {}
+    fn node_metadata(&self) -> Self::NodeMetadata {
+        &self.1
+    }
 }
 
-impl<'a, Leaf, InnerNode> hiearchy::lazy::GroupRef<'a> for &'a BTInnerNode<Leaf, InnerNode> {
-    type Hiearchy = BinTree<Leaf, InnerNode>;
-
+impl<'a, Leaf, InnerNode, Node> hiearchy::lazy::GroupRef
+    for &'a BTInnerNode<Leaf, InnerNode, Node>
+{
     fn get_children(
         &self,
-    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<'a, Self::Hiearchy>>, Infallible> {
+    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<Self>>, Infallible> {
         Ok(self.children.iter().map(|node| match node {
             BinTree::InnerNode(group) => hiearchy::lazy::NodeRef::Group(group),
-            BinTree::Leaf(l) => hiearchy::lazy::NodeRef::Leaf(BTLeafRef(l)),
+            BinTree::Leaf(l, n) => hiearchy::lazy::NodeRef::Leaf(BTLeafRef(l, n)),
         }))
     }
 
-    fn group_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::GroupMetadata<'b>
-    where
-        'a: 'b,
-    {
-        &self.data
+    fn group_metadata(&self) -> &'a InnerNode {
+        &self.inner_node_data
     }
 
-    fn node_metadata<'b>(&self) -> <Self::Hiearchy as hiearchy::Lazy>::NodeMetadata<'b>
-    where
-        'a: 'b,
-    {
+    fn node_metadata(&self) -> &'a Node {
+        &self.node_data
     }
+
+    type NodeMetadata = &'a Node;
+    type LeafMetadata = &'a Leaf;
+    type GroupMetadata = &'a InnerNode;
+    type StructureErr = Infallible;
+    type LeafRef = BTLeafRef<'a, Leaf, Node>;
 }
 
-impl<Leaf, InnerNode> hiearchy::Lazy for BinTree<Leaf, InnerNode> {
-    type LeafRef<'a>
-        = BTLeafRef<'a, Leaf>
-    where
-        Self: 'a;
-
+impl<Leaf, InnerNode, Node> hiearchy::Lazy for BinTree<Leaf, InnerNode, Node> {
     type GroupRef<'a>
-        = &'a BTInnerNode<Leaf, InnerNode>
-    where
-        Self: 'a;
-
-    type NodeMetadata<'a>
-        = ()
-    where
-        Self: 'a;
-
-    type LeafMetadata<'a>
-        = &'a Leaf
-    where
-        Self: 'a;
-
-    type StructureErr = Infallible;
-
-    type GroupMetadata<'a>
-        = &'a InnerNode
+        = &'a BTInnerNode<Leaf, InnerNode, Node>
     where
         Self: 'a;
 
     fn root(&self) -> Self::GroupRef<'_> {
         match self {
-            BinTree::Leaf(_) => todo!(),
+            BinTree::Leaf(_, _) => todo!(),
             BinTree::InnerNode(group) => group,
         }
-    }
-
-    fn reborrow_groupref<'long: 'short, 'short>(
-        it: Self::GroupRef<'long>,
-    ) -> Self::GroupRef<'short> {
-        it
-    }
-
-    fn reborrow_leafref<'long: 'short, 'short>(
-        it: BTLeafRef<'long, Leaf>,
-    ) -> BTLeafRef<'short, Leaf> {
-        it
     }
 }

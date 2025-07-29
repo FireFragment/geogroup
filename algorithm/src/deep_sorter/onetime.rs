@@ -3,7 +3,7 @@ use super::*;
 /// Same as [`sort_to_binary_tree`], but assumes that the points are ordered
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_ordered_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
+pub fn sort_ordered_to_binary_tree<Item: SortableItem>(points: Vec<Item>) -> BinTree<Item, (), ()> {
     assert!(
         !points.is_empty(),
         "to_binary_tree called with empty vector",
@@ -35,7 +35,7 @@ pub fn sort_ordered_to_binary_tree<P: Point>(points: Vec<P>) -> BinTree<P, ()> {
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<P: SortableItem>(mut points: Vec<P>) -> BinTree<P, ()> {
+pub fn sort_to_binary_tree<Item: SortableItem>(mut points: Vec<Item>) -> BinTree<Item, (), ()> {
     points.sort_by_key(|p| p.get_time());
 
     sort_ordered_to_binary_tree(points)
@@ -49,9 +49,9 @@ pub fn sort_to_binary_tree<P: SortableItem>(mut points: Vec<P>) -> BinTree<P, ()
 fn sort_to_binary_tree_with_distances<P>(
     input: Vec<(P, Distance)>,
     last_point: P,
-) -> BinTree<P, ()> {
+) -> BinTree<P, (), ()> {
     if input.is_empty() {
-        return BinTree::Leaf(last_point);
+        return BinTree::Leaf(last_point, ());
     };
 
     let idx_of_max_distance_to_next = input
@@ -71,6 +71,7 @@ fn sort_to_binary_tree_with_distances<P>(
             sort_to_binary_tree_with_distances(first_group, last_from_first_group.0),
             sort_to_binary_tree_with_distances(second_group, last_point),
         ]),
-        data: (),
+        inner_node_data: (),
+        node_data: (),
     })
 }

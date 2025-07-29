@@ -3,7 +3,7 @@ use geogroup_common::*;
 //pub mod algo;
 pub mod bintree;
 pub mod deep_sorter;
-pub mod strength;
+//pub mod strength;
 pub use bintree::*;
 //pub use algo::sort;
 //pub use algo::sort_just_points;
