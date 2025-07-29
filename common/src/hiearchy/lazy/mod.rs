@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use crate::hiearchy;
-pub use utils::GroupRefUtils;
+use crate::hiearchy::{self, lazy::utils::WithParentNodeMetadata};
+pub use utils::{AsGroupRefUtils, GroupRefUtils, WithParentUtils};
 
 pub mod utils;
 
@@ -48,7 +48,7 @@ pub trait GroupRef: Clone {
     fn node_metadata(&self) -> Self::NodeMetadata;
 }
 
-pub trait LeafRef {
+pub trait LeafRef: Clone {
     /// Additional data related to a leaf
     type Metadata;
     /// Additional data related to every node in the hierarchy
@@ -73,24 +73,6 @@ impl<G: GroupRef> NodeRef<G> {
     }
 }
 
-pub trait AsGroupRefUtils: AsGroupRef {
-    /// Convert to concrete hierarchy by instantiating all the items
-    fn collect_to_concrete<'a>(
-        &'a self,
-    ) -> Result<
-        hiearchy::Concrete<
-            <Self::GroupRef<'a> as GroupRef>::GroupMetadata,
-            <Self::GroupRef<'a> as GroupRef>::LeafMetadata,
-            <Self::GroupRef<'a> as GroupRef>::NodeMetadata,
-        >,
-        <Self::GroupRef<'a> as GroupRef>::StructureErr,
-    >
-    where
-        Self: std::marker::Sized,
-    {
-        Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
-    }
-}
-
 impl<T: GroupRef> GroupRefUtils for T {}
+impl<T: GroupRef<NodeMetadata = WithParentNodeMetadata<T>>> WithParentUtils<T> for T {}
 impl<T: AsGroupRef> AsGroupRefUtils for T {}

@@ -9,17 +9,19 @@ pub fn with_parent<H: hiearchy::lazy::GroupRef>(hiearchy: H) -> WithParentGroupR
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WithParentGroupRef<G: GroupRef> {
     this: G,
     parent: Option<G>,
 }
 
+#[derive(Clone, Debug)]
 pub struct WithParentNodeMetadata<G: GroupRef> {
     pub data: G::NodeMetadata,
     pub parent: Option<G>,
 }
 
+#[derive(Clone, Debug)]
 pub struct WithParentLeafRef<G: GroupRef + Clone> {
     this: G::LeafRef,
     parent: Option<G>,

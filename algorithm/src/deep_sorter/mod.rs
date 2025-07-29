@@ -2,168 +2,81 @@ mod onetime;
 #[cfg(test)]
 mod test;
 
+use std::convert::Infallible;
+
 use crate::*;
-use geogroup_common::hiearchy::lazy::{GroupRef as _, GroupRefUtils, LeafRef as _};
+use geogroup_common::prelude::*;
 use itertools::Itertools;
 pub use onetime::*;
 
 pub struct DeepSorter<Item: SortableItem> {
     bintree: BinTree<Item, (), NodeInfo<Item>>,
     params: Params,
-    sep_mapper: SeparationMapper,
-    final_mapper: DeepSorterMapper,
 }
 
-/// Decorates the inner [`BinTree`] of [`DeepSorter`] with separation information
-///
-/// `GroupData` of a group is [None] if the group had less than 2 children, otherwise it's
-/// its level of separation.
-pub struct SeparationMapper;
-
-impl<'a, Item: SortableItem>
-    hiearchy::lazy::utils::map::Mapper<&'a bintree::BTInnerNode<Item, (), NodeInfo<Item>>>
-    for SeparationMapper
-{
-    type GroupDataNew = Option<Distance>;
-
-    type LeafDataNew = &'a Item;
-
-    type NodeDataNew = &'a NodeInfo<Item>;
-
-    fn map_group_data(
-        &self,
-        group_ref: &&'a BTInnerNode<Item, (), NodeInfo<Item>>,
-    ) -> Self::GroupDataNew {
-        let separation = group_ref
-            .get_children()
-            .unwrap_or_else(|e| match e {})
-            .map(|child| child.node_data())
-            .tuple_windows()
-            .map(|(first, second)| first.last_pos.distance(&second.first_pos))
-            .max();
-
-        if separation.is_none() {
-            debug_assert!(
-                group_ref
-                    .get_children()
-                    .unwrap_or_else(|e| match e {})
-                    .collect_vec()
-                    .len()
-                    < 2,
-            );
-        }
-
-        separation
-    }
-
-    fn map_leaf_data(&self, leaf_ref: &BTLeafRef<'a, Item, NodeInfo<Item>>) -> Self::LeafDataNew {
-        leaf_ref.leaf_metadata()
-    }
-
-    fn map_group_node_data(
-        &self,
-        group_ref: &&'a BTInnerNode<Item, (), NodeInfo<Item>>,
-    ) -> Self::NodeDataNew {
-        group_ref.node_metadata()
-    }
-
-    fn map_leaf_node_data(
-        &self,
-        leaf_ref: &BTLeafRef<'a, Item, NodeInfo<Item>>,
-    ) -> Self::NodeDataNew {
-        leaf_ref.node_metadata()
-    }
-}
-
-/// Maps the inner unstable [`BinTree`] of [`DeepSorter`] into a user-facing [`GroupRef`]s
-#[derive(Default)]
-pub struct DeepSorterMapper;
-
-impl<'a, Item: SortableItem> hiearchy::lazy::utils::map::Mapper<DeepSorterInnerGroupRef<'a, Item>>
-    for DeepSorterMapper
-{
-    type GroupDataNew = GroupInfo;
-
-    type LeafDataNew = &'a Item;
-
-    type NodeDataNew = NodeInfo<Item>;
-
-    fn map_group_data(&self, group_ref: &DeepSorterInnerGroupRef<'a, Item>) -> Self::GroupDataNew {
-        let self_separation = group_ref.group_metadata();
-        let Some(parent) = group_ref.node_metadata().parent else {
-            return GroupInfo {
-                separation: self_separation,
-                strength: StrengthInfo::Root,
-            };
-        };
-        let parent_separation = parent.group_metadata();
-
-        GroupInfo {
-            separation: self_separation,
-            strength: if let Some(self_separation) = self_separation {
-                if let Some(parent_separation) = parent_separation {
-                    // TODO: Prevent division by zero
-                    StrengthInfo::Ok(parent_separation as f32 / self_separation as f32)
-                } else {
-                    StrengthInfo::NoSiblings
-                }
-            } else {
-                StrengthInfo::LessThan2Children
-            },
-        }
-    }
-
-    fn map_leaf_data(
-        &self,
-        leaf_ref: &<DeepSorterInnerGroupRef<'a, Item> as hiearchy::lazy::GroupRef>::LeafRef,
-    ) -> Self::LeafDataNew {
-        leaf_ref.leaf_metadata()
-    }
-
-    fn map_group_node_data(
-        &self,
-        group_ref: &DeepSorterInnerGroupRef<'a, Item>,
-    ) -> Self::NodeDataNew {
-        group_ref.node_metadata().data.to_owned()
-    }
-
-    fn map_leaf_node_data(
-        &self,
-        leaf_ref: &<DeepSorterInnerGroupRef<'a, Item> as hiearchy::lazy::GroupRef>::LeafRef,
-    ) -> Self::NodeDataNew {
-        leaf_ref.node_metadata().data.to_owned()
-    }
-}
-
-/// This should be treated as an opaque type, but I don't want to fight the compiler
-/// about opaque types again, so we're stuck with this solution.
-pub type DeepSorterGroupRef<'a, Item: SortableItem> = hiearchy::lazy::utils::map::MappedGroupRef<
-    'a,
-    DeepSorterInnerGroupRef<'a, Item>,
-    DeepSorterMapper,
->;
-
-type DeepSorterInnerGroupRef<'a, Item> = hiearchy::lazy::utils::with_parent::WithParentGroupRef<
-    hiearchy::lazy::utils::map::MappedGroupRef<
-        'a,
-        &'a bintree::BTInnerNode<Item, (), NodeInfo<Item>>,
-        SeparationMapper,
-    >,
->;
-
-impl<Item: SortableItem> hiearchy::Lazy for DeepSorter<Item> {
-    fn root<'s>(&'s self) -> Self::GroupRef<'s> {
+impl<Item: SortableItem> DeepSorter<Item> {
+    pub fn root<'s>(
+        &'s self,
+    ) -> impl hiearchy::lazy::GroupRef<
+        GroupMetadata = GroupInfo,
+        LeafMetadata = &'s Item,
+        NodeMetadata = NodeInfo<Item>,
+        StructureErr = Infallible,
+    >
+           + 's
+           + use<'s, Item> {
         self.bintree
             .root()
-            .map_as_groupref(&self.sep_mapper)
-            .with_parent()
-            .map_as_groupref(&self.final_mapper)
-    }
+            .map_group_data(|group_ref| {
+                let separation = group_ref
+                    .get_children()
+                    .unwrap_or_else(|e| match e {})
+                    .map(|child| child.node_data())
+                    .tuple_windows()
+                    .map(|(first, second)| first.last_pos.distance(&second.first_pos))
+                    .max();
 
-    type GroupRef<'a>
-        = DeepSorterGroupRef<'a, Item>
-    where
-        Self: 'a;
+                if separation.is_none() {
+                    debug_assert!(
+                        group_ref
+                            .get_children()
+                            .unwrap_or_else(|e| match e {})
+                            .collect_vec()
+                            .len()
+                            < 2,
+                    );
+                }
+
+                separation
+            })
+            .with_parent()
+            .map_group_data(|group_ref| {
+                let self_separation = group_ref.group_metadata();
+                let Some(parent) = group_ref.node_metadata().parent else {
+                    return GroupInfo {
+                        separation: self_separation,
+                        strength: StrengthInfo::Root,
+                    };
+                };
+                let parent_separation = parent.group_metadata();
+
+                GroupInfo {
+                    separation: self_separation,
+                    strength: if let Some(self_separation) = self_separation {
+                        if let Some(parent_separation) = parent_separation {
+                            // TODO: Prevent division by zero
+                            StrengthInfo::Ok(parent_separation as f32 / self_separation as f32)
+                        } else {
+                            StrengthInfo::NoSiblings
+                        }
+                    } else {
+                        StrengthInfo::LessThan2Children
+                    },
+                }
+            })
+            .map_node_data(|node_ref| node_ref.node_data().data.to_owned())
+        //
+    }
 }
 
 pub struct NodeInfo<Item: SortableItem> {
@@ -255,8 +168,6 @@ impl<Item: SortableItem> DeepSorter<Item> {
         Self {
             bintree: provide_info(sort_to_binary_tree(points)),
             params,
-            final_mapper: DeepSorterMapper,
-            sep_mapper: SeparationMapper,
         }
     }
 

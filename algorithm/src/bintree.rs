@@ -23,7 +23,14 @@ pub struct BTInnerNode<Leaf, InnerNode, Node> {
 }
 
 /// [`hiearchy::lazy::LeafRef`] implementation for [`BinTree`]
+#[derive(Debug)]
 pub struct BTLeafRef<'a, L, N>(&'a L, &'a N);
+
+impl<'a, L, N> Clone for BTLeafRef<'a, L, N> {
+    fn clone(&self) -> Self {
+        BTLeafRef(self.0, self.1)
+    }
+}
 
 impl<'a, L, N> hiearchy::lazy::LeafRef for BTLeafRef<'a, L, N> {
     type Metadata = &'a L;

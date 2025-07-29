@@ -15,3 +15,10 @@ mod sealed {
     impl Sealed for () {}
     impl Sealed for Infallible {}
 }
+
+/// Doesn't actually import anything named, just to make trait methods available.
+pub mod prelude {
+    pub use super::hiearchy::lazy::{
+        AsGroupRef as _, GroupRef as _, GroupRefUtils as _, LeafRef as _, WithParentUtils as _,
+    };
+}

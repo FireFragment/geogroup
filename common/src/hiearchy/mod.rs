@@ -63,14 +63,14 @@ mod tests {
         let str_leaf = String::from("a leaf");
         let str_subgroup = String::from("a subgroup");
         let str_root_group = String::from("root group");
-        let target = ConcreteHiearchy::new(Group::new(
+        let target = Group::new(
             vec![
                 Node::new_leaf(Leaf::new(&10, &str_leaf)),
                 Node::new_group(Group::new(Vec::new(), false, &str_subgroup)),
             ],
             true,
             &str_root_group,
-        ));
+        );
 
         assert_eq!(collected, target);
     }
@@ -103,7 +103,7 @@ mod tests {
         let str_nested_leaf = String::from("nested leaf");
         let str_subgroup = String::from("a subgroup");
         let str_root_group = String::from("root group");
-        let target = ConcreteHiearchy::new(Group::new(
+        let target = Group::new(
             vec![
                 Node::new_leaf(Leaf::new(20, &str_leaf)), // 10 * 2 = 20
                 Node::new_group(Group::new(
@@ -114,7 +114,7 @@ mod tests {
             ],
             &false,
             &str_root_group,
-        ));
+        );
 
         assert_eq!(collected, target);
     }
