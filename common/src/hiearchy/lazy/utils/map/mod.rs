@@ -74,21 +74,21 @@ impl<OrigGr: GroupRef, M: Mapper<OrigGr>> AsGroupRef for AsMappedGroupRef<OrigGr
     fn root<'s>(&'s self) -> MappedGroupRef<'s, OrigGr, M> {
         MappedGroupRef {
             this: self.original.clone(),
-            root: self,
+            mapper: &self.mapper,
         }
     }
 }
 
 pub struct MappedGroupRef<'root, OrigGr: GroupRef, M: Mapper<OrigGr>> {
     this: OrigGr,
-    root: &'root AsMappedGroupRef<OrigGr, M>,
+    mapper: &'root M,
 }
 
 impl<'root, OrigGr: GroupRef, M: Mapper<OrigGr>> Clone for MappedGroupRef<'root, OrigGr, M> {
     fn clone(&self) -> Self {
         MappedGroupRef {
             this: self.this.clone(),
-            root: self.root,
+            mapper: self.mapper,
         }
     }
 }
@@ -126,21 +126,21 @@ impl<'a, OrigGr: GroupRef, M: Mapper<OrigGr>> GroupRef for MappedGroupRef<'a, Or
             iter.map(|child| match child {
                 NodeRef::Group(group) => NodeRef::Group(MappedGroupRef {
                     this: group,
-                    root: self.root,
+                    mapper: self.mapper,
                 }),
                 NodeRef::Leaf(leaf) => NodeRef::Leaf(MappedLeafRef {
                     this: leaf,
-                    mapper: &self.root.mapper,
+                    mapper: self.mapper,
                 }),
             })
         })
     }
 
     fn group_metadata(&self) -> Self::GroupMetadata {
-        self.root.mapper.map_group_data(&self.this)
+        self.mapper.map_group_data(&self.this)
     }
 
     fn node_metadata<'b>(&self) -> Self::NodeMetadata {
-        self.root.mapper.map_group_node_data(&self.this)
+        self.mapper.map_group_node_data(&self.this)
     }
 }

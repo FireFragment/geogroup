@@ -7,6 +7,7 @@ use crate::hiearchy::concrete::Group;
 use super::*;
 pub mod map;
 pub mod with_parent;
+pub use with_parent::{WithParentGroupRef, WithParentLeafRef};
 
 pub trait GroupRefUtils: GroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
@@ -42,6 +43,17 @@ pub trait GroupRefUtils: GroupRef {
         ))
     }
 
+    fn map<M: utils::map::Mapper<Self>>(self, mapper: M) -> utils::map::AsMappedGroupRef<Self, M> {
+        utils::map::map(self, mapper)
+    }
+
+    fn map_as_groupref<'m, M: utils::map::Mapper<Self>>(
+        self,
+        mapper: &'m M,
+    ) -> utils::map::MappedGroupRef<'m, Self, M> {
+        utils::map::map_as_groupref(self, mapper)
+    }
+
     fn map_group_data<'x, GroupDataNew: 'x, F: Fn(&Self) -> GroupDataNew + 'x>(
         self,
         fun: F,
@@ -63,7 +75,7 @@ pub trait GroupRefUtils: GroupRef {
         utils::map::map_leaf_data(self, fun)
     }
 
-    fn with_parent(self) -> utils::with_parent::WithParent<Self>
+    fn with_parent(self) -> utils::with_parent::WithParentGroupRef<Self>
     where
         Self: Sized,
     {

@@ -80,6 +80,23 @@ impl<OrigGr: GroupRef, LeafDataNew, F: Fn(&OrigGr::LeafRef) -> LeafDataNew> Mapp
     }
 }
 
+pub fn map<OrigGr: GroupRef, M: Mapper<OrigGr>>(
+    gr: OrigGr,
+    mapper: M,
+) -> AsMappedGroupRef<OrigGr, M> {
+    AsMappedGroupRef {
+        original: gr,
+        mapper,
+    }
+}
+
+pub fn map_as_groupref<'m, OrigGr: GroupRef, M: Mapper<OrigGr>>(
+    gr: OrigGr,
+    mapper: &'m M,
+) -> MappedGroupRef<'m, OrigGr, M> {
+    MappedGroupRef { this: gr, mapper }
+}
+
 /// Creates a mapped hierarchy that transforms group data.
 ///
 /// # Parameters

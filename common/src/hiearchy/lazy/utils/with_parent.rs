@@ -2,24 +2,10 @@
 
 use super::*;
 
-pub fn with_parent<H: hiearchy::lazy::GroupRef>(hiearchy: H) -> WithParent<H> {
-    WithParent(hiearchy)
-}
-
-#[derive(Clone)]
-pub struct WithParent<G: GroupRef>(G);
-
-impl<G: GroupRef> AsGroupRef for WithParent<G> {
-    type GroupRef<'a>
-        = WithParentGroupRef<G>
-    where
-        Self: 'a;
-
-    fn root(&self) -> Self::GroupRef<'_> {
-        WithParentGroupRef {
-            this: self.0.clone(),
-            parent: None,
-        }
+pub fn with_parent<H: hiearchy::lazy::GroupRef>(hiearchy: H) -> WithParentGroupRef<H> {
+    WithParentGroupRef {
+        this: hiearchy,
+        parent: None,
     }
 }
 

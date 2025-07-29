@@ -3,6 +3,8 @@ use std::error::Error;
 use crate::hiearchy;
 pub use utils::GroupRefUtils;
 
+pub mod utils;
+
 /// A trait for types that can provide a root group reference
 ///
 /// `'a` is a equal to or shorter than lifetime of how long is `Self` valid
@@ -62,6 +64,15 @@ pub enum NodeRef<G: GroupRef> {
     Leaf(G::LeafRef),
 }
 
+impl<G: GroupRef> NodeRef<G> {
+    pub fn node_data(&self) -> G::NodeMetadata {
+        match self {
+            NodeRef::Group(group) => group.node_metadata(),
+            NodeRef::Leaf(leaf) => leaf.node_metadata(),
+        }
+    }
+}
+
 pub trait AsGroupRefUtils: AsGroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
     fn collect_to_concrete<'a>(
@@ -83,5 +94,3 @@ pub trait AsGroupRefUtils: AsGroupRef {
 
 impl<T: GroupRef> GroupRefUtils for T {}
 impl<T: AsGroupRef> AsGroupRefUtils for T {}
-
-mod utils;
