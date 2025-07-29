@@ -187,10 +187,11 @@ impl<Item: SortableItem> Clone for NodeInfo<Item> {
 
 /// Strength lower than 1.0 means that the group has even higher "separation" than its parent.
 pub type Strength = f32;
+#[derive(Debug, Clone, PartialEq)]
 pub enum StrengthInfo {
     /// Strength couldn't be determined because this group has less than two children.
     LessThan2Children,
-    /// Strength couldn't be determined because this group has no siblings (ie. its parent has only one child   ).
+    /// Strength couldn't be determined because this group has no siblings (ie. its parent has only one child).
     NoSiblings,
     /// Strength couldn't be determined for root groups and this _is_ a root group.
     Root,
