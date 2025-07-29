@@ -56,25 +56,30 @@ mod tests {
             .root()
             .map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
 
-        binding
-            .root()
-            .map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
+        let root = binding.root();
+        let collected = root.group_metadata(); //.collect_to_concrete().unwrap();
 
-        /*let collected = binding.collect_to_concrete().unwrap();
+        let aa = binding.root().map_group_data(
+            |group_ref| group_ref.to_owned(), /* !group_ref.group_metadata() && ext_var.len() == 0*/
+        );
 
-        dbg!(&collected);
+        let bb = aa.root().map_group_data(
+            |group_ref| group_ref.to_owned(), /* !group_ref.group_metadata() && ext_var.len() == 0*/
+        );
+
+        /*dbg!(&collected);
 
         let str_leaf = String::from("a leaf");
         let str_subgroup = String::from("a subgroup");
         let str_root_group = String::from("root group");
-        let target = ConcreteHiearchy::new(Group::new(
+        let target = Group::new(
             vec![
                 Node::new_leaf(Leaf::new(&10, &str_leaf)),
                 Node::new_group(Group::new(Vec::new(), false, &str_subgroup)),
             ],
             true,
             &str_root_group,
-        ));
+        );
 
         assert_eq!(collected, target);*/
     }

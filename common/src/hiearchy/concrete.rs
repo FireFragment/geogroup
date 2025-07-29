@@ -90,6 +90,20 @@ impl<G, L, N> ConcreteHiearchy<G, L, N> {
 }
 
 impl<L, G, N> hiearchy::lazy::AsGroupRef for ConcreteHiearchy<G, L, N> {
+    type NodeMetadata<'a>
+        = &'a N
+    where
+        Self: 'a;
+    type LeafMetadata<'a>
+        = &'a L
+    where
+        Self: 'a;
+    type GroupMetadata<'a>
+        = &'a G
+    where
+        Self: 'a;
+    type StructureErr = Infallible;
+
     type GroupRef<'a>
         = &'a Group<G, L, N>
     where

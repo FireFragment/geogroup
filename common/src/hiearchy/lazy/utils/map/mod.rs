@@ -102,6 +102,20 @@ pub struct AsMappedGroupRef<OrigGr: GroupRef, M: Mapper<OrigGr>> {
 }
 
 impl<OrigGr: GroupRef, M: Mapper<OrigGr>> AsGroupRef for AsMappedGroupRef<OrigGr, M> {
+    type NodeMetadata<'a>
+        = M::NodeDataNew
+    where
+        Self: 'a;
+    type LeafMetadata<'a>
+        = M::LeafDataNew
+    where
+        Self: 'a;
+    type GroupMetadata<'a>
+        = M::GroupDataNew
+    where
+        Self: 'a;
+    type StructureErr = <OrigGr as GroupRef>::StructureErr;
+
     type GroupRef<'root>
         = MappedGroupRef<'root, OrigGr, M>
     where

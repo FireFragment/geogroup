@@ -7,8 +7,31 @@ pub use utils::GroupRefUtils;
 ///
 /// `'a` is a equal to or shorter than lifetime of how long is `Self` valid
 pub trait AsGroupRef {
+    /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
+    type NodeMetadata<'a>
+    where
+        Self: 'a;
+
+    /// Additional data related to a leaf. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
+    type LeafMetadata<'a>
+    where
+        Self: 'a;
+
+    /// Additional data related to a group. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
+    type GroupMetadata<'a>
+    where
+        Self: 'a;
+
+    /// Error encountered while trying to construct the group structure
+    type StructureErr: Error;
+
     /// The type of group reference this hierarchy provides
-    type GroupRef<'a>: GroupRef
+    type GroupRef<'a>: GroupRef<
+        GroupMetadata = Self::GroupMetadata<'a>,
+        NodeMetadata = Self::NodeMetadata<'a>,
+        LeafMetadata = Self::LeafMetadata<'a>,
+        StructureErr = Self::StructureErr,
+    >
     where
         Self: 'a;
 

@@ -15,6 +15,20 @@ impl<G: GroupRef> AsGroupRef for WithParent<G> {
     where
         Self: 'a;
 
+    type NodeMetadata<'a>
+        = WithParentNodeMetadata<G>
+    where
+        Self: 'a;
+    type LeafMetadata<'a>
+        = G::LeafMetadata
+    where
+        Self: 'a;
+    type GroupMetadata<'a>
+        = G::GroupMetadata
+    where
+        Self: 'a;
+    type StructureErr = G::StructureErr;
+
     fn root(&self) -> Self::GroupRef<'_> {
         WithParentGroupRef {
             this: self.0.clone(),
