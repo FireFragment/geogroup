@@ -46,7 +46,7 @@ mod tests {
 
         /// Simple reproduction of the lifetime error
         fn err_repro() {
-            pub trait AsGroupRef: Sized {
+            pub trait AsGroupRef {
                 type GroupRef<'a>: GroupRef
                 where
                     Self: 'a;
@@ -91,7 +91,7 @@ mod tests {
 
             let binding = Base;
             let mapped_1 = map(binding, 8);
-            let mapped_2 = map(mapped_1.as_group_ref(), String::from("hello"));
+            let gr = mapped_1.as_group_ref();
         }
     }
 
