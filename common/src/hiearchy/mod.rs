@@ -42,6 +42,7 @@ mod tests {
     }
 
     mod err_repro {
+        use std::marker::PhantomData;
 
         /// Simple reproduction of the lifetime error
         fn err_repro() {
@@ -53,33 +54,44 @@ mod tests {
                 fn as_group_ref(&self) -> Self::GroupRef<'_>;
             }
 
-            pub trait GroupRef {}
-
-            fn map<'a, T: GroupRef>(
-                _: T,
-            ) -> impl AsGroupRef<GroupRef<'a> = impl GroupRef + use<'a, T>> {
-                AsGrMapper
+            pub trait GroupRef {
+                type AssocType;
             }
 
             pub struct Base;
-            impl GroupRef for Base {}
+            impl GroupRef for Base {
+                type AssocType = u8;
+            }
 
-            pub struct AsGrMapper;
-            pub struct GrMapper<'a>(&'a AsGrMapper);
+            pub struct AsGrMapper<Gr: GroupRef, T>(Gr, T);
+            pub struct GrMapper<'a, Gr: GroupRef, T>(Gr, &'a AsGrMapper<Gr, T>);
 
-            impl<'a> GroupRef for GrMapper<'a> {}
+            impl<'a, Gr: GroupRef, T> GroupRef for GrMapper<'a, Gr, T> {
+                type AssocType = T;
+            }
 
-            impl AsGroupRef for AsGrMapper {
-                type GroupRef<'a> = GrMapper<'a>;
+            impl<Gr: GroupRef, T> AsGroupRef for AsGrMapper<Gr, T> {
+                type GroupRef<'a>
+                    = GrMapper<'a, Gr, T>
+                where
+                    Self: 'a;
 
                 fn as_group_ref(&self) -> Self::GroupRef<'_> {
                     todo!()
                 }
             }
 
+            fn map<'a, Gr: GroupRef + 'a, T: 'a>(
+                gr: Gr,
+                t: T,
+            ) -> impl AsGroupRef<GroupRef<'a> = impl GroupRef<AssocType = T> + use<'a, Gr, T>>
+            {
+                AsGrMapper(gr, t)
+            }
+
             let binding = Base;
-            let mapped_1 = map(binding);
-            let mapped_2 = map(mapped_1.as_group_ref());
+            let mapped_1 = map(binding, 8);
+            let mapped_2 = map(mapped_1.as_group_ref(), String::from("hello"));
         }
     }
 
