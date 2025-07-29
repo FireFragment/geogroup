@@ -41,25 +41,46 @@ mod tests {
         assert_eq!(collected, target);
     }
 
-    /// Simple reproduction of the lifetime error
-    fn err_repro() {
-        pub trait ExperimentTrait<'a>: Sized {}
+    mod err_repro {
 
-        fn my_fun<'a, T: ExperimentTrait<'a>>(_: &'a T) -> impl ExperimentTrait<'a> {
-            ExperimentInstance
+        /// Simple reproduction of the lifetime error
+        fn err_repro() {
+            pub trait AsGroupRef: Sized {
+                type GroupRef<'a>: GroupRef
+                where
+                    Self: 'a;
+
+                fn as_group_ref(&self) -> Self::GroupRef<'_>;
+            }
+
+            pub trait GroupRef {}
+
+            fn map<'a, T: GroupRef>(
+                _: T,
+            ) -> impl AsGroupRef<GroupRef<'a> = impl GroupRef + use<'a, T>> {
+                AsGrMapper
+            }
+
+            pub struct Base;
+            impl GroupRef for Base {}
+
+            pub struct AsGrMapper;
+            pub struct GrMapper<'a>(&'a AsGrMapper);
+
+            impl<'a> GroupRef for GrMapper<'a> {}
+
+            impl AsGroupRef for AsGrMapper {
+                type GroupRef<'a> = GrMapper<'a>;
+
+                fn as_group_ref(&self) -> Self::GroupRef<'_> {
+                    todo!()
+                }
+            }
+
+            let binding = Base;
+            let mapped_1 = map(binding);
+            let mapped_2 = map(mapped_1.as_group_ref());
         }
-
-        pub struct Base<'a>(&'a u8);
-
-        impl<'a> ExperimentTrait<'a> for Base<'a> {}
-
-        pub struct ExperimentInstance;
-
-        impl<'a> ExperimentTrait<'a> for ExperimentInstance {}
-
-        let binding = ExperimentInstance;
-        let mapped_1 = my_fun(&binding);
-        let mapped_2 = my_fun(&mapped_1);
     }
 
     #[test]
