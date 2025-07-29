@@ -60,42 +60,6 @@ pub trait Mapper<OrigGr: GroupRef> {
     fn map_leaf_node_data(&self, leaf_ref: &<OrigGr as GroupRef>::LeafRef) -> Self::NodeDataNew;
 }
 
-/// Creates a mapped hierarchy that transforms group data.
-///
-/// # Parameters
-///
-/// * `gr` - The original hierarchy to transform
-/// * `fun` - A function that maps group data
-pub fn map_group_data<OrigGr: GroupRef, GroupDataNew, F: Fn(&OrigGr) -> GroupDataNew>(
-    gr: OrigGr,
-    fun: F,
-) -> AsMappedGroupRef<OrigGr, GroupDataMapper<F>> {
-    AsMappedGroupRef {
-        original: gr,
-        mapper: GroupDataMapper::new(fun),
-    }
-}
-
-/// Creates a mapped hierarchy that transforms leaf data.
-///
-/// # Parameters
-///
-/// * `gr` - The original hierarchy to transform
-/// * `fun` - A function that maps leaf data
-pub fn map_leaf_data<
-    OrigGr: GroupRef,
-    LeafDataNew,
-    F: Fn(&<OrigGr as GroupRef>::LeafRef) -> LeafDataNew,
->(
-    gr: OrigGr,
-    fun: F,
-) -> AsMappedGroupRef<OrigGr, LeafDataMapper<F>> {
-    AsMappedGroupRef {
-        original: gr,
-        mapper: LeafDataMapper::new(fun),
-    }
-}
-
 pub struct AsMappedGroupRef<OrigGr: GroupRef, M: Mapper<OrigGr>> {
     original: OrigGr,
     mapper: M,
