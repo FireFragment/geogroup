@@ -45,13 +45,7 @@ pub trait GroupRefUtils: GroupRef {
     fn map_group_data<'x, GroupDataNew: 'x, F: Fn(&Self) -> GroupDataNew + 'x>(
         self,
         fun: F,
-    ) -> impl AsGroupRef<
-        GroupRef<'x> = impl GroupRef<
-            GroupMetadata = GroupDataNew,
-            LeafMetadata = Self::LeafMetadata,
-            NodeMetadata = Self::NodeMetadata,
-        > + 'x,
-    > + 'x
+    ) -> utils::map::AsMappedGroupRef<Self, utils::map::GroupDataMapper<F>>
     where
         Self: Sized, // TODO: Is this bound really needed?
         Self: 'x,

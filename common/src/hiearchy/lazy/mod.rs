@@ -63,22 +63,22 @@ pub enum NodeRef<G: GroupRef> {
 }
 
 pub trait AsGroupRefUtils: AsGroupRef {
-    /*/// Convert to concrete hierarchy by instantiating all the items
-    fn collect_to_concrete(
-        &self,
+    /// Convert to concrete hierarchy by instantiating all the items
+    fn collect_to_concrete<'a>(
+        &'a self,
     ) -> Result<
         hiearchy::Concrete<
-            <Self::GroupRef as GroupRef>::GroupMetadata,
-            <Self::GroupRef as GroupRef>::LeafMetadata,
-            <Self::GroupRef as GroupRef>::NodeMetadata,
+            <Self::GroupRef<'a> as GroupRef>::GroupMetadata,
+            <Self::GroupRef<'a> as GroupRef>::LeafMetadata,
+            <Self::GroupRef<'a> as GroupRef>::NodeMetadata,
         >,
-        <Self::GroupRef as GroupRef>::StructureErr,
+        <Self::GroupRef<'a> as GroupRef>::StructureErr,
     >
     where
         Self: std::marker::Sized,
     {
         Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
-    }*/
+    }
 }
 
 impl<T: GroupRef> GroupRefUtils for T {}

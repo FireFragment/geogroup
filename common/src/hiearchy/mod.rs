@@ -56,11 +56,7 @@ mod tests {
             .root()
             .map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
 
-        binding
-            .root()
-            .map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
-
-        /*let collected = binding.collect_to_concrete().unwrap();
+        let collected = binding.collect_to_concrete().unwrap();
 
         dbg!(&collected);
 
@@ -76,7 +72,7 @@ mod tests {
             &str_root_group,
         ));
 
-        assert_eq!(collected, target);*/
+        assert_eq!(collected, target);
     }
 
     #[test]
@@ -96,7 +92,9 @@ mod tests {
         ));
 
         let ext_coeficient = 2; // Test that the code compiles even if the closure references an external variable
-        let binding = hierarchy.map_leaf_data(|leaf_ref| leaf_ref.leaf_metadata() * ext_coeficient);
+        let binding = hierarchy
+            .root()
+            .map_leaf_data(|leaf_ref| leaf_ref.leaf_metadata() * ext_coeficient);
         let collected = binding.collect_to_concrete().unwrap();
 
         dbg!(&collected);
