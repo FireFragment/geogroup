@@ -70,9 +70,10 @@ impl<Item: SortableItem> Sorter<Item> {
 
 /// # Simple getters and setters
 impl<Item: SortableItem> Sorter<Item> {
-    pub fn new(points: Vec<Item>, params: Params) -> Self {
+    /// This sorts all items to binary tree, potentially long-running
+    pub fn new(items: Vec<Item>, params: Params) -> Self {
         Self {
-            deep_sorter: DeepSorter::new(points),
+            deep_sorter: DeepSorter::new(items),
             params,
         }
     }
