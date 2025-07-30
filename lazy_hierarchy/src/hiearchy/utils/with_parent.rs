@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub fn with_parent<H: hiearchy::lazy::GroupRef>(hiearchy: H) -> WithParentGroupRef<H> {
+pub fn with_parent<H: GroupRef>(hiearchy: H) -> WithParentGroupRef<H> {
     WithParentGroupRef {
         this: hiearchy,
         parent: None,

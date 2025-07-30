@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use lazy_hierarchy::hiearchy;
+use lazy_hierarchy::AsGroupRef;
 
 pub enum BinTree<Leaf, InnerNode, Node> {
     InnerNode(BTInnerNode<Leaf, InnerNode, Node>),
@@ -22,7 +22,7 @@ pub struct BTInnerNode<Leaf, InnerNode, Node> {
     pub node_data: Node,
 }
 
-/// [`hiearchy::lazy::LeafRef`] implementation for [`BinTree`]
+/// [`lazy_hierarchy::LeafRef`] implementation for [`BinTree`]
 #[derive(Debug)]
 pub struct BTLeafRef<'a, L, N>(&'a L, &'a N);
 
@@ -32,7 +32,7 @@ impl<'a, L, N> Clone for BTLeafRef<'a, L, N> {
     }
 }
 
-impl<'a, L, N> hiearchy::lazy::LeafRef for BTLeafRef<'a, L, N> {
+impl<'a, L, N> lazy_hierarchy::LeafRef for BTLeafRef<'a, L, N> {
     type Metadata = &'a L;
 
     type NodeMetadata = &'a N;
@@ -46,15 +46,15 @@ impl<'a, L, N> hiearchy::lazy::LeafRef for BTLeafRef<'a, L, N> {
     }
 }
 
-impl<'a, Leaf, InnerNode, Node> hiearchy::lazy::GroupRef
+impl<'a, Leaf, InnerNode, Node> lazy_hierarchy::GroupRef
     for &'a BTInnerNode<Leaf, InnerNode, Node>
 {
     fn get_children(
         &self,
-    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<Self>>, Infallible> {
+    ) -> Result<impl Iterator<Item = lazy_hierarchy::NodeRef<Self>>, Infallible> {
         Ok(self.children.iter().map(|node| match node {
-            BinTree::InnerNode(group) => hiearchy::lazy::NodeRef::Group(group),
-            BinTree::Leaf(l, n) => hiearchy::lazy::NodeRef::Leaf(BTLeafRef(l, n)),
+            BinTree::InnerNode(group) => lazy_hierarchy::NodeRef::Group(group),
+            BinTree::Leaf(l, n) => lazy_hierarchy::NodeRef::Leaf(BTLeafRef(l, n)),
         }))
     }
 
@@ -73,7 +73,7 @@ impl<'a, Leaf, InnerNode, Node> hiearchy::lazy::GroupRef
     type LeafRef = BTLeafRef<'a, Leaf, Node>;
 }
 
-impl<Leaf, InnerNode, Node> hiearchy::Lazy for BinTree<Leaf, InnerNode, Node> {
+impl<Leaf, InnerNode, Node> AsGroupRef for BinTree<Leaf, InnerNode, Node> {
     type GroupRef<'a>
         = &'a BTInnerNode<Leaf, InnerNode, Node>
     where

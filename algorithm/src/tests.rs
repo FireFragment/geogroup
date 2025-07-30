@@ -1,7 +1,5 @@
 use core::fmt;
 
-use lazy_hierarchy::hiearchy::lazy::{GroupRef, GroupRefUtils};
-
 use super::*;
 
 /// Simple test item that implements SortableItem

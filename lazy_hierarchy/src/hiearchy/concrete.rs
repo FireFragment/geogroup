@@ -1,8 +1,6 @@
 use crate::*;
 use std::convert::Infallible;
 
-pub use hiearchy::lazy::NodeRef;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Node<G, L, N> {
     Group(Group<G, L, N>),
@@ -89,7 +87,7 @@ impl<G, L, N> ConcreteHiearchy<G, L, N> {
     }
 }
 
-impl<L, G, N> hiearchy::lazy::AsGroupRef for ConcreteHiearchy<G, L, N> {
+impl<L, G, N> AsGroupRef for ConcreteHiearchy<G, L, N> {
     type GroupRef<'a>
         = &'a Group<G, L, N>
     where
@@ -100,7 +98,7 @@ impl<L, G, N> hiearchy::lazy::AsGroupRef for ConcreteHiearchy<G, L, N> {
     }
 }
 
-impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
+impl<'a, N, L> LeafRef for &'a Leaf<L, N> {
     type Metadata = &'a L;
     type NodeMetadata = &'a N;
 
@@ -113,7 +111,7 @@ impl<'a, N, L> hiearchy::lazy::LeafRef for &'a Leaf<L, N> {
     }
 }
 
-impl<'a, G, L, N> hiearchy::lazy::GroupRef for &'a Group<G, L, N> {
+impl<'a, G, L, N> GroupRef for &'a Group<G, L, N> {
     type NodeMetadata = &'a N;
     type LeafMetadata = &'a L;
     type GroupMetadata = &'a G;
@@ -122,10 +120,10 @@ impl<'a, G, L, N> hiearchy::lazy::GroupRef for &'a Group<G, L, N> {
 
     fn get_children(
         &self,
-    ) -> Result<impl Iterator<Item = hiearchy::lazy::NodeRef<Self>>, Self::StructureErr> {
+    ) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr> {
         Ok(self.children.iter().map(|node| match node {
-            Node::Group(group) => hiearchy::lazy::NodeRef::Group(group),
-            Node::Leaf(leaf) => hiearchy::lazy::NodeRef::Leaf(leaf),
+            Node::Group(group) => NodeRef::Group(group),
+            Node::Leaf(leaf) => NodeRef::Leaf(leaf),
         }))
     }
 

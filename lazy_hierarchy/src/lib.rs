@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 
-pub mod hiearchy;
+mod hiearchy;
+pub use hiearchy::*;
 
 pub trait UnitOrNever: sealed::Sealed {}
 
@@ -18,7 +19,7 @@ mod sealed {
 
 /// Doesn't actually `use` anything named, just to make trait methods available.
 pub mod prelude {
-    pub use super::hiearchy::lazy::{
+    pub use super::{
         AsGroupRef as _, GroupRef as _, GroupRefUtils as _, LeafRef as _, WithParentUtils as _,
     };
 }

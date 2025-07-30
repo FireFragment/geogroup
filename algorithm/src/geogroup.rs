@@ -1,4 +1,4 @@
-use lazy_hierarchy::hiearchy::lazy::{GroupRef, GroupRefUtils};
+use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 
 pub use deep_sorter::{GroupInfo, NodeInfo};
@@ -22,7 +22,7 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
             "{}",
             self.hierarchy().format_as_tree(
                 |n| match n {
-                    hiearchy::lazy::NodeRef::Group(g) => match g.group_metadata().strength {
+                    lazy_hierarchy::NodeRef::Group(g) => match g.group_metadata().strength {
                         StrengthInfo::Ok {
                             strength,
                             separation_ratio,
@@ -32,7 +32,7 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
                         ),
                         issue => format!("{issue:?}"),
                     },
-                    hiearchy::lazy::NodeRef::Leaf(l) => format!("{:?}", l.leaf_metadata()),
+                    lazy_hierarchy::NodeRef::Leaf(l) => format!("{:?}", l.leaf_metadata()),
                 },
                 true
             )
@@ -43,7 +43,7 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
 impl<Item: SortableItem> Sorter<Item> {
     pub fn hierarchy<'s>(
         &'s self,
-    ) -> impl hiearchy::lazy::GroupRef<
+    ) -> impl lazy_hierarchy::GroupRef<
         GroupMetadata = GroupInfo,
         LeafMetadata = &'s Item,
         NodeMetadata = NodeInfo<Item>,

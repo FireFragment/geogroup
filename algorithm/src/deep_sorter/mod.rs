@@ -30,7 +30,7 @@ pub fn ratio_to_strength(parent_separation: f32, self_separation: f32) -> f32 {
 impl<Item: SortableItem> DeepSorter<Item> {
     pub fn deep_hierarchy<'s>(
         &'s self,
-    ) -> impl hiearchy::lazy::GroupRef<
+    ) -> impl lazy_hierarchy::GroupRef<
         GroupMetadata = GroupInfo,
         LeafMetadata = &'s Item,
         NodeMetadata = NodeInfo<Item>,

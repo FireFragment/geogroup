@@ -2,8 +2,6 @@
 
 use std::{fmt::Display, marker::PhantomData};
 
-use crate::hiearchy::concrete::Group;
-
 use super::*;
 pub mod dissolve;
 pub mod map;
@@ -20,23 +18,24 @@ pub trait GroupRefUtils: GroupRef {
     fn collect_to_concrete<'c>(
         &'c self,
     ) -> Result<
-        hiearchy::concrete::Group<Self::GroupMetadata, Self::LeafMetadata, Self::NodeMetadata>,
+        concrete::Group<Self::GroupMetadata, Self::LeafMetadata, Self::NodeMetadata>,
         Self::StructureErr,
     > {
         let group_data = self.group_metadata();
         let node_data = self.node_metadata();
         let children = self.get_children()?;
-        Ok(hiearchy::concrete::Group::new(
+        Ok(concrete::Group::new(
             {
                 children
                     .map(|child| {
                         Ok(match child {
                             NodeRef::Group(g) => {
-                                hiearchy::concrete::Node::new_group(g.collect_to_concrete()?)
+                                concrete::Node::new_group(g.collect_to_concrete()?)
                             }
-                            NodeRef::Leaf(l) => hiearchy::concrete::Node::new_leaf(
-                                hiearchy::concrete::Leaf::new(l.leaf_metadata(), l.node_metadata()),
-                            ),
+                            NodeRef::Leaf(l) => concrete::Node::new_leaf(concrete::Leaf::new(
+                                l.leaf_metadata(),
+                                l.node_metadata(),
+                            )),
                         })
                     })
                     .collect::<Result<_, _>>()?
@@ -221,7 +220,7 @@ pub trait AsGroupRefUtils: AsGroupRef {
     fn collect_to_concrete<'a>(
         &'a self,
     ) -> Result<
-        hiearchy::Concrete<
+        Concrete<
             <Self::GroupRef<'a> as GroupRef>::GroupMetadata,
             <Self::GroupRef<'a> as GroupRef>::LeafMetadata,
             <Self::GroupRef<'a> as GroupRef>::NodeMetadata,
@@ -231,6 +230,6 @@ pub trait AsGroupRefUtils: AsGroupRef {
     where
         Self: std::marker::Sized,
     {
-        Ok(hiearchy::Concrete::new(self.root().collect_to_concrete()?))
+        Ok(Concrete::new(self.root().collect_to_concrete()?))
     }
 }
