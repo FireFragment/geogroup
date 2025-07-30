@@ -5,8 +5,10 @@ use std::marker::PhantomData;
 use crate::hiearchy::concrete::Group;
 
 use super::*;
+pub mod dissolve;
 pub mod map;
 pub mod with_parent;
+pub use dissolve::Dissolver;
 pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeMetadata};
 
 pub trait GroupRefUtils: GroupRef {
@@ -97,6 +99,15 @@ pub trait GroupRefUtils: GroupRef {
 
     fn with_parent(self) -> utils::with_parent::WithParentGroupRef<Self> {
         utils::with_parent::with_parent(self)
+    }
+
+    /// Move all children from a group to its parent group if `fun_should_dissolve` returns [true] for it.
+    /// Discards group data and node data for those "dissolved" groups.
+    fn dissolve_by_key<F: Fn(&Self) -> bool + Clone>(
+        self,
+        fun_should_dissolve: F,
+    ) -> utils::Dissolver<Self, F> {
+        utils::Dissolver::new(self, fun_should_dissolve)
     }
 
     /* TODO: WTF is this?
