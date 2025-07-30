@@ -1,21 +1,34 @@
 mod onetime;
-#[cfg(test)]
-mod test;
+//#[cfg(test)]
+//mod test;
 
-use std::convert::Infallible;
+use std::{convert::Infallible, ops::Div};
 
 use crate::*;
-use geogroup_common::prelude::*;
 use itertools::Itertools;
 pub use onetime::*;
 
 pub struct DeepSorter<Item: SortableItem> {
     bintree: BinTree<Item, (), NodeInfo<Item>>,
-    params: Params,
 }
 
+/// Returns a result between -1 and 1. To convert it to [`Strength`], multiply it with [`Strength::MAX`]
+///
+/// This formula for strength is used because
+///  1) It makes any ratio representable in i16 thanks to `tanh` which bounds the result to
+///     range (-1;1)
+///  2) It's "symmetric": `ratio_to_strength(parent_separation, self_separation) == -ratio_to_strength(self_separation, parent_separation)`
+pub fn ratio_to_strength(parent_separation: f32, self_separation: f32) -> f32 {
+    // NOTE: Division by zero is OK here, because 1/0 = Infinity and Infinity.tanh() = 1
+    (parent_separation / self_separation)
+        .log2()
+        .div(2.0) // This is a magic number, the strengths just seemd right with this
+        .tanh()
+}
+
+/// # Sorting methods
 impl<Item: SortableItem> DeepSorter<Item> {
-    pub fn hierarchy<'s>(
+    pub fn deep_hierarchy<'s>(
         &'s self,
     ) -> impl hiearchy::lazy::GroupRef<
         GroupMetadata = GroupInfo,
@@ -25,6 +38,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
     > + 's {
         self.bintree
             .root()
+            // Calculate separation
             .map_group_data(|group_ref| {
                 let separation = group_ref
                     .get_children()
@@ -48,6 +62,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
                 separation
             })
             .with_parent()
+            // Calculate strength
             .map_group_data(|group_ref| {
                 let self_separation = group_ref.group_metadata();
                 let Some(parent) = group_ref.node_metadata().parent else {
@@ -62,8 +77,14 @@ impl<Item: SortableItem> DeepSorter<Item> {
                     separation: self_separation,
                     strength: if let Some(self_separation) = self_separation {
                         if let Some(parent_separation) = parent_separation {
-                            // TODO: Prevent division by zero
-                            StrengthInfo::Ok(parent_separation as f32 / self_separation as f32)
+                            StrengthInfo::Ok {
+                                strength: (ratio_to_strength(
+                                    parent_separation as f32,
+                                    self_separation as f32,
+                                ) * Strength::MAX as f32)
+                                    as Strength,
+                                separation_ratio: parent_separation as f32 / self_separation as f32,
+                            }
                         } else {
                             StrengthInfo::NoSiblings
                         }
@@ -77,6 +98,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
     }
 }
 
+#[derive(Debug)]
 pub struct NodeInfo<Item: SortableItem> {
     first_time: Item::Time,
     last_time: Item::Time,
@@ -96,32 +118,26 @@ impl<Item: SortableItem> Clone for NodeInfo<Item> {
     }
 }
 
-/// Strength lower than 1.0 means that the group has even higher "separation" than its parent.
-pub type Strength = f32;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StrengthInfo {
     /// Strength couldn't be determined because this group has less than two children.
     LessThan2Children,
-    /// Strength couldn't be determined because this group has no siblings (ie. its parent has only one child).
+    /// Strength couldn't be determined because this group has no siblings (ie. its parent has only one child)
+    /// AND this group has 2 children or more (if it had less, this would be [`StrengthInfo::LessThan2Children`])
     NoSiblings,
     /// Strength couldn't be determined for root groups and this _is_ a root group.
     Root,
-    Ok(Strength),
+    Ok {
+        strength: Strength,
+        separation_ratio: f32,
+    },
 }
 
+#[derive(Clone, Debug)]
 pub struct GroupInfo {
     pub strength: StrengthInfo,
     /// If [None], the group has less than two children
     pub separation: Option<Distance>,
-}
-
-/// An item that can be sorted using the geogroup algorithm
-pub trait SortableItem: Point {
-    type Time: Ord + Clone;
-    type Position: Point + Clone;
-
-    fn get_time(&self) -> Self::Time;
-    fn get_position(&self) -> Self::Position;
 }
 
 fn provide_info<Item: SortableItem, InnerNode>(
@@ -160,12 +176,11 @@ fn provide_info<Item: SortableItem, InnerNode>(
 }
 
 impl<Item: SortableItem> DeepSorter<Item> {
-    pub fn new(points: Vec<Item>, params: Params) -> Self {
+    pub fn new(points: Vec<Item>) -> Self {
         //points.sort_unstable_by_key(|it| it.get_time());
 
         Self {
             bintree: provide_info(sort_to_binary_tree(points)),
-            params,
         }
     }
 

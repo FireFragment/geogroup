@@ -19,7 +19,9 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(points: Vec<Item>) -> Bin
         //    If there wasn't one, the loop would be broken out of.
         let current_item = points_iter.next().unwrap();
         if let Some(next_item) = points_iter.peek() {
-            let distance_to_next = current_item.distance(next_item);
+            let distance_to_next = current_item
+                .get_position()
+                .distance(&next_item.get_position());
             points_with_distances.push((current_item, distance_to_next));
         } else {
             break current_item;

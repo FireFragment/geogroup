@@ -14,3 +14,8 @@ log = "0.4.27"
 [features]
 geo = ["dep:geo"]
 default = ["geo"]
+debug_colors = ["geogroup_common/colors"]
+
+
+[dev-dependencies]
+geogroup_common = { path = "../common", features = ["colors"] }

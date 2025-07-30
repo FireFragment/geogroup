@@ -116,6 +116,7 @@ name = "geogroup_common"
 version = "0.1.0"
 dependencies = [
  "either",
+ "owo-colors",
 ]
 
 [[package]]
@@ -187,6 +188,12 @@ dependencies = [
  "autocfg",
  "libm",
 ]
+
+[[package]]
+name = "owo-colors"
+version = "4.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48dd4f4a2c8405440fd0462561f0e5806bd0f77e86f51c761481bdd4018b545e"
 
 [[package]]
 name = "proc-macro2"
