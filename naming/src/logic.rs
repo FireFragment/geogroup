@@ -2,7 +2,7 @@
 
 use address_formatter::Place;
 use geocoding::{GeocodingError, Point};
-use geogroup_common::HiearchyItem;
+//use geogroup_common::HiearchyItem;
 
 use crate::*;
 

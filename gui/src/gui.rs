@@ -1,6 +1,5 @@
 //! The core of this crate, the code rendering all the GUI
 
-use backend::HiearchyItem;
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
 use std::ops::RangeInclusive;
@@ -10,8 +9,7 @@ use super::*;
 
 pub(crate) fn ribbon_slider<Num: emath::Numeric>(
     ui: &mut Ui,
-    value: &mut Num,
-    range: RangeInclusive<Num>,
+    slider: egui::Slider,
     default: Num,
     name: &str,
     help_text: &str,
@@ -23,19 +21,16 @@ pub(crate) fn ribbon_slider<Num: emath::Numeric>(
             .on_hover_cursor(CursorIcon::Help)
             .on_hover_text(help_text);
 
-        let mut changed = ui
-            .add(egui::Slider::new(value, range))
-            .labelled_by(label.id)
-            .changed();
+        let mut changed = ui.add(slider).labelled_by(label.id).changed();
 
-        #[allow(clippy::collapsible_if)]
+        //TODO
+        /*#[allow(clippy::collapsible_if)]
         if *value != default {
             if ui.button("⟳").clicked() {
                 *value = default;
                 changed = true;
             }
-        }
-
+        }*/
         if let Some(cfg_changed) = cfg_changed {
             *cfg_changed |= changed;
         }
@@ -141,36 +136,20 @@ impl App {
 
                                 ribbon_slider(
                                     ui,
-                                    &mut main_page.operation_config.geogroup_params.depth,
-                                    0..=u8::MAX,
+                                    egui::Slider::new(
+                                        &mut main_page.operation_config.depth,
+                                        0..=backend::algorithm::MAX_DEPTH
+                                    ).custom_formatter(|num, range|  format!(".{:>2}", num*100.0 / *range.end() as f64)), // TODO: Add also custom parser
                                     backend::algorithm::Params::default().depth,
                                     "Depth",
                                     "High values yield deeply nested folder structure. Low values lead to shallow structures",
                                     Some(&mut cfg_changed),
                                 );
-
-
-                                if (cfg_changed && main_page.auto_sort)
-                                    | sort_btn_clicked
-                                    | main_page.sort_pending
-                                {
-
-                                    if main_page.is_sort_process_idle() {
-                                        main_page.sort_process = Some(action::sort(
-                                            &mut main_page.operation_config,
-                                            main_page.hiearchy.to_owned(),
-                                            &self.args,
-                                            &self.inbox,
-                                        ));
-                                        main_page.sort_pending = false;
-                                    } else {
-                                        main_page.sort_pending = true;
-                                    }
-                                }
                         }
                         PaneContent::Naming => {}
                         PaneContent::ManualEdit => {
-                            if main_page.auto_sort {
+                            todo!()
+                            /*if main_page.auto_sort {
                                 ui.vertical(|ui| {
                                     ui.strong("Automatic sorting is enabled");
                                     ui.label("To make manual changes to the hiearchy, please disable automatic sorting.");
@@ -179,7 +158,7 @@ impl App {
                                     }
                                 });
                             } else if let Some(selected_item) = main_page.selected_item_mut() {
-                                match selected_item {
+                                /*match selected_item {
                                     HiearchyItem::Group(_, name) => {
                                         ui.text_edit_singleline(name);
                                         if ui.button("Dissolve").clicked() {
@@ -192,11 +171,11 @@ impl App {
                                             ui.text_edit_singleline(&mut it.name);
                                         });
                                     }
-                                }
-                            }
+                                }*/
+                            }*/
                         }
                         PaneContent::Apply => {
-                            if ui.button("Apply by copying files").clicked() {
+                            /*if ui.button("Apply by copying files").clicked() {
                                 let target_dir = rfd::FileDialog::new().pick_folder();
 
                                 if let Some(target_dir) = target_dir {
@@ -227,7 +206,7 @@ impl App {
                                     });
 
                                 }
-                            };
+                            };*/
                         }
                         PaneContent::Home => {
                             #[cfg(target_os = "linux")]
@@ -245,8 +224,8 @@ impl App {
                         PaneContent::View => {
                             ribbon_slider(
                                 ui,
-                                &mut main_page.image_scale,
-                                32..=128,
+                                egui::Slider::new(&mut main_page.image_scale,
+                                32..=128,),
                                 48,
                                 "Image size",
                                 "Height of image previews",
@@ -335,6 +314,8 @@ fn show_hiearchy_inner(
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
 ) {
+    todo!()
+    /*
     assert!(selected_vec.len() >= current_depth);
 
     use egui_extras::{Column, TableBuilder};
@@ -417,7 +398,7 @@ fn show_hiearchy_inner(
             flatten_mode,
             image_scale,
         )
-    }
+    }*/
 }
 
 pub(crate) fn error_ui(ui: &mut Ui, error: &str) {
@@ -585,7 +566,9 @@ impl WelcomePage {
     }
 
     fn action_load_dir(&mut self, inbox: &UiInbox<Message>, folder: PathBuf) {
-        let sender = inbox.sender();
+        todo!()
+
+        /*let sender = inbox.sender();
 
         std::thread::spawn(move || {
             use geogroup_backend::HiearchyItem as HI;
@@ -606,7 +589,7 @@ impl WelcomePage {
                 .ok();
         });
 
-        *self = Self::Loading("Loading files".into());
+        *self = Self::Loading("Loading files".into());*/
     }
 }
 
@@ -668,7 +651,7 @@ struct MainPage {
     image_scale: u16,
     progress: Option<Progress>,
     /// Config controlling the entire operation, including sorting, naming, etc.
-    operation_config: backend::SortingCfg,
+    operation_config: backend::algorithm::Params,
     auto_sort: bool,
     /// Whether sorting should be rerun once `sort_process` completes.
     /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
@@ -738,34 +721,34 @@ impl Message {
 
 impl MainPage {
     fn new(
-        hiearchy: Vec<geogroup_backend::HiearchyItem<PathBuf, PathBuf>>,
+        //hiearchy: Vec<geogroup_backend::HiearchyItem<PathBuf, PathBuf>>,
         folder: PathBuf,
     ) -> MainPage {
         MainPage {
-            hiearchy: hiearchy
-                .into_iter()
-                .map(|h| {
-                    h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
-                        .map_leafs(&|path| {
-                            let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
-                            hiearchy::FileInfo {
-                                name: filename_to_string(path.file_name()),
-                                path,
-                                pos: loc_data.as_ref().and_then(|loc_data| {
-                                    loc_data
-                                        .location
-                                        .as_ref()
-                                        .ok()
-                                        .map(|rect| rect.center().into())
-                                }),
-                                date: loc_data.as_ref().and_then(|loc_data| {
-                                    loc_data.time.as_ref().ok().map(|dates| dates[0])
-                                    // TODO: Don't use just the first one
-                                }),
-                            }
-                        })
-                })
-                .collect(),
+            hiearchy: todo!(), /*hiearchy
+                               .into_iter()
+                               .map(|h| {
+                                   h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
+                                       .map_leafs(&|path| {
+                                           let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
+                                           hiearchy::FileInfo {
+                                               name: filename_to_string(path.file_name()),
+                                               path,
+                                               pos: loc_data.as_ref().and_then(|loc_data| {
+                                                   loc_data
+                                                       .location
+                                                       .as_ref()
+                                                       .ok()
+                                                       .map(|rect| rect.center().into())
+                                               }),
+                                               date: loc_data.as_ref().and_then(|loc_data| {
+                                                   loc_data.time.as_ref().ok().map(|dates| dates[0])
+                                                   // TODO: Don't use just the first one
+                                               }),
+                                           }
+                                       })
+                               })
+                               .collect(),*/
             pane: Some(PaneContent::Grouping),
             src_dir: folder,
             flatten_mode: None,
@@ -782,7 +765,7 @@ impl MainPage {
 
     /// Returns [None] if either:
     ///  - Nothing is selected
-    pub fn selected_item(&self) -> Option<&backend::HiearchyItem<hiearchy::FileInfo, String>> {
+    /*pub fn selected_item(&self) -> Option<&backend::HiearchyItem<hiearchy::FileInfo, String>> {
         let mut idx_iter = self.selection.iter();
         let Some(first_idx) = idx_iter.next() else {
             return None;
@@ -797,11 +780,11 @@ impl MainPage {
         }
 
         Some(current_hiearchy)
-    }
+    } TODO*/
 
     /// Returns [None] if either:
     ///  - Nothing is selected
-    pub fn selected_item_mut(
+    /*pub fn selected_item_mut(
         &mut self,
     ) -> Option<&mut backend::HiearchyItem<hiearchy::FileInfo, String>> {
         let mut idx_iter = self.selection.iter();
@@ -818,7 +801,7 @@ impl MainPage {
         }
 
         Some(current_hiearchy)
-    }
+    }*/
 
     fn is_sort_process_idle(self: &mut MainPage) -> bool {
         self.sort_process.as_ref().is_none_or(|p| p.is_finished())
@@ -826,7 +809,8 @@ impl MainPage {
 
     /// Returns [false] if nothing was dissolved because a group was not selected
     fn dissolve_selected(&mut self) -> bool {
-        let idx_of_dissolved = self.selection.pop().unwrap();
+        todo!()
+        /*let idx_of_dissolved = self.selection.pop().unwrap();
 
         let target_items =
             if let Some(HiearchyItem::Group(target_items, _)) = self.selected_item_mut() {
@@ -845,7 +829,7 @@ impl MainPage {
         target_items.extend_from_slice(&dissolved_items);
         target_items.append(&mut v);
 
-        return true;
+        return true;*/
     }
 }
 

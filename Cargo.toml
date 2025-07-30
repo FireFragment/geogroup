@@ -3,10 +3,10 @@ resolver = "2"
 members = [
     "algorithm",
     "common",
-    #"gui",
-    #"loaders",
-    #"backend",
-    #"naming",
+    "gui",
+    "loaders",
+    "backend",
+    "naming",
     #"apply",
 ]
 #default-members = ["gui"]
