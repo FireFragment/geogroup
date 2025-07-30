@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "algorithm",
-    "common",
+    "lazy_hierarchy",
     "gui",
     "loaders",
     "backend",

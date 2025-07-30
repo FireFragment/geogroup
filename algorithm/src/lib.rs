@@ -1,4 +1,4 @@
-use geogroup_common::*;
+use lazy_hierarchy::*;
 
 //pub mod algo;
 pub mod bintree;
@@ -10,7 +10,7 @@ mod tests;
 
 pub use bintree::*;
 pub use deep_sorter::{DeepSorter, StrengthInfo};
-use geogroup_common::prelude::*;
+use lazy_hierarchy::prelude::*;
 use std::convert::Infallible;
 //pub use algo::sort;
 //pub use algo::sort_just_points;

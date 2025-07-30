@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-geogroup_common = { path = "../common" }
+lazy_hierarchy = { path = "../lazy_hierarchy" }
 log = "0.4.25"
 sanitise-file-name = "1.0.0"

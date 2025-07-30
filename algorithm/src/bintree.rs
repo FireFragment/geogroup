@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use geogroup_common::hiearchy;
+use lazy_hierarchy::hiearchy;
 
 pub enum BinTree<Leaf, InnerNode, Node> {
     InnerNode(BTInnerNode<Leaf, InnerNode, Node>),

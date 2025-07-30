@@ -1969,8 +1969,8 @@ name = "geogroup_algo"
 version = "0.1.0"
 dependencies = [
  "geo 0.28.0",
- "geogroup_common",
  "itertools 0.14.0",
+ "lazy_hierarchy",
  "log",
 ]
 
@@ -1980,18 +1980,10 @@ version = "0.1.0"
 dependencies = [
  "geo 0.29.3",
  "geogroup_algo",
- "geogroup_common",
  "geogroup_loaders",
  "geogroup_naming",
+ "lazy_hierarchy",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "geogroup_common"
-version = "0.1.0"
-dependencies = [
- "either",
- "owo-colors",
 ]
 
 [[package]]
@@ -2031,7 +2023,7 @@ dependencies = [
  "address-formatter",
  "bincode",
  "geocoding",
- "geogroup_common",
+ "lazy_hierarchy",
 ]
 
 [[package]]
@@ -2857,6 +2849,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd85a5776cd9500c2e2059c8c76c3b01528566b7fcbaf8098b55a33fc298849b"
 dependencies = [
  "arrayvec",
+]
+
+[[package]]
+name = "lazy_hierarchy"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "owo-colors",
 ]
 
 [[package]]

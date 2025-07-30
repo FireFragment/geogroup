@@ -1,5 +1,5 @@
 [package]
-name = "geogroup_common"
+name = "lazy_hierarchy"
 version = "0.1.0"
 edition = "2021"
 

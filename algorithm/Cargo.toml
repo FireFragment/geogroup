@@ -7,15 +7,15 @@ edition = "2021"
 
 [dependencies]
 geo = { version = "0.28.0", optional = true }
-geogroup_common = { path = "../common" }
+lazy_hierarchy = { path = "../lazy_hierarchy" }
 itertools = "0.14.0"
 log = "0.4.27"
 
 [features]
 geo = ["dep:geo"]
 default = ["geo"]
-debug_colors = ["geogroup_common/colors"]
+debug_colors = ["lazy_hierarchy/colors"]
 
 
 [dev-dependencies]
-geogroup_common = { path = "../common", features = ["colors"] }
+lazy_hierarchy = { path = "../lazy_hierarchy", features = ["colors"] }

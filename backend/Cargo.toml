@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 geo = "0.29.1"
 #geogroup_apply = { path = "../apply" }
+lazy_hierarchy = { path = "../lazy_hierarchy" }
 geogroup_algo = { path = "../algorithm" }
-geogroup_common = { path = "../common" }
 geogroup_loaders = { path = "../loaders" }
 geogroup_naming = { path = "../naming" }
 thiserror = "1.0.63"

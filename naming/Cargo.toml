@@ -7,4 +7,4 @@ edition = "2021"
 address-formatter = "0.2.2"
 bincode = "1.3.3"
 geocoding = "0.4.0"
-geogroup_common = { path = "../common" }
+lazy_hierarchy = { path = "../lazy_hierarchy" }

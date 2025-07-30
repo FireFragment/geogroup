@@ -1,4 +1,4 @@
-use geogroup_common::hiearchy::lazy::{GroupRef, GroupRefUtils};
+use lazy_hierarchy::hiearchy::lazy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 
 pub use deep_sorter::{GroupInfo, NodeInfo};

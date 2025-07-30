@@ -1,6 +1,6 @@
 use core::fmt;
 
-use geogroup_common::hiearchy::lazy::{GroupRef, GroupRefUtils};
+use lazy_hierarchy::hiearchy::lazy::{GroupRef, GroupRefUtils};
 
 use super::*;
 
