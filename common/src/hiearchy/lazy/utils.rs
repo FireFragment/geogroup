@@ -122,7 +122,7 @@ pub trait GroupRefUtils: GroupRef {
         format_node: F,
         colors: bool,
     ) -> impl Display {
-        struct Displayer<'a, G, F>(&'a G, F, #[cfg(feature = "colors")] bool);
+        struct Displayer<'a, G, F>(&'a G, F, bool);
 
         impl<'a, G: GroupRef, F: Fn(&NodeRef<G>) -> String> Display for Displayer<'a, G, F> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -132,18 +132,12 @@ pub trait GroupRefUtils: GroupRef {
                     String::new(),
                     &self.1,
                     f,
-                    #[cfg(feature = "colors")]
                     self.2,
                 )
             }
         }
 
-        Displayer(
-            self,
-            format_node,
-            #[cfg(feature = "colors")]
-            colors,
-        )
+        Displayer(self, format_node, colors)
     }
 
     /* TODO: WTF is this?
