@@ -136,15 +136,6 @@ pub trait GroupRefUtils: GroupRef {
 
         Displayer(self, format_node, colors)
     }
-
-    /* TODO: WTF is this?
-    /// For now works only when the hierarchy doesn't do loading
-    fn exp<'b, 'c>(&'c self) -> Self::GroupMetadata<'b>
-    where
-        'a: 'b,
-    {
-        self.group_metadata()
-    }*/
 }
 
 /// Without the feature `colors`, the `colors` argument is ignored
