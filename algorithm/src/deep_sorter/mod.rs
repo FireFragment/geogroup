@@ -177,11 +177,11 @@ fn provide_info<Item: SortableItem, InnerNode>(
 
 impl<Item: SortableItem> DeepSorter<Item> {
     /// This sorts all points to binary tree, potentially long-running
-    pub fn new(points: Vec<Item>) -> Self {
+    pub fn new(items: Vec<Item>) -> Self {
         //points.sort_unstable_by_key(|it| it.get_time());
 
         Self {
-            bintree: provide_info(sort_to_binary_tree(points)),
+            bintree: provide_info(sort_to_binary_tree(items)),
         }
     }
 
