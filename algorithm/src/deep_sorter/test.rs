@@ -124,7 +124,7 @@ fn test_deep_sorter_simple_linear() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     // Check that we get the expected leaves
     let leaves = collect_leaves(&root);
@@ -151,7 +151,7 @@ fn test_deep_sorter_with_gaps() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let leaves = collect_leaves(&root);
     assert_eq!(leaves.len(), 5);
@@ -184,7 +184,7 @@ fn test_deep_sorter_identical_positions() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let leaves = collect_leaves(&root);
     assert_eq!(leaves.len(), 4);
@@ -210,7 +210,7 @@ fn test_deep_sorter_two_items() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let leaves = collect_leaves(&root);
     assert_eq!(leaves.len(), 2);
@@ -235,7 +235,7 @@ fn test_deep_sorter_strength_calculation() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let group_info = collect_group_info(&root);
 
@@ -274,7 +274,7 @@ fn test_deep_sorter_hierarchy_consistency() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let leaves = collect_leaves(&root);
     assert_eq!(leaves.len(), 8);
@@ -309,7 +309,7 @@ fn test_deep_sorter_unsorted_input() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let leaves = collect_leaves(&root);
     assert_eq!(leaves.len(), 4);
@@ -336,7 +336,7 @@ fn test_deep_sorter_regression_specific_values() {
     ];
 
     let sorter = DeepSorter::new(items, Params::default());
-    let root = sorter.root();
+    let root = sorter.hierarchy();
 
     let group_info = collect_group_info(&root);
 

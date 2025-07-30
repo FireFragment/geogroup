@@ -15,16 +15,14 @@ pub struct DeepSorter<Item: SortableItem> {
 }
 
 impl<Item: SortableItem> DeepSorter<Item> {
-    pub fn root<'s>(
+    pub fn hierarchy<'s>(
         &'s self,
     ) -> impl hiearchy::lazy::GroupRef<
         GroupMetadata = GroupInfo,
         LeafMetadata = &'s Item,
         NodeMetadata = NodeInfo<Item>,
         StructureErr = Infallible,
-    >
-           + 's
-           + use<'s, Item> {
+    > + 's {
         self.bintree
             .root()
             .map_group_data(|group_ref| {
