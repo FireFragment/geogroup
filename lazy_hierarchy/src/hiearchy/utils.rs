@@ -7,7 +7,7 @@ pub mod dissolve;
 pub mod map;
 pub mod with_parent;
 pub use dissolve::Dissolver;
-pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeMetadata};
+pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeData};
 
 use either::Either;
 #[cfg(feature = "colors")]
@@ -17,12 +17,10 @@ pub trait GroupRefUtils: GroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
     fn collect_to_concrete<'c>(
         &'c self,
-    ) -> Result<
-        concrete::Group<Self::GroupMetadata, Self::LeafMetadata, Self::NodeMetadata>,
-        Self::StructureErr,
-    > {
-        let group_data = self.group_metadata();
-        let node_data = self.node_metadata();
+    ) -> Result<concrete::Group<Self::GroupData, Self::LeafData, Self::NodeData>, Self::StructureErr>
+    {
+        let group_data = self.group_data();
+        let node_data = self.node_data();
         let children = self.get_children()?;
         Ok(concrete::Group::new(
             {
@@ -33,8 +31,8 @@ pub trait GroupRefUtils: GroupRef {
                                 concrete::Node::new_group(g.collect_to_concrete()?)
                             }
                             NodeRef::Leaf(l) => concrete::Node::new_leaf(concrete::Leaf::new(
-                                l.leaf_metadata(),
-                                l.node_metadata(),
+                                l.leaf_data(),
+                                l.node_data(),
                             )),
                         })
                     })
@@ -60,9 +58,9 @@ pub trait GroupRefUtils: GroupRef {
         self,
         fun: F,
     ) -> impl GroupRef<
-        GroupMetadata = GroupDataNew,
-        LeafMetadata = Self::LeafMetadata,
-        NodeMetadata = Self::NodeMetadata,
+        GroupData = GroupDataNew,
+        LeafData = Self::LeafData,
+        NodeData = Self::NodeData,
         StructureErr = Self::StructureErr,
     > {
         utils::map::map_group_data(self, fun)
@@ -76,9 +74,9 @@ pub trait GroupRefUtils: GroupRef {
         self,
         fun: F,
     ) -> impl GroupRef<
-        GroupMetadata = Self::GroupMetadata,
-        LeafMetadata = LeafDataNew,
-        NodeMetadata = Self::NodeMetadata,
+        GroupData = Self::GroupData,
+        LeafData = LeafDataNew,
+        NodeData = Self::NodeData,
         StructureErr = Self::StructureErr,
     > {
         utils::map::map_leaf_data(self, fun)
@@ -92,9 +90,9 @@ pub trait GroupRefUtils: GroupRef {
         self,
         fun: F,
     ) -> impl GroupRef<
-        GroupMetadata = Self::GroupMetadata,
-        LeafMetadata = Self::LeafMetadata,
-        NodeMetadata = NodeDataNew,
+        GroupData = Self::GroupData,
+        LeafData = Self::LeafData,
+        NodeData = NodeDataNew,
         StructureErr = Self::StructureErr,
     > {
         utils::map::map_node_data(self, fun)
@@ -198,7 +196,7 @@ fn format_as_tree_rec<G: GroupRef, F: Fn(&NodeRef<G>) -> String>(
     Ok(())
 }
 
-pub trait WithParentUtils<G: GroupRef>: GroupRef<NodeMetadata = WithParentNodeMetadata<G>> {
+pub trait WithParentUtils<G: GroupRef>: GroupRef<NodeData = WithParentNodeData<G>> {
     /*    /// Reverse the [`with_parent`] operation.
     ///
     /// Common pattern is to call [`with_parent`], then map using the parent and finally get
@@ -221,9 +219,9 @@ pub trait AsGroupRefUtils: AsGroupRef {
         &'a self,
     ) -> Result<
         Concrete<
-            <Self::GroupRef<'a> as GroupRef>::GroupMetadata,
-            <Self::GroupRef<'a> as GroupRef>::LeafMetadata,
-            <Self::GroupRef<'a> as GroupRef>::NodeMetadata,
+            <Self::GroupRef<'a> as GroupRef>::GroupData,
+            <Self::GroupRef<'a> as GroupRef>::LeafData,
+            <Self::GroupRef<'a> as GroupRef>::NodeData,
         >,
         <Self::GroupRef<'a> as GroupRef>::StructureErr,
     >

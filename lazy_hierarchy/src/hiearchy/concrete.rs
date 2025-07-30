@@ -99,39 +99,37 @@ impl<L, G, N> AsGroupRef for ConcreteHiearchy<G, L, N> {
 }
 
 impl<'a, N, L> LeafRef for &'a Leaf<L, N> {
-    type Metadata = &'a L;
-    type NodeMetadata = &'a N;
+    type LeafData = &'a L;
+    type NodeData = &'a N;
 
-    fn leaf_metadata(&self) -> Self::Metadata {
+    fn leaf_data(&self) -> Self::LeafData {
         &self.leaf_data
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
+    fn node_data(&self) -> Self::NodeData {
         &self.node_data
     }
 }
 
 impl<'a, G, L, N> GroupRef for &'a Group<G, L, N> {
-    type NodeMetadata = &'a N;
-    type LeafMetadata = &'a L;
-    type GroupMetadata = &'a G;
+    type NodeData = &'a N;
+    type LeafData = &'a L;
+    type GroupData = &'a G;
     type StructureErr = Infallible;
     type LeafRef = &'a Leaf<L, N>;
 
-    fn get_children(
-        &self,
-    ) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr> {
+    fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr> {
         Ok(self.children.iter().map(|node| match node {
             Node::Group(group) => NodeRef::Group(group),
             Node::Leaf(leaf) => NodeRef::Leaf(leaf),
         }))
     }
 
-    fn group_metadata(&self) -> Self::GroupMetadata {
+    fn group_data(&self) -> Self::GroupData {
         &self.group_data
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
+    fn node_data(&self) -> Self::NodeData {
         &self.node_data
     }
 }

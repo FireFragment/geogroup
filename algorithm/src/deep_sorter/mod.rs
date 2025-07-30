@@ -31,9 +31,9 @@ impl<Item: SortableItem> DeepSorter<Item> {
     pub fn deep_hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
-        GroupMetadata = GroupInfo,
-        LeafMetadata = &'s Item,
-        NodeMetadata = NodeInfo<Item>,
+        GroupData = GroupInfo,
+        LeafData = &'s Item,
+        NodeData = NodeInfo<Item>,
         StructureErr = Infallible,
     > + 's {
         self.bintree
@@ -64,14 +64,14 @@ impl<Item: SortableItem> DeepSorter<Item> {
             .with_parent()
             // Calculate strength
             .map_group_data(|group_ref| {
-                let self_separation = group_ref.group_metadata();
-                let Some(parent) = group_ref.node_metadata().parent else {
+                let self_separation = group_ref.group_data();
+                let Some(parent) = group_ref.node_data().parent else {
                     return GroupInfo {
                         separation: self_separation,
                         strength: StrengthInfo::Root,
                     };
                 };
-                let parent_separation = parent.group_metadata();
+                let parent_separation = parent.group_data();
 
                 GroupInfo {
                     separation: self_separation,

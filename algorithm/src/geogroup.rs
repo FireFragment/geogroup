@@ -22,7 +22,7 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
             "{}",
             self.hierarchy().format_as_tree(
                 |n| match n {
-                    lazy_hierarchy::NodeRef::Group(g) => match g.group_metadata().strength {
+                    lazy_hierarchy::NodeRef::Group(g) => match g.group_data().strength {
                         StrengthInfo::Ok {
                             strength,
                             separation_ratio,
@@ -32,7 +32,7 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
                         ),
                         issue => format!("{issue:?}"),
                     },
-                    lazy_hierarchy::NodeRef::Leaf(l) => format!("{:?}", l.leaf_metadata()),
+                    lazy_hierarchy::NodeRef::Leaf(l) => format!("{:?}", l.leaf_data()),
                 },
                 true
             )
@@ -44,14 +44,14 @@ impl<Item: SortableItem> Sorter<Item> {
     pub fn hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
-        GroupMetadata = GroupInfo,
-        LeafMetadata = &'s Item,
-        NodeMetadata = NodeInfo<Item>,
+        GroupData = GroupInfo,
+        LeafData = &'s Item,
+        NodeData = NodeInfo<Item>,
         StructureErr = Infallible,
     > {
         self.deep_sorter()
             .deep_hierarchy()
-            .dissolve_by_key(|group| match group.group_metadata().strength {
+            .dissolve_by_key(|group| match group.group_data().strength {
                 StrengthInfo::Ok{strength, ..} => (strength) < MAX_DEPTH - self.params.depth,
                 StrengthInfo::Root => false,
 

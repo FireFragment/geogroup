@@ -6,7 +6,7 @@ mod tests;
 
 use std::error::Error;
 
-use crate::utils::WithParentNodeMetadata;
+use crate::utils::WithParentNodeData;
 pub use utils::{AsGroupRefUtils, GroupRefUtils, WithParentUtils};
 
 pub mod utils;
@@ -26,19 +26,19 @@ pub trait AsGroupRef {
 
 pub trait GroupRef: Clone {
     /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
-    type NodeMetadata;
+    type NodeData;
 
     /// Additional data related to a leaf. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
-    type LeafMetadata;
+    type LeafData;
 
     /// Additional data related to a group. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
-    type GroupMetadata;
+    type GroupData;
 
     /// Error encountered while trying to construct the group structure
     type StructureErr: Error;
 
     /// The type of leaf reference
-    type LeafRef: LeafRef<Metadata = Self::LeafMetadata, NodeMetadata = Self::NodeMetadata>;
+    type LeafRef: LeafRef<LeafData = Self::LeafData, NodeData = Self::NodeData>;
 
     /// Returns children of a group.
     fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
@@ -47,21 +47,21 @@ pub trait GroupRef: Clone {
 
     /// Return value can't include references to self (to [`GroupRef`]),
     /// but can include references to the hierarchy this group belongs to.
-    fn group_metadata(&self) -> Self::GroupMetadata;
+    fn group_data(&self) -> Self::GroupData;
 
     /// Return value can't include references to self (to [`GroupRef`]),
     /// but can include references to the hierarchy this group belongs to.
-    fn node_metadata(&self) -> Self::NodeMetadata;
+    fn node_data(&self) -> Self::NodeData;
 }
 
 pub trait LeafRef: Clone {
     /// Additional data related to a leaf
-    type Metadata;
+    type LeafData;
     /// Additional data related to every node in the hierarchy
-    type NodeMetadata;
+    type NodeData;
 
-    fn leaf_metadata(&self) -> Self::Metadata;
-    fn node_metadata(&self) -> Self::NodeMetadata;
+    fn leaf_data(&self) -> Self::LeafData;
+    fn node_data(&self) -> Self::NodeData;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -71,14 +71,14 @@ pub enum NodeRef<G: GroupRef> {
 }
 
 impl<G: GroupRef> NodeRef<G> {
-    pub fn node_data(&self) -> G::NodeMetadata {
+    pub fn node_data(&self) -> G::NodeData {
         match self {
-            NodeRef::Group(group) => group.node_metadata(),
-            NodeRef::Leaf(leaf) => leaf.node_metadata(),
+            NodeRef::Group(group) => group.node_data(),
+            NodeRef::Leaf(leaf) => leaf.node_data(),
         }
     }
 }
 
 impl<T: GroupRef> GroupRefUtils for T {}
-impl<T: GroupRef<NodeMetadata = WithParentNodeMetadata<T>>> WithParentUtils<T> for T {}
+impl<T: GroupRef<NodeData = WithParentNodeData<T>>> WithParentUtils<T> for T {}
 impl<T: AsGroupRef> AsGroupRefUtils for T {}

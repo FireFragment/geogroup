@@ -46,7 +46,7 @@ fn test_map() {
     let ext_var: Vec<i32> = Vec::new(); // Test that the code compiles even if the closure references an external variable
     let binding = hierarchy
         .root()
-        .map_group_data(|group_ref| !group_ref.group_metadata() && ext_var.len() == 0);
+        .map_group_data(|group_ref| !group_ref.group_data() && ext_var.len() == 0);
 
     let collected = binding.collect_to_concrete().unwrap();
 
@@ -86,7 +86,7 @@ fn test_map_leaf_data() {
     let ext_coeficient = 2; // Test that the code compiles even if the closure references an external variable
     let binding = hierarchy
         .root()
-        .map_leaf_data(|leaf_ref| leaf_ref.leaf_metadata() * ext_coeficient);
+        .map_leaf_data(|leaf_ref| leaf_ref.leaf_data() * ext_coeficient);
     let collected = binding.collect_to_concrete().unwrap();
 
     dbg!(&collected);

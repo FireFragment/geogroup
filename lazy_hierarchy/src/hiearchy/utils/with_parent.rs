@@ -16,8 +16,8 @@ pub struct WithParentGroupRef<G: GroupRef> {
 }
 
 #[derive(Clone, Debug)]
-pub struct WithParentNodeMetadata<G: GroupRef> {
-    pub data: G::NodeMetadata,
+pub struct WithParentNodeData<G: GroupRef> {
+    pub data: G::NodeData,
     pub parent: Option<G>,
 }
 
@@ -28,25 +28,25 @@ pub struct WithParentLeafRef<G: GroupRef + Clone> {
 }
 
 impl<G: GroupRef + Clone> LeafRef for WithParentLeafRef<G> {
-    type Metadata = G::LeafMetadata;
-    type NodeMetadata = WithParentNodeMetadata<G>;
+    type LeafData = G::LeafData;
+    type NodeData = WithParentNodeData<G>;
 
-    fn leaf_metadata(&self) -> Self::Metadata {
-        self.this.leaf_metadata()
+    fn leaf_data(&self) -> Self::LeafData {
+        self.this.leaf_data()
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
-        WithParentNodeMetadata {
-            data: self.this.node_metadata(),
+    fn node_data(&self) -> Self::NodeData {
+        WithParentNodeData {
+            data: self.this.node_data(),
             parent: self.parent.clone(),
         }
     }
 }
 
 impl<G: GroupRef + Clone> GroupRef for WithParentGroupRef<G> {
-    type NodeMetadata = WithParentNodeMetadata<G>;
-    type LeafMetadata = G::LeafMetadata;
-    type GroupMetadata = G::GroupMetadata;
+    type NodeData = WithParentNodeData<G>;
+    type LeafData = G::LeafData;
+    type GroupData = G::GroupData;
     type StructureErr = G::StructureErr;
     type LeafRef = WithParentLeafRef<G>;
 
@@ -68,13 +68,13 @@ impl<G: GroupRef + Clone> GroupRef for WithParentGroupRef<G> {
         })
     }
 
-    fn group_metadata(&self) -> Self::GroupMetadata {
-        self.this.group_metadata()
+    fn group_data(&self) -> Self::GroupData {
+        self.this.group_data()
     }
 
-    fn node_metadata<'b>(&self) -> Self::NodeMetadata {
-        WithParentNodeMetadata {
-            data: self.this.node_metadata(),
+    fn node_data<'b>(&self) -> Self::NodeData {
+        WithParentNodeData {
+            data: self.this.node_data(),
             parent: self.parent.clone(),
         }
     }

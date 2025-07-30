@@ -14,7 +14,7 @@ impl<F: Clone> GroupDataMapper<F> {
     ///
     /// # Parameters
     ///
-    /// * `map_fn` - Function that transforms group metadata and node metadata into new group data
+    /// * `map_fn` - Function that transforms group data and node data into new group data
     pub fn new(map_fn: F) -> Self {
         Self { map_fn }
     }
@@ -24,15 +24,15 @@ impl<OrigGr: GroupRef, GroupDataNew, F: Fn(&OrigGr) -> GroupDataNew + Clone> Map
     for GroupDataMapper<F>
 {
     type GroupDataNew = GroupDataNew;
-    type LeafDataNew = OrigGr::LeafMetadata;
-    type NodeDataNew = OrigGr::NodeMetadata;
+    type LeafDataNew = OrigGr::LeafData;
+    type NodeDataNew = OrigGr::NodeData;
 
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
         (self.map_fn)(group_ref)
     }
 
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
-        leaf_ref.leaf_metadata()
+        leaf_ref.leaf_data()
     }
 
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {
@@ -51,7 +51,7 @@ impl<F> LeafDataMapper<F> {
     ///
     /// # Parameters
     ///
-    /// * `map_fn` - Function that transforms leaf metadata and node metadata into new leaf data
+    /// * `map_fn` - Function that transforms leaf data and node data into new leaf data
     pub fn new(map_fn: F) -> Self {
         Self { map_fn }
     }
@@ -60,12 +60,12 @@ impl<F> LeafDataMapper<F> {
 impl<OrigGr: GroupRef, LeafDataNew, F: Fn(&OrigGr::LeafRef) -> LeafDataNew + Clone> Mapper<OrigGr>
     for LeafDataMapper<F>
 {
-    type GroupDataNew = OrigGr::GroupMetadata;
+    type GroupDataNew = OrigGr::GroupData;
     type LeafDataNew = LeafDataNew;
-    type NodeDataNew = OrigGr::NodeMetadata;
+    type NodeDataNew = OrigGr::NodeData;
 
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
-        group_ref.group_metadata()
+        group_ref.group_data()
     }
 
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
@@ -87,7 +87,7 @@ impl<F> NodeDataMapper<F> {
     ///
     /// # Parameters
     ///
-    /// * `map_fn` - Function that transforms leaf metadata and node metadata into new leaf data
+    /// * `map_fn` - Function that transforms leaf data and node data into new leaf data
     pub fn new(map_fn: F) -> Self {
         Self { map_fn }
     }
@@ -96,16 +96,16 @@ impl<F> NodeDataMapper<F> {
 impl<OrigGr: GroupRef, NodeDataNew, F: Fn(NodeRef<OrigGr>) -> NodeDataNew + Clone> Mapper<OrigGr>
     for NodeDataMapper<F>
 {
-    type GroupDataNew = OrigGr::GroupMetadata;
-    type LeafDataNew = OrigGr::LeafMetadata;
+    type GroupDataNew = OrigGr::GroupData;
+    type LeafDataNew = OrigGr::LeafData;
     type NodeDataNew = NodeDataNew;
 
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
-        group_ref.group_metadata()
+        group_ref.group_data()
     }
 
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
-        leaf_ref.leaf_metadata()
+        leaf_ref.leaf_data()
     }
 
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {

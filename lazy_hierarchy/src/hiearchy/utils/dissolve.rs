@@ -30,11 +30,11 @@ impl<G: GroupRef, F: Fn(&G) -> bool + Clone> Dissolver<G, F> {
 }
 
 impl<OrigGr: GroupRef, F: Fn(&OrigGr) -> bool + Clone> GroupRef for Dissolver<OrigGr, F> {
-    type NodeMetadata = OrigGr::NodeMetadata;
+    type NodeData = OrigGr::NodeData;
 
-    type LeafMetadata = OrigGr::LeafMetadata;
+    type LeafData = OrigGr::LeafData;
 
-    type GroupMetadata = OrigGr::GroupMetadata;
+    type GroupData = OrigGr::GroupData;
 
     type StructureErr = OrigGr::StructureErr;
 
@@ -58,12 +58,12 @@ impl<OrigGr: GroupRef, F: Fn(&OrigGr) -> bool + Clone> GroupRef for Dissolver<Or
         )
     }
 
-    fn group_metadata(&self) -> Self::GroupMetadata {
-        self.this.group_metadata()
+    fn group_data(&self) -> Self::GroupData {
+        self.this.group_data()
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
-        self.this.node_metadata()
+    fn node_data(&self) -> Self::NodeData {
+        self.this.node_data()
     }
 }
 

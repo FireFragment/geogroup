@@ -2,7 +2,7 @@ use super::*;
 pub mod convenience;
 pub use convenience::*;
 
-/// A trait that defines how to map metadata between different hierarchy representations.
+/// A trait that defines how to map data between different hierarchy representations.
 ///
 /// # Type Parameters
 ///
@@ -11,17 +11,17 @@ pub use convenience::*;
 ///
 /// # Associated Types
 ///
-/// * `GroupDataNew` - The new type for group metadata after transformation
-/// * `LeafDataNew` - The new type for leaf metadata after transformation
-/// * `NodeDataNew` - The new type for node metadata after transformation
+/// * `GroupDataNew` - The new type for group data after transformation
+/// * `LeafDataNew` - The new type for leaf data after transformation
+/// * `NodeDataNew` - The new type for node data after transformation
 pub trait Mapper<OrigGr: GroupRef>: Clone {
     type GroupDataNew;
     type LeafDataNew;
     type NodeDataNew;
 
-    /// Transform group metadata into the new group data type.
+    /// Transform group data into the new group data type.
     ///
-    /// This method is called whenever group metadata needs to be accessed
+    /// This method is called whenever group data needs to be accessed
     /// in the transformed hierarchy.
     ///
     /// # Parameters
@@ -29,9 +29,9 @@ pub trait Mapper<OrigGr: GroupRef>: Clone {
     /// * `group_ref` - Reference to the original group
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew;
 
-    /// Transform leaf metadata into the new leaf data type.
+    /// Transform leaf data into the new leaf data type.
     ///
-    /// This method is called whenever leaf metadata needs to be accessed
+    /// This method is called whenever leaf data needs to be accessed
     /// in the transformed hierarchy.
     ///
     /// # Parameters
@@ -56,22 +56,22 @@ pub struct MappedLeafRef<OrigGr: GroupRef, M: Mapper<OrigGr>> {
 }
 
 impl<'root, OrigGr: GroupRef, M: Mapper<OrigGr>> LeafRef for MappedLeafRef<OrigGr, M> {
-    type Metadata = M::LeafDataNew;
-    type NodeMetadata = M::NodeDataNew;
+    type LeafData = M::LeafDataNew;
+    type NodeData = M::NodeDataNew;
 
-    fn leaf_metadata(&self) -> M::LeafDataNew {
+    fn leaf_data(&self) -> M::LeafDataNew {
         self.mapper.map_leaf_data(&self.this)
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
+    fn node_data(&self) -> Self::NodeData {
         self.mapper.map_node_data(NodeRef::Leaf(self.this.clone()))
     }
 }
 
 impl<OrigGr: GroupRef, M: Mapper<OrigGr>> GroupRef for MappedGroupRef<OrigGr, M> {
-    type NodeMetadata = M::NodeDataNew;
-    type LeafMetadata = M::LeafDataNew;
-    type GroupMetadata = M::GroupDataNew;
+    type NodeData = M::NodeDataNew;
+    type LeafData = M::LeafDataNew;
+    type GroupData = M::GroupDataNew;
     type StructureErr = <OrigGr as GroupRef>::StructureErr;
     type LeafRef = MappedLeafRef<OrigGr, M>;
 
@@ -93,11 +93,11 @@ impl<OrigGr: GroupRef, M: Mapper<OrigGr>> GroupRef for MappedGroupRef<OrigGr, M>
         })
     }
 
-    fn group_metadata(&self) -> Self::GroupMetadata {
+    fn group_data(&self) -> Self::GroupData {
         self.mapper.map_group_data(&self.this)
     }
 
-    fn node_metadata<'b>(&self) -> Self::NodeMetadata {
+    fn node_data<'b>(&self) -> Self::NodeData {
         self.mapper.map_node_data(NodeRef::Group(self.this.clone()))
     }
 }

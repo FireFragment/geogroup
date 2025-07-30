@@ -33,15 +33,15 @@ impl<'a, L, N> Clone for BTLeafRef<'a, L, N> {
 }
 
 impl<'a, L, N> lazy_hierarchy::LeafRef for BTLeafRef<'a, L, N> {
-    type Metadata = &'a L;
+    type LeafData = &'a L;
 
-    type NodeMetadata = &'a N;
+    type NodeData = &'a N;
 
-    fn leaf_metadata(&self) -> Self::Metadata {
+    fn leaf_data(&self) -> Self::LeafData {
         &self.0
     }
 
-    fn node_metadata(&self) -> Self::NodeMetadata {
+    fn node_data(&self) -> Self::NodeData {
         &self.1
     }
 }
@@ -58,17 +58,17 @@ impl<'a, Leaf, InnerNode, Node> lazy_hierarchy::GroupRef
         }))
     }
 
-    fn group_metadata(&self) -> &'a InnerNode {
+    fn group_data(&self) -> &'a InnerNode {
         &self.inner_node_data
     }
 
-    fn node_metadata(&self) -> &'a Node {
+    fn node_data(&self) -> &'a Node {
         &self.node_data
     }
 
-    type NodeMetadata = &'a Node;
-    type LeafMetadata = &'a Leaf;
-    type GroupMetadata = &'a InnerNode;
+    type NodeData = &'a Node;
+    type LeafData = &'a Leaf;
+    type GroupData = &'a InnerNode;
     type StructureErr = Infallible;
     type LeafRef = BTLeafRef<'a, Leaf, Node>;
 }
