@@ -30,16 +30,6 @@ pub const MAX_DEPTH: Strength = i16::MAX; // TODO: Convert to struct
 /// This type however represents strength times [`i16::MAX`] for the best precision and ease of use compared to floats.
 pub type Strength = i16; // TODO: Convert to struct
 
-/// One item as an input to the [`sort_unordered`] function
-pub struct SortItem<P: Point + Clone, T: Ord + Clone, D> {
-    /// Position of the item. Should be fast to [clone](Clone).
-    pub point: P,
-    /// Timestamp of the item. Should be fast to [clone](Clone).
-    pub time: T,
-    /// Additional data, the algorithm ignores theese
-    pub data: D,
-}
-
 /// An item that can be sorted using the geogroup algorithm
 pub trait SortableItem {
     type Time: Ord + Clone;
