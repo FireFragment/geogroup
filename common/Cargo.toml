@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+owo-colors = { version = "4.2.2", optional = true }
 either = "1.15.0"
+
+[features]
+colors = ["dep:owo-colors"]
+default = []

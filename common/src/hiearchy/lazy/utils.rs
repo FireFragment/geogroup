@@ -1,6 +1,6 @@
 //! Utility types for working with hierarchies
 
-use std::marker::PhantomData;
+use std::{fmt::Display, marker::PhantomData};
 
 use crate::hiearchy::concrete::Group;
 
@@ -10,6 +10,10 @@ pub mod map;
 pub mod with_parent;
 pub use dissolve::Dissolver;
 pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeMetadata};
+
+use either::Either;
+#[cfg(feature = "colors")]
+use owo_colors::OwoColorize;
 
 pub trait GroupRefUtils: GroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
@@ -110,6 +114,38 @@ pub trait GroupRefUtils: GroupRef {
         utils::Dissolver::new(self, fun_should_dissolve)
     }
 
+    /// `format_node` should return just a single line
+    ///
+    /// Without the feature `colors`, the `colors` argument is ignored
+    fn format_as_tree<F: Fn(&NodeRef<Self>) -> String>(
+        &self,
+        format_node: F,
+        colors: bool,
+    ) -> impl Display {
+        struct Displayer<'a, G, F>(&'a G, F, #[cfg(feature = "colors")] bool);
+
+        impl<'a, G: GroupRef, F: Fn(&NodeRef<G>) -> String> Display for Displayer<'a, G, F> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                format_as_tree_rec(
+                    &NodeRef::Group(self.0.to_owned()),
+                    String::new(),
+                    String::new(),
+                    &self.1,
+                    f,
+                    #[cfg(feature = "colors")]
+                    self.2,
+                )
+            }
+        }
+
+        Displayer(
+            self,
+            format_node,
+            #[cfg(feature = "colors")]
+            colors,
+        )
+    }
+
     /* TODO: WTF is this?
     /// For now works only when the hierarchy doesn't do loading
     fn exp<'b, 'c>(&'c self) -> Self::GroupMetadata<'b>
@@ -118,6 +154,55 @@ pub trait GroupRefUtils: GroupRef {
     {
         self.group_metadata()
     }*/
+}
+
+/// Without the feature `colors`, the `colors` argument is ignored
+fn format_as_tree_rec<G: GroupRef, F: Fn(&NodeRef<G>) -> String>(
+    node: &NodeRef<G>,
+    first_line_prefix: String,
+
+    other_lines_prefix: String,
+    format_node: &F,
+    formatter: &mut std::fmt::Formatter<'_>,
+    colors: bool,
+) -> Result<(), std::fmt::Error> {
+    let node_description = (&format_node)(&node).replace("\n", &format!("\n{other_lines_prefix}"));
+
+    #[cfg(feature = "colors")]
+    let node_description = match node {
+        NodeRef::Group(_) => Either::Left(node_description.bold()),
+        NodeRef::Leaf(_) => Either::Right(node_description.bright_blue()),
+    };
+
+    writeln!(formatter, "{first_line_prefix}{node_description}")?;
+
+    if let NodeRef::Group(g) = node {
+        let mut children = g.get_children().unwrap().collect::<Vec<_>>();
+        let last = children.pop();
+        for child in children {
+            format_as_tree_rec(
+                &child,
+                format!("{other_lines_prefix} ├─ "),
+                format!("{other_lines_prefix} │  "),
+                format_node,
+                formatter,
+                colors,
+            )?;
+        }
+
+        if let Some(last) = last {
+            format_as_tree_rec(
+                &last,
+                format!("{other_lines_prefix} ╰─ "),
+                format!("{other_lines_prefix}    "),
+                format_node,
+                formatter,
+                colors,
+            )?;
+        }
+    }
+
+    Ok(())
 }
 
 pub trait WithParentUtils<G: GroupRef>: GroupRef<NodeMetadata = WithParentNodeMetadata<G>> {
