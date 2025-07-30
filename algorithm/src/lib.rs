@@ -4,7 +4,7 @@ use lazy_hierarchy::*;
 pub mod bintree;
 pub mod deep_sorter;
 pub mod geogroup;
-pub use geogroup::Sorter as GeogroupSorter;
+pub use geogroup::Sorter;
 #[cfg(test)]
 mod tests;
 

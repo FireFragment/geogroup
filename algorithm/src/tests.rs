@@ -25,7 +25,7 @@ impl SortableItem for TestItem {
 
 #[test]
 fn geogroup_algo_test() {
-    let sorter = GeogroupSorter::new(
+    let sorter = Sorter::new(
         vec![
             TestItem {
                 time: 1,
