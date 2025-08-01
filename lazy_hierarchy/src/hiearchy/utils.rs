@@ -13,6 +13,28 @@ use either::Either;
 #[cfg(feature = "colors")]
 use owo_colors::OwoColorize;
 
+/// Automatically implemented for all possible types
+pub trait FusableGroupRef<Subgroup: GroupRef>:
+    GroupRef<
+    GroupData = Subgroup::GroupData,
+    NodeData = Subgroup::NodeData,
+    LeafData = fused::MainLeafData<Subgroup::LeafData, Subgroup>,
+    StructureErr = Subgroup::StructureErr,
+>
+{
+    /// A hierarchy adapter which lets you "fuse" multiple [`GroupRef`]s into a single hierarchy.
+    ///
+    /// It takes a hierarchy whose [`LeafData`](GroupRef::LeafData) is [`MainLeafData`].
+    ///  - Leaves matching [`MainLeafData::RealLeaf`] are left as leaves
+    ///  - Leaves matching [`MainLeafData::Subgroup`] are changed to groups
+    ///
+    /// Note: this has nothing in common with [`Iterator::fuse`]
+    fn fuse(self) -> fused::FGroupRef<Self, Subgroup> {
+        fused::FGroupRef::new(self)
+    }
+}
+
+/// Automatically implemented for all possible types
 pub trait GroupRefUtils: GroupRef {
     /// Convert to concrete hierarchy by instantiating all the items
     fn collect_to_concrete<'c>(

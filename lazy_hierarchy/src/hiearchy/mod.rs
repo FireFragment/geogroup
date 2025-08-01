@@ -1,4 +1,5 @@
 pub mod concrete;
+pub mod fused;
 pub use concrete::ConcreteHiearchy as Concrete;
 
 #[cfg(test)]
@@ -7,6 +8,7 @@ mod tests;
 use std::error::Error;
 
 use crate::utils::WithParentNodeData;
+use either::Either;
 pub use utils::{AsGroupRefUtils, GroupRefUtils, WithParentUtils};
 
 pub mod utils;
