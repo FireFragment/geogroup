@@ -1,3 +1,4 @@
+pub mod cached;
 pub mod concrete;
 pub mod fused;
 pub use concrete::ConcreteHiearchy as Concrete;
@@ -29,16 +30,12 @@ pub trait AsGroupRef {
 pub trait GroupRef: Clone {
     /// Additional data related to any node alongside [`LeafMetadata`] and [`GroupMetadata`]
     type NodeData;
-
     /// Additional data related to a leaf. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
     type LeafData;
-
     /// Additional data related to a group. See also [`Self::NodeMetadata`](GroupRef::NodeMetadata)
     type GroupData;
-
     /// Error encountered while trying to construct the group structure
     type StructureErr: Error;
-
     /// The type of leaf reference
     type LeafRef: LeafRef<LeafData = Self::LeafData, NodeData = Self::NodeData>;
 
