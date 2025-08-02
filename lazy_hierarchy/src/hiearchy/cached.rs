@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::{cell::RefCell, collections::HashMap};
 
 use super::*;
@@ -8,27 +9,68 @@ pub struct HierarchyCache<
     OrigGr: GroupRef,
     GroupKey: Hash,
     LeafKey: Hash,
-    FGroupId: Fn(&OrigGr) -> GroupKey + Clone,
-    FLeafId: Fn(&OrigGr::LeafData) -> LeafKey + Clone,
+    FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+    FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
 > {
+    /// If returns [None], it means that this group can't be cached.
     get_group_id: FGroupId,
+    /// If returns [None], it means that this leaf can't be cached.
     get_leaf_id: FLeafId,
-    cache_group_data: HashMap<GroupKey, FGroupId>,
-    cache_leaf_data: HashMap<LeafKey, FLeafId>,
+    cache_group_data: RefCell<HashMap<GroupKey, OrigGr::GroupData>>,
+    cache_group_structure: RefCell<HashMap<GroupKey, CachedGroup<GroupKey, OrigGr>>>,
+    cache_leaf_data: RefCell<HashMap<LeafKey, OrigGr::LeafData>>,
 }
 
-#[derive(Clone)]
-pub struct CGroupRef<'a, OrigGr: GroupRef>(&'a Group<OrigGr>);
+struct CachedGroup<GroupKey, OrigGr: GroupRef> {
+    id: GroupKey,
+    orig_group: OrigGr,
+    children: Option<Vec<CachedGroup<GroupKey, OrigGr>>>,
+}
 
-#[derive(Clone)]
-pub struct CLeafRef<'a, OrigGr: GroupRef>(&'a Leaf<OrigGr::LeafRef>);
+pub struct CGroupRef<
+    'cache,
+    OrigGr: GroupRef,
+    GroupKey: Hash,
+    LeafKey: Hash,
+    FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+    FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+> {
+    this: CGroupRefBody<'cache, GroupKey, OrigGr>,
+    cache: &'cache HierarchyCache<OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>,
+}
 
-impl<'a, OrigGr: GroupRef> GroupRef for CGroupRef<'a, OrigGr> {
+enum CGroupRefBody<'cache, GroupKey, OrigGr: GroupRef> {
+    Cached(&'cache CachedGroup<GroupKey, OrigGr>),
+    /// Used in the rare case when writing into the cache's [RefCell] failed, possibly because of attempting multiple writes simultaneously
+    Uncached(OrigGr),
+}
+
+pub struct CLeafRef<
+    'cache,
+    OrigGr: GroupRef,
+    GroupKey: Hash,
+    LeafKey: Hash,
+    FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+    FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+> {
+    this: OrigGr::LeafRef,
+    cache: &'cache HierarchyCache<OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>,
+}
+
+impl<
+        'cache,
+        OrigGr: GroupRef,
+        GroupKey: Hash,
+        LeafKey: Hash,
+        FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+        FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+    > GroupRef for CGroupRef<'cache, OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>
+{
     type NodeData = OrigGr::NodeData;
     type LeafData = OrigGr::LeafData;
     type GroupData = OrigGr::GroupData;
     type StructureErr = OrigGr::StructureErr;
-    type LeafRef = CLeafRef<'a, OrigGr>;
+    type LeafRef = CLeafRef<'cache, OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>;
 
     fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
@@ -46,7 +88,15 @@ impl<'a, OrigGr: GroupRef> GroupRef for CGroupRef<'a, OrigGr> {
     }
 }
 
-impl<'a, OrigGr: GroupRef> LeafRef for CLeafRef<'a, OrigGr> {
+impl<
+        'cache,
+        OrigGr: GroupRef,
+        GroupKey: Hash,
+        LeafKey: Hash,
+        FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+        FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+    > LeafRef for CLeafRef<'cache, OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>
+{
     type LeafData = <OrigGr::LeafRef as LeafRef>::LeafData;
     type NodeData = <OrigGr::LeafRef as LeafRef>::NodeData;
 
@@ -59,20 +109,45 @@ impl<'a, OrigGr: GroupRef> LeafRef for CLeafRef<'a, OrigGr> {
     }
 }
 
-struct Group<OrigGr: GroupRef> {
-    orig_group_ref: OrigGr,
-    children: RefCell<Option<Vec<Node<OrigGr>>>>,
-    group_data: RefCell<Option<OrigGr::GroupData>>,
-    node_data: RefCell<Option<OrigGr::NodeData>>,
+impl<'cache, GroupKey, OrigGr: GroupRef> Clone for CGroupRefBody<'cache, GroupKey, OrigGr> {
+    fn clone(&self) -> Self {
+        match self {
+            CGroupRefBody::Cached(cached_group) => CGroupRefBody::Cached(cached_group),
+            CGroupRefBody::Uncached(group_ref) => CGroupRefBody::Uncached(group_ref.clone()),
+        }
+    }
 }
 
-pub struct Leaf<OrigLf: LeafRef> {
-    orig_leaf_ref: OrigLf,
-    leaf_data: RefCell<Option<OrigLf::LeafData>>,
-    node_data: RefCell<Option<OrigLf::NodeData>>,
+impl<
+        'cache,
+        OrigGr: GroupRef,
+        GroupKey: Hash,
+        LeafKey: Hash,
+        FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+        FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+    > Clone for CGroupRef<'cache, OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>
+{
+    fn clone(&self) -> Self {
+        Self {
+            this: self.this.clone(),
+            cache: self.cache,
+        }
+    }
 }
 
-enum Node<OrigGr: GroupRef> {
-    Group(Group<OrigGr>),
-    Leaf(Leaf<OrigGr::LeafRef>),
+impl<
+        'cache,
+        OrigGr: GroupRef,
+        GroupKey: Hash,
+        LeafKey: Hash,
+        FGroupId: Fn(&OrigGr) -> Option<GroupKey>,
+        FLeafId: Fn(&OrigGr::LeafData) -> Option<LeafKey>,
+    > Clone for CLeafRef<'cache, OrigGr, GroupKey, LeafKey, FGroupId, FLeafId>
+{
+    fn clone(&self) -> Self {
+        Self {
+            this: self.this.clone(),
+            cache: self.cache.clone(),
+        }
+    }
 }
