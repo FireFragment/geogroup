@@ -6,14 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-geo = { version = "0.28.0", optional = true }
 lazy_hierarchy = { path = "../lazy_hierarchy" }
 itertools = "0.14.0"
 log = "0.4.27"
+geogroup_common = { path = "../common", default-features = false }
 
 [features]
-geo = ["dep:geo"]
-default = ["geo"]
 debug_colors = ["lazy_hierarchy/colors"]
 
 

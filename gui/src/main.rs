@@ -1,15 +1,19 @@
+#![allow(unused)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 mod action;
 mod gui;
 mod hiearchy;
+//mod long_running_container;
 mod style;
 mod tabbar;
+use backend::gg_prelude::*;
 use gui::Message;
 use hiearchy::TemplateHiearchy;
 use tabbar::tabbar;
 
+use backend::gg_prelude::*;
 use clap::Parser;
 use egui_extras::Size;
 use egui_inbox::UiInbox;
@@ -20,9 +24,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use eframe::*;
+use eframe::{egui, emath, glow};
 use egui::Frame;
-use egui::*;
 use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
 
@@ -50,6 +53,12 @@ struct CliArgs {
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+
+    log::info!(
+        "Starting {} version {}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
 
     if let Err(error) = dotenv::dotenv() {
         log::warn!("Failed to load .env file: {error}\nDeveloper info: {error:?}")

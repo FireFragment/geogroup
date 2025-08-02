@@ -6,7 +6,7 @@ members = [
     "gui",
     "loaders",
     "backend",
-    "naming",
+    "naming", "common",
     #"apply",
 ]
 #default-members = ["gui"]

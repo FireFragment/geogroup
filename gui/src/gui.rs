@@ -1,20 +1,29 @@
 //! The core of this crate, the code rendering all the GUI
 
+use derive_more::From;
+use eframe::egui::TextStyle;
+use egui::{
+    Align, Button, CursorIcon, FontFamily, FontId, Layout, Margin, ProgressBar, RichText, Sense,
+    Stroke, UiBuilder, Vec2, ViewportCommand, Widget,
+};
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
+use geogroup_backend::lazy_hierarchy::NodeRef;
 use std::ops::RangeInclusive;
 use std::thread;
+use std::time::Duration;
+use thiserror::Error;
 
 use super::*;
 
 pub(crate) fn ribbon_slider<Num: emath::Numeric>(
-    ui: &mut Ui,
+    ui: &mut egui::Ui,
     slider: egui::Slider,
     default: Num,
     name: &str,
     help_text: &str,
     cfg_changed: Option<&mut bool>,
-) -> Response {
+) -> egui::Response {
     ui.horizontal(|ui| {
         let label = ui
             .label(name)
@@ -39,7 +48,7 @@ pub(crate) fn ribbon_slider<Num: emath::Numeric>(
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.style_changed {
             self.style_changed = false;
             style::apply(ctx, &self.style_params);
@@ -49,19 +58,57 @@ impl eframe::App for App {
             message.perform(self, ctx);
         }
 
-        match &mut self.content {
-            AppContent::WelcomePage(welcome_page) => welcome_page.draw(ctx, &self.inbox),
+        if let Some(cpu_usage) = frame.info().cpu_usage {
+            egui::TopBottomPanel::bottom("performance").show(ctx, |ui| {
+                let since_last_frame = ctx.input(|input| input.unstable_dt);
 
-            AppContent::MainPage(_) => {
-                self.main_page(ctx);
-            }
+                egui::ProgressBar::new(cpu_usage / (1.0 / 60.0))
+                    .rounding(egui::Rounding::ZERO)
+                    .ui(ui);
+                ctx.request_repaint();
+
+                //std::thread::sleep(Duration::from_millis(1000 / 90));
+            });
+        };
+
+        match &mut self.content {
+            AppContent::WelcomePage(_) => self.draw_welcome_page(ctx),
+            AppContent::MainPage(_) => self.draw_main_page(ctx),
         }
     }
 }
 
 impl App {
+    fn load_dir(&mut self, dir: PathBuf) {
+        self.content = MainPage::new(dir).into();
+        //
+
+        /*let sender = inbox.sender();
+
+        std::thread::spawn(move || {
+            use geogroup_backend::HiearchyItem as HI;
+            let res = backend::load_directory(&folder);
+            // Send will return an error if the receiver has been dropped
+            // but unless you have a long running task that will send multiple messages
+            // you can just ignore the error
+            sender
+                .send(Message::SetContent(match res {
+                    Ok(HI::Group(hiearchy, _)) => {
+                        AppContent::MainPage(MainPage::new(hiearchy, folder))
+                    }
+                    Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(String::from(
+                        "Please choose a directory",
+                    ))),
+                    Err(err) => AppContent::WelcomePage(WelcomePage::Error(err.to_string())),
+                }))
+                .ok();
+        });
+
+        *self = Self::Loading("Loading files".into());*/
+    }
+
     /// Panics if `content` is not [`AppContent::MainPage`]
-    pub(crate) fn main_page(&mut self, ctx: &Context) {
+    pub(crate) fn draw_main_page(&mut self, ctx: &egui::Context) {
         let AppContent::MainPage(ref mut main_page) = self.content else {
             panic!(
                 "AppContent is not `MainPage` when `App::main_page` was called.
@@ -99,7 +146,7 @@ impl App {
             let mut cfg_changed = false;
 
             ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
-                animated_pager(ui, pane, &TransitionStyle::horizontal(ui), Id::from("ribbon"), |ui, pane| {
+                animated_pager(ui, pane, &TransitionStyle::horizontal(ui), egui::Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
                             let mut sort_btn_clicked = false;
@@ -256,7 +303,7 @@ impl App {
         });
 
         egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
-            if let Some(ref progress) = main_page.progress {
+            /*if let Some(ref progress) = main_page.progress {
                 ui.horizontal(|ui| {
                     ui.spinner();
                     ui.label(match progress.action {
@@ -275,6 +322,13 @@ impl App {
                 });
             } else {
                 ui.label("Idle");
+            }*/
+
+            if let Some(error) = self.errors.last() {
+                error_ui(ui, &format!("{error}"));
+                if ui.button("✔").clicked() {
+                    self.errors.pop();
+                }
             }
         });
 
@@ -291,7 +345,7 @@ impl App {
 }
 
 pub fn show_hiearchy(
-    ui: &mut Ui,
+    ui: &mut egui::Ui,
     hiearchy: &TemplateHiearchy,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
@@ -307,21 +361,25 @@ pub fn show_hiearchy(
 }
 
 fn show_hiearchy_inner(
-    ui: &mut Ui,
+    ui: &mut egui::Ui,
     hiearchy: &TemplateHiearchy,
     selected_vec: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
 ) {
-    todo!()
-    /*
+    // TODO: Maybe we don't have to crash so horribly?
     assert!(selected_vec.len() >= current_depth);
 
     use egui_extras::{Column, TableBuilder};
 
+    let children = hiearchy
+        .get_children()
+        .expect("TODO") //TODO: Handle
+        .collect_vec();
+
     let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
-        if let geogroup_backend::HiearchyItem::Group(g, _) = &hiearchy[*selection_idx] {
+        if let lazy_hierarchy::NodeRef::Group(g) = &children[*selection_idx] {
             Some(g)
         } else {
             None
@@ -342,12 +400,9 @@ fn show_hiearchy_inner(
             .sense(Sense::click())
             .body(|body| {
                 body.heterogeneous_rows(
-                    hiearchy.iter().map(|item| {
-                        use geogroup_backend::HiearchyItem as HI;
-                        match item {
-                            HI::Group(_, _) => group_row_size,
-                            HI::Item(_) => image_scale as f32,
-                        }
+                    children.iter().map(|item| match item {
+                        lazy_hierarchy::NodeRef::Group(_) => group_row_size,
+                        lazy_hierarchy::NodeRef::Leaf(_) => image_scale as f32,
                     }),
                     |mut row| {
                         let idx = row.index();
@@ -360,17 +415,35 @@ fn show_hiearchy_inner(
                         );
 
                         row.col(|ui| {
-                            match &hiearchy[idx] {
-                                geogroup_backend::HiearchyItem::Group(_, name) => {
-                                    ui.add(Label::new(format!("🗁 {name}")).selectable(false));
-                                }
-                                geogroup_backend::HiearchyItem::Item(item) => {
-                                    ui.horizontal_top(|ui| {
-                                        if let Some(file_path) = item.path.to_str() {
-                                            Image::new(format!("file://{file_path}")).ui(ui);
-                                        }
+                            let child = &children[idx];
+                            let child_path = child.node_data();
+                            let child_name = child_path
+                                .file_name()
+                                .map(|n| Either::Left(n.display()))
+                                .unwrap_or(Either::Right("[invalid name]"));
 
-                                        ui.add(Label::new(&item.name).selectable(false))
+                            match child {
+                                lazy_hierarchy::NodeRef::Group(folder) => {
+                                    // TODO: Group names
+                                    ui.add(
+                                        egui::Label::new(format!("🗁 {child_name}"))
+                                            .selectable(false),
+                                    );
+                                }
+                                lazy_hierarchy::NodeRef::Leaf(leaf) => {
+                                    ui.horizontal_top(|ui| {
+                                        egui::Image::new(format!(
+                                            "file://{}",
+                                            leaf.node_data()
+                                                .to_str()
+                                                .unwrap_or("invalid file name") // This is a bit weird handling, but it works
+                                        ))
+                                        .ui(ui);
+
+                                        ui.add(
+                                            egui::Label::new(format!("{child_name}"))
+                                                .selectable(false),
+                                        )
                                     });
                                 }
                             };
@@ -398,10 +471,10 @@ fn show_hiearchy_inner(
             flatten_mode,
             image_scale,
         )
-    }*/
+    }
 }
 
-pub(crate) fn error_ui(ui: &mut Ui, error: &str) {
+pub(crate) fn error_ui(ui: &mut egui::Ui, error: &str) {
     ui.colored_label(ui.visuals().error_fg_color, format!("⊗ {}", error));
 }
 
@@ -418,7 +491,7 @@ fn widgetvisuals_to_frame(
     }
 }
 
-pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Response {
+pub fn big_btn(ui: &mut egui::Ui, icon: &str, heading: &str, description: &str) -> egui::Response {
     ui.scope_builder(UiBuilder::new().sense(Sense::click()), |ui| {
         let response = ui.response();
         let visuals = ui.style().interact(&response);
@@ -442,8 +515,17 @@ pub fn big_btn(ui: &mut Ui, icon: &str, heading: &str, description: &str) -> Res
     .response
 }
 
-impl WelcomePage {
-    fn draw(&mut self, ctx: &egui::Context, inbox: &UiInbox<Message>) {
+impl WelcomePage {}
+
+impl App {
+    /// Panics if `self.app_content` is not WelcomePage
+    fn draw_welcome_page(&mut self, ctx: &egui::Context) {
+        let AppContent::WelcomePage(ref welcome_page) = self.content else {
+            panic!("`self.app_content` is not `WelcomePage`")
+        };
+
+        let welcome_page = welcome_page.to_owned();
+
         egui::SidePanel::left("recents")
             .frame(Frame::default().inner_margin(Margin::same(32.0)))
             .show(ctx, |ui| {
@@ -504,10 +586,10 @@ impl WelcomePage {
                 }));
                 ui.add_space(32.0);
 
-                if matches!(self, Self::Normal | Self::Error(_)) {
+                if !matches!(welcome_page, WelcomePage::Loading(_)) {
                     //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
 
-                    self.pick_file_btn(ui, inbox);
+                    self.pick_file_btn(ui);
                     let clicked = big_btn(
                         ui,
                         "🗋",
@@ -523,16 +605,13 @@ impl WelcomePage {
 
                 ui.horizontal(|ui| ui.link(" GitHub"));
 
-                match self {
-                    Self::Normal => (),
-                    Self::Loading(msg) => {
+                match welcome_page {
+                    WelcomePage::Normal => {}
+                    WelcomePage::Loading(msg) => {
                         ui.horizontal(|ui| {
                             ui.spinner();
                             ui.label(&*msg);
                         });
-                    }
-                    Self::Error(err) => {
-                        gui::error_ui(ui, err);
                     }
                 }
             });
@@ -544,13 +623,13 @@ impl WelcomePage {
                     .inner_margin(Margin::same(32.0)),
             )
             .show(ctx, |ui| {
+                // TODO: Actually implement
                 ui.heading("Recent projects");
 
                 ui.label("No recently opened projects\nUse the left panel to open a folder with your photos")
             });
     }
-
-    fn pick_file_btn(&mut self, ui: &mut Ui, inbox: &UiInbox<Message>) {
+    fn pick_file_btn(&mut self, ui: &mut egui::Ui) {
         let clicked = big_btn(
             ui,
             "🗁",
@@ -560,36 +639,9 @@ impl WelcomePage {
         .clicked();
         if clicked {
             if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                self.action_load_dir(inbox, folder);
+                self.load_dir(folder);
             }
         };
-    }
-
-    fn action_load_dir(&mut self, inbox: &UiInbox<Message>, folder: PathBuf) {
-        todo!()
-
-        /*let sender = inbox.sender();
-
-        std::thread::spawn(move || {
-            use geogroup_backend::HiearchyItem as HI;
-            let res = backend::load_directory(&folder);
-            // Send will return an error if the receiver has been dropped
-            // but unless you have a long running task that will send multiple messages
-            // you can just ignore the error
-            sender
-                .send(Message::SetContent(match res {
-                    Ok(HI::Group(hiearchy, _)) => {
-                        AppContent::MainPage(MainPage::new(hiearchy, folder))
-                    }
-                    Ok(HI::Item(_)) => AppContent::WelcomePage(WelcomePage::Error(String::from(
-                        "Please choose a directory",
-                    ))),
-                    Err(err) => AppContent::WelcomePage(WelcomePage::Error(err.to_string())),
-                }))
-                .ok();
-        });
-
-        *self = Self::Loading("Loading files".into());*/
     }
 }
 
@@ -602,12 +654,19 @@ pub enum Message {
     SetProgress(Option<Progress>),
 }
 
+#[derive(Error, Debug)]
+pub enum AppWideError {
+    #[error(transparent)]
+    SelectedNotFileNorDir(#[from] backend::fs_hierarchy::ErrFileNorDir),
+}
+
 pub struct App {
     pub content: AppContent,
     pub inbox: UiInbox<Message>,
     pub args: CliArgs,
     pub style_params: style::Params,
     pub style_changed: bool,
+    pub errors: Vec<AppWideError>, // TODO: Show it on every page (every variant of AppContent)
 }
 
 impl App {
@@ -617,6 +676,7 @@ impl App {
             inbox: UiInbox::default(),
             style_params: Default::default(),
             style_changed: false,
+            errors: Vec::new(),
             args,
         };
 
@@ -628,14 +688,14 @@ impl App {
         };
 
         if let Some(ref dir) = app.args.dir {
-            welcome_page.action_load_dir(&app.inbox, dir.to_owned());
+            //welcome_page.action_load_dir(&app.inbox, dir.to_owned());
         }
 
         app
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub enum AppContent {
     WelcomePage(WelcomePage),
     MainPage(MainPage),
@@ -644,7 +704,6 @@ pub enum AppContent {
 #[derive(Debug)]
 struct MainPage {
     pane: Option<PaneContent>,
-    src_dir: PathBuf,
     hiearchy: hiearchy::TemplateHiearchy,
     flatten_mode: Option<FlattenMode>,
     selection: Vec<usize>,
@@ -690,11 +749,11 @@ enum FlattenMode {
     OnlyRoot,
 }
 
-#[derive(Debug)]
+// NOTE: As of writing this, WelcomePage is cloned every frame in draw_welcome_page, be careful in increasing its size
+#[derive(Debug, Clone)]
 enum WelcomePage {
     Normal,
     Loading(String),
-    Error(String),
 }
 
 impl Message {
@@ -720,37 +779,48 @@ impl Message {
 }
 
 impl MainPage {
+    /// Panics on `!folder.is_dir()`
     fn new(
         //hiearchy: Vec<geogroup_backend::HiearchyItem<PathBuf, PathBuf>>,
         folder: PathBuf,
     ) -> MainPage {
+        assert!(
+            folder.is_dir(),
+            "MainPage::new called with non-directory as an argument: {}",
+            folder.display()
+        );
+
+        let Ok(NodeRef::Group(hiearchy)) = backend::fs_hierarchy::new(folder) else {
+            unreachable!()
+        };
+
         MainPage {
-            hiearchy: todo!(), /*hiearchy
-                               .into_iter()
-                               .map(|h| {
-                                   h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
-                                       .map_leafs(&|path| {
-                                           let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
-                                           hiearchy::FileInfo {
-                                               name: filename_to_string(path.file_name()),
-                                               path,
-                                               pos: loc_data.as_ref().and_then(|loc_data| {
-                                                   loc_data
-                                                       .location
-                                                       .as_ref()
-                                                       .ok()
-                                                       .map(|rect| rect.center().into())
-                                               }),
-                                               date: loc_data.as_ref().and_then(|loc_data| {
-                                                   loc_data.time.as_ref().ok().map(|dates| dates[0])
-                                                   // TODO: Don't use just the first one
-                                               }),
-                                           }
-                                       })
-                               })
-                               .collect(),*/
+            hiearchy,
+            /*hiearchy
+            .into_iter()
+            .map(|h| {
+                h.map_group_data(&|path: PathBuf| filename_to_string(path.file_name()))
+                    .map_leafs(&|path| {
+                        let loc_data = backend::loaders::GeneralLoader.get_data(&path).ok(); // TODO: Do something with unexpected errors
+                        hiearchy::FileInfo {
+                            name: filename_to_string(path.file_name()),
+                            path,
+                            pos: loc_data.as_ref().and_then(|loc_data| {
+                                loc_data
+                                    .location
+                                    .as_ref()
+                                    .ok()
+                                    .map(|rect| rect.center().into())
+                            }),
+                            date: loc_data.as_ref().and_then(|loc_data| {
+                                loc_data.time.as_ref().ok().map(|dates| dates[0])
+                                // TODO: Don't use just the first one
+                            }),
+                        }
+                    })
+            })
+            .collect(),*/
             pane: Some(PaneContent::Grouping),
-            src_dir: folder,
             flatten_mode: None,
             selection: Vec::new(),
             image_scale: 48,

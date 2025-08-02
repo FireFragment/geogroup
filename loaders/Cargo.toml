@@ -8,6 +8,7 @@ kamadak-exif = { version = "0.5.5", optional = true }
 geo = "0.28.0"
 thiserror = "1.0.63"
 chrono = { version = "0.4.38", optional = true }
+geogroup_common = { path = "../common" }
 
 [features]
 default = ["exif"]

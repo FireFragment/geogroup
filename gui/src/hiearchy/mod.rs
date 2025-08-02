@@ -17,4 +17,4 @@ use super::*;
 ///     - Lower RAM usage.
 ///
 /// If you are interested in examining the actual structure of hiearchy, see [`hiearchy::lazy`]
-pub type TemplateHiearchy = (); // TODO
+pub type TemplateHiearchy = backend::fs_hierarchy::FolderRef; // TODO

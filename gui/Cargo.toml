@@ -22,3 +22,5 @@ egui-theme-switch = "=0.2.1"
 log = "0.4.26"
 font-kit = "0.14.2"
 dotenv = "0.15.0"
+thiserror = "2.0.12"
+derive_more = { version = "2.0.1", features = ["from"] }

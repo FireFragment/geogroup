@@ -1,8 +1,9 @@
 use super::*;
+use eframe::egui::{Align, Button, Color32, Layout, Stroke};
 use egui::Frame;
 
 pub fn tabbar<'a, TabId: PartialEq>(
-    ui: &mut Ui,
+    ui: &mut egui::Ui,
     selected_tab: &mut Option<TabId>,
     tabs: impl IntoIterator<Item = (TabId, &'a str)>,
 ) {

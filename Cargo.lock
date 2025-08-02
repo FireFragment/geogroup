@@ -1130,6 +1130,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c297a1c74b71ae29df00c3e22dd9534821d60eb9af5a0192823fa2acea70c2a"
 
 [[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1968,7 +1988,7 @@ dependencies = [
 name = "geogroup_algo"
 version = "0.1.0"
 dependencies = [
- "geo 0.28.0",
+ "geogroup_common",
  "itertools 0.14.0",
  "lazy_hierarchy",
  "log",
@@ -1978,12 +1998,24 @@ dependencies = [
 name = "geogroup_backend"
 version = "0.1.0"
 dependencies = [
+ "either",
  "geo 0.29.3",
  "geogroup_algo",
+ "geogroup_common",
  "geogroup_loaders",
  "geogroup_naming",
+ "itertools 0.14.0",
  "lazy_hierarchy",
+ "log",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "geogroup_common"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "geo 0.28.0",
 ]
 
 [[package]]
@@ -1992,6 +2024,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
+ "derive_more",
  "dotenv",
  "eframe",
  "egui-theme-switch",
@@ -2004,6 +2037,7 @@ dependencies = [
  "image",
  "log",
  "rfd",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2012,6 +2046,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "geo 0.28.0",
+ "geogroup_common",
  "kamadak-exif",
  "thiserror 1.0.69",
 ]

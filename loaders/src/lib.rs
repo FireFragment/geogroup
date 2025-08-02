@@ -3,6 +3,8 @@ use std::error::Error as StdError;
 use std::path::Path;
 use thiserror::Error;
 
+use geogroup_common as common;
+
 #[cfg(feature = "exif")]
 pub mod exif_loader;
 pub use exif_loader::ExifLoader;
@@ -20,12 +22,48 @@ pub struct LocData<
     /// First element must always be before or equal to the second element.
     ///
     /// If the file corresponds to a single instant, both elements are equal.
-    pub time: Result<[DateTime<chrono::FixedOffset>; 2], TimeError>,
+    time: Result<[DateTime<chrono::FixedOffset>; 2], TimeError>,
     /// Rectangle containing the real location of the file, if in doubt
     ///
     /// It might be that the file corresponds to multiple locations (eg. a GPX file).
     /// In that case, this rect should contain all of them
-    pub location: Result<geo::Rect, LocationError>,
+    location: Result<geo::Rect, LocationError>,
+}
+
+#[derive(Error)]
+pub enum TimeOrLocError<T, L> {
+    #[error("failed to get datetime of an item: {0}")]
+    TimeError(T),
+
+    #[error("failed to get location of an item: {0}")]
+    LocationError(L),
+}
+
+impl<TimeError: Clone, LocationError: Clone> LocData<TimeError, LocationError> {
+    pub fn as_sortable_item(
+        &self,
+    ) -> Result<
+        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>>,
+        TimeOrLocError<TimeError, LocationError>,
+    > {
+        // For now, we ignore the "deltas" and just return everything as an average of values
+        Ok(common::ConcreteSortableItem {
+            position: self
+                .location
+                .as_ref()
+                .map_err(|err| TimeOrLocError::LocationError(err.to_owned()))?
+                .center()
+                .into(),
+            time: {
+                let [start, end] = self
+                    .time
+                    .as_ref()
+                    .map_err(|err| TimeOrLocError::TimeError(err.to_owned()))?;
+                *start + (*end - *start) / 2
+            },
+            data: (),
+        })
+    }
 }
 
 impl<FromTimeError, FromLocationError> LocData<FromTimeError, FromLocationError> {

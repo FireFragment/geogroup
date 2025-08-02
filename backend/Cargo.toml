@@ -10,4 +10,8 @@ lazy_hierarchy = { path = "../lazy_hierarchy" }
 geogroup_algo = { path = "../algorithm" }
 geogroup_loaders = { path = "../loaders" }
 geogroup_naming = { path = "../naming" }
+geogroup_common = { path = "../common" }
 thiserror = "1.0.63"
+log = "0.4.27"
+either = "1.15.0"
+itertools = "0.14.0"

@@ -1,0 +1,13 @@
+[package]
+name = "geogroup_common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geo = { version = "0.28.0", optional = true }
+chrono = { version = "0.4.41", optional = true }
+
+[features]
+geo = ["dep:geo"]
+chrono = ["dep:chrono"]
+default = ["geo", "chrono"]
