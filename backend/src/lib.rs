@@ -19,6 +19,7 @@ pub mod gg_prelude {
     pub use lazy_hierarchy::prelude::*;
     pub use loaders::DataLoader as _;
 
+    pub use chrono::DateTime;
     pub use either::Either;
     pub use itertools::Itertools;
     pub use thiserror::Error;
