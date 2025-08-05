@@ -4,6 +4,7 @@ use std::{
 };
 
 pub mod fs_hierarchy;
+pub mod main_hierarchy;
 pub use geogroup_common::*;
 pub use gg_prelude::*;
 
