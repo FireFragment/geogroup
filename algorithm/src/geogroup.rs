@@ -10,6 +10,19 @@ pub struct Sorter<Item: SortableItem> {
     params: Params,
 }
 
+impl<Item: SortableItem + Debug> Debug for Sorter<Item>
+where
+    Item::Time: std::fmt::Debug,
+    Item::Position: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sorter")
+            .field("deep_sorter", &self.deep_sorter)
+            .field("params", &self.params)
+            .finish()
+    }
+}
+
 impl<Item: SortableItem + Debug> Sorter<Item> {
     /// Pretty print the resulting tree and parameters
     pub fn debug(&self) {

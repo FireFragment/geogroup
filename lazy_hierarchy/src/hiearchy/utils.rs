@@ -1,6 +1,9 @@
 //! Utility types for working with hierarchies
 
-use std::{fmt::Display, marker::PhantomData};
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+};
 
 use super::*;
 pub mod dissolve;
@@ -21,7 +24,12 @@ pub trait GroupRefUtils: GroupRef {
     ///  - Leaves matching [`MainLeafData::RealLeaf`] are left as leaves
     ///  - Leaves matching [`MainLeafData::Subgroup`] are changed to groups
     ///
-    /// Note: this has nothing in common with [`Iterator::fuse`]
+    /// **Tip:** It's quite hard to get all the types exactly right for this function to be callable.
+    /// If you have problems calling this function (and compiler emits unhelpful type errors), try calling
+    /// [`fused::FGroupRef::new`] instead - it won't fix any errors but then thecompiler usuallly
+    /// emits more useful errors.
+    ///
+    /// **Note:** this has nothing in common with [`Iterator::fuse`]
     fn fuse<Subgroup: GroupRef>(self) -> fused::FGroupRef<Self, Subgroup>
     where
         Self: GroupRef<
@@ -118,6 +126,22 @@ pub trait GroupRefUtils: GroupRef {
         utils::map::map_node_data(self, fun)
     }
 
+    fn map_structure_error<
+        'a,
+        StructureErrorNew,
+        F: Fn(Self::StructureErr, &Self) -> StructureErrorNew + 'a + std::clone::Clone,
+    >(
+        self,
+        fun: F,
+    ) -> impl GroupRef<
+        GroupData = Self::GroupData,
+        LeafData = Self::LeafData,
+        NodeData = Self::NodeData,
+        StructureErr = StructureErrorNew,
+    > {
+        utils::map::map_structure_error(self, fun)
+    }
+
     fn with_parent(self) -> utils::with_parent::WithParentGroupRef<Self> {
         utils::with_parent::with_parent(self)
     }
@@ -138,10 +162,16 @@ pub trait GroupRefUtils: GroupRef {
         &self,
         format_node: F,
         colors: bool,
-    ) -> impl Display {
+    ) -> impl Display
+    where
+        Self::StructureErr: Debug,
+    {
         struct Displayer<'a, G, F>(&'a G, F, bool);
 
-        impl<'a, G: GroupRef, F: Fn(&NodeRef<G>) -> String> Display for Displayer<'a, G, F> {
+        impl<'a, G: GroupRef, F: Fn(&NodeRef<G>) -> String> Display for Displayer<'a, G, F>
+        where
+            G::StructureErr: Debug,
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 format_as_tree_rec(
                     &NodeRef::Group(self.0.to_owned()),
@@ -159,7 +189,7 @@ pub trait GroupRefUtils: GroupRef {
 }
 
 /// Without the feature `colors`, the `colors` argument is ignored
-fn format_as_tree_rec<G: GroupRef, F: Fn(&NodeRef<G>) -> String>(
+fn format_as_tree_rec<G: GroupRef<StructureErr = impl Debug>, F: Fn(&NodeRef<G>) -> String>(
     node: &NodeRef<G>,
     first_line_prefix: String,
 
@@ -179,28 +209,39 @@ fn format_as_tree_rec<G: GroupRef, F: Fn(&NodeRef<G>) -> String>(
     writeln!(formatter, "{first_line_prefix}{node_description}")?;
 
     if let NodeRef::Group(g) = node {
-        let mut children = g.get_children().unwrap().collect::<Vec<_>>();
-        let last = children.pop();
-        for child in children {
-            format_as_tree_rec(
-                &child,
-                format!("{other_lines_prefix} ├─ "),
-                format!("{other_lines_prefix} │  "),
-                format_node,
-                formatter,
-                colors,
-            )?;
-        }
+        match g.get_children() {
+            Ok(children) => {
+                let mut children = children.collect::<Vec<_>>();
+                let last = children.pop();
+                for child in children {
+                    format_as_tree_rec(
+                        &child,
+                        format!("{other_lines_prefix} ├─ "),
+                        format!("{other_lines_prefix} │  "),
+                        format_node,
+                        formatter,
+                        colors,
+                    )?;
+                }
 
-        if let Some(last) = last {
-            format_as_tree_rec(
-                &last,
-                format!("{other_lines_prefix} ╰─ "),
-                format!("{other_lines_prefix}    "),
-                format_node,
-                formatter,
-                colors,
-            )?;
+                if let Some(last) = last {
+                    format_as_tree_rec(
+                        &last,
+                        format!("{other_lines_prefix} ╰─ "),
+                        //format!("{other_lines_prefix} └─ "),
+                        format!("{other_lines_prefix}    "),
+                        format_node,
+                        formatter,
+                        colors,
+                    )?;
+                }
+            }
+            Err(error) => {
+                let msg = format!("╰─ Error obtaining children: {error:?}");
+                #[cfg(feature = "colors")]
+                let msg = msg.red();
+                writeln!(formatter, "{other_lines_prefix} {msg}",)?;
+            }
         }
     }
 

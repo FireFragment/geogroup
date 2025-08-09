@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 geo = "0.29.1"
 #geogroup_apply = { path = "../apply" }
-lazy_hierarchy = { path = "../lazy_hierarchy" }
+lazy_hierarchy = { path = "../lazy_hierarchy", features = ["colors"] } # TODO: Remove colors
 geogroup_algo = { path = "../algorithm" }
 geogroup_loaders = { path = "../loaders" }
 geogroup_naming = { path = "../naming" }
@@ -16,3 +16,4 @@ log = "0.4.27"
 either = "1.15.0"
 itertools = "0.14.0"
 chrono = "0.4.41"
+derive_more = { version = "2.0.1", features = ["from"] }

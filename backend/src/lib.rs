@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub mod caching_file_item;
+pub use caching_file_item::CachedFileSortableItem;
 pub mod fs_hierarchy;
 pub mod main_hierarchy;
 pub use geogroup_common::*;

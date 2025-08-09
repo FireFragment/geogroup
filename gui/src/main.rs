@@ -10,7 +10,6 @@ mod style;
 mod tabbar;
 use backend::gg_prelude::*;
 use gui::Message;
-use hiearchy::TemplateHiearchy;
 use tabbar::tabbar;
 
 use backend::gg_prelude::*;

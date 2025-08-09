@@ -18,6 +18,7 @@ pub trait Mapper<OrigGr: GroupRef>: Clone {
     type GroupDataNew;
     type LeafDataNew;
     type NodeDataNew;
+    type StructureErrorNew;
 
     /// Transform group data into the new group data type.
     ///
@@ -41,6 +42,13 @@ pub trait Mapper<OrigGr: GroupRef>: Clone {
 
     /// Transform node data.
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew;
+
+    /// Transform node data.
+    fn map_structure_error(
+        &self,
+        error: OrigGr::StructureErr,
+        group_ref: &OrigGr,
+    ) -> Self::StructureErrorNew;
 }
 
 #[derive(Clone, Debug)]
@@ -72,25 +80,28 @@ impl<OrigGr: GroupRef, M: Mapper<OrigGr>> GroupRef for MappedGroupRef<OrigGr, M>
     type NodeData = M::NodeDataNew;
     type LeafData = M::LeafDataNew;
     type GroupData = M::GroupDataNew;
-    type StructureErr = <OrigGr as GroupRef>::StructureErr;
+    type StructureErr = M::StructureErrorNew;
     type LeafRef = MappedLeafRef<OrigGr, M>;
 
     fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
         Self: Sized,
     {
-        self.this.get_children().map(move |iter| {
-            iter.map(|child| match child {
-                NodeRef::Group(group) => NodeRef::Group(MappedGroupRef {
-                    this: group,
-                    mapper: self.mapper.clone(),
-                }),
-                NodeRef::Leaf(leaf) => NodeRef::Leaf(MappedLeafRef {
-                    this: leaf,
-                    mapper: self.mapper.clone(),
-                }),
+        self.this
+            .get_children()
+            .map(move |iter| {
+                iter.map(|child| match child {
+                    NodeRef::Group(group) => NodeRef::Group(MappedGroupRef {
+                        this: group,
+                        mapper: self.mapper.clone(),
+                    }),
+                    NodeRef::Leaf(leaf) => NodeRef::Leaf(MappedLeafRef {
+                        this: leaf,
+                        mapper: self.mapper.clone(),
+                    }),
+                })
             })
-        })
+            .map_err(|err| self.mapper.map_structure_error(err, &self.this))
     }
 
     fn group_data(&self) -> Self::GroupData {

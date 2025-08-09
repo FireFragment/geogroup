@@ -9,6 +9,7 @@ use egui::{
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
 use geogroup_backend::lazy_hierarchy::NodeRef;
+use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::thread;
 use std::time::Duration;
@@ -346,7 +347,7 @@ impl App {
 
 pub fn show_hiearchy(
     ui: &mut egui::Ui,
-    hiearchy: &TemplateHiearchy,
+    hiearchy: &backend::main_hierarchy::TemplateHiearchy,
     selected_vec: &mut Vec<usize>,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
@@ -355,14 +356,28 @@ pub fn show_hiearchy(
         .stick_to_right(true)
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
-                show_hiearchy_inner(ui, hiearchy, selected_vec, 0, flatten_mode, image_scale)
+                show_hiearchy_inner(
+                    ui,
+                    &hiearchy
+                        .root()
+                        .map_node_data(|n| n.node_data().name.unwrap_or_default())
+                        .map_leaf_data(|l| l.leaf_data().path),
+                    selected_vec,
+                    0,
+                    flatten_mode,
+                    image_scale,
+                )
             });
         });
 }
 
 fn show_hiearchy_inner(
     ui: &mut egui::Ui,
-    hiearchy: &TemplateHiearchy,
+    hiearchy: &impl lazy_hierarchy::GroupRef<
+        NodeData = impl AsRef<str>,
+        LeafData = impl AsRef<Path>,
+        StructureErr = impl Debug,
+    >,
     selected_vec: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
@@ -416,11 +431,8 @@ fn show_hiearchy_inner(
 
                         row.col(|ui| {
                             let child = &children[idx];
-                            let child_path = child.node_data();
-                            let child_name = child_path
-                                .file_name()
-                                .map(|n| Either::Left(n.display()))
-                                .unwrap_or(Either::Right("[invalid name]"));
+                            let child_data = child.node_data();
+                            let child_name = child_data.as_ref();
 
                             match child {
                                 lazy_hierarchy::NodeRef::Group(folder) => {
@@ -434,7 +446,8 @@ fn show_hiearchy_inner(
                                     ui.horizontal_top(|ui| {
                                         egui::Image::new(format!(
                                             "file://{}",
-                                            leaf.node_data()
+                                            leaf.leaf_data()
+                                                .as_ref()
                                                 .to_str()
                                                 .unwrap_or("invalid file name") // This is a bit weird handling, but it works
                                         ))
@@ -648,8 +661,9 @@ impl App {
 #[derive(Debug)]
 pub enum Message {
     SetContent(AppContent),
+    // TODO: Remove
     Sorted {
-        new_hiearchy: hiearchy::TemplateHiearchy,
+        new_hiearchy: backend::main_hierarchy::TemplateHiearchy,
     },
     SetProgress(Option<Progress>),
 }
@@ -704,7 +718,7 @@ pub enum AppContent {
 #[derive(Debug)]
 struct MainPage {
     pane: Option<PaneContent>,
-    hiearchy: hiearchy::TemplateHiearchy,
+    hiearchy: backend::main_hierarchy::TemplateHiearchy,
     flatten_mode: Option<FlattenMode>,
     selection: Vec<usize>,
     image_scale: u16,
@@ -795,7 +809,7 @@ impl MainPage {
         };
 
         MainPage {
-            hiearchy,
+            hiearchy: hiearchy.into(),
             /*hiearchy
             .into_iter()
             .map(|h| {

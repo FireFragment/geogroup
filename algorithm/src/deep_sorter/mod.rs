@@ -12,6 +12,18 @@ pub struct DeepSorter<Item: SortableItem> {
     bintree: BinTree<Item, (), NodeInfo<Item>>,
 }
 
+impl<Item: SortableItem + std::fmt::Debug> std::fmt::Debug for DeepSorter<Item>
+where
+    Item::Time: std::fmt::Debug,
+    Item::Position: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeepSorter")
+            .field("bintree", &self.bintree)
+            .finish()
+    }
+}
+
 /// Returns a result between -1 and 1. To convert it to [`Strength`], multiply it with [`Strength::MAX`]
 ///
 /// This formula for strength is used because

@@ -1999,6 +1999,7 @@ name = "geogroup_backend"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "derive_more",
  "either",
  "geo 0.29.3",
  "geogroup_algo",

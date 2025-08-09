@@ -1,5 +1,4 @@
 use super::*;
-
 /// A [`Mapper`] implementation that only transforms group data.
 ///
 /// Shouldn't be super expensive to [clone](Clone::clone), it's cloned whenever a new
@@ -15,6 +14,7 @@ impl<F: Clone> GroupDataMapper<F> {
     /// # Parameters
     ///
     /// * `map_fn` - Function that transforms group data and node data into new group data
+    #[inline]
     pub fn new(map_fn: F) -> Self {
         Self { map_fn }
     }
@@ -26,17 +26,30 @@ impl<OrigGr: GroupRef, GroupDataNew, F: Fn(&OrigGr) -> GroupDataNew + Clone> Map
     type GroupDataNew = GroupDataNew;
     type LeafDataNew = OrigGr::LeafData;
     type NodeDataNew = OrigGr::NodeData;
+    type StructureErrorNew = <OrigGr as GroupRef>::StructureErr;
 
+    #[inline]
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
         (self.map_fn)(group_ref)
     }
 
+    #[inline]
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
         leaf_ref.leaf_data()
     }
 
+    #[inline]
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {
         node_ref.node_data()
+    }
+
+    #[inline]
+    fn map_structure_error(
+        &self,
+        error: <OrigGr as GroupRef>::StructureErr,
+        _group_ref: &OrigGr,
+    ) -> Self::StructureErrorNew {
+        error
     }
 }
 
@@ -63,17 +76,30 @@ impl<OrigGr: GroupRef, LeafDataNew, F: Fn(&OrigGr::LeafRef) -> LeafDataNew + Clo
     type GroupDataNew = OrigGr::GroupData;
     type LeafDataNew = LeafDataNew;
     type NodeDataNew = OrigGr::NodeData;
+    type StructureErrorNew = OrigGr::StructureErr;
 
+    #[inline]
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
         group_ref.group_data()
     }
 
+    #[inline]
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
         (self.map_fn)(leaf_ref)
     }
 
+    #[inline]
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {
         node_ref.node_data()
+    }
+
+    #[inline]
+    fn map_structure_error(
+        &self,
+        error: OrigGr::StructureErr,
+        _group_ref: &OrigGr,
+    ) -> Self::StructureErrorNew {
+        error
     }
 }
 
@@ -99,17 +125,83 @@ impl<OrigGr: GroupRef, NodeDataNew, F: Fn(NodeRef<OrigGr>) -> NodeDataNew + Clon
     type GroupDataNew = OrigGr::GroupData;
     type LeafDataNew = OrigGr::LeafData;
     type NodeDataNew = NodeDataNew;
+    type StructureErrorNew = OrigGr::StructureErr;
 
+    #[inline]
     fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
         group_ref.group_data()
     }
 
+    #[inline]
     fn map_leaf_data(&self, leaf_ref: &OrigGr::LeafRef) -> Self::LeafDataNew {
         leaf_ref.leaf_data()
     }
 
+    #[inline]
     fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {
         (self.map_fn)(node_ref)
+    }
+
+    #[inline]
+    fn map_structure_error(
+        &self,
+        error: OrigGr::StructureErr,
+        _group_ref: &OrigGr,
+    ) -> Self::StructureErrorNew {
+        error
+    }
+}
+
+/// A [`Mapper`] implementation that only transforms errors.
+///
+/// Shouldn't be super expensive to [clone](Clone::clone), it's cloned whenever a new
+/// [MappedGroupRef] is created.
+#[derive(Clone)]
+pub struct StructureErrorMapper<F: Clone> {
+    map_fn: F,
+}
+
+impl<F: Clone> StructureErrorMapper<F> {
+    /// Creates a new [`StructureErrorMapper`] with the given function.
+    #[inline]
+    pub fn new(map_fn: F) -> Self {
+        Self { map_fn }
+    }
+}
+
+impl<
+        OrigGr: GroupRef,
+        StructureErrNew,
+        F: Fn(OrigGr::StructureErr, &OrigGr) -> StructureErrNew + Clone,
+    > Mapper<OrigGr> for StructureErrorMapper<F>
+{
+    type GroupDataNew = OrigGr::GroupData;
+    type LeafDataNew = OrigGr::LeafData;
+    type NodeDataNew = OrigGr::NodeData;
+    type StructureErrorNew = StructureErrNew;
+
+    #[inline]
+    fn map_group_data(&self, group_ref: &OrigGr) -> Self::GroupDataNew {
+        group_ref.group_data()
+    }
+
+    #[inline]
+    fn map_leaf_data(&self, leaf_ref: &<OrigGr as GroupRef>::LeafRef) -> Self::LeafDataNew {
+        leaf_ref.leaf_data()
+    }
+
+    #[inline]
+    fn map_node_data(&self, node_ref: NodeRef<OrigGr>) -> Self::NodeDataNew {
+        node_ref.node_data()
+    }
+
+    #[inline]
+    fn map_structure_error(
+        &self,
+        error: <OrigGr as GroupRef>::StructureErr,
+        group_ref: &OrigGr,
+    ) -> Self::StructureErrorNew {
+        (self.map_fn)(error, group_ref)
     }
 }
 
@@ -180,5 +272,19 @@ pub fn map_node_data<
     MappedGroupRef {
         this: gr,
         mapper: NodeDataMapper::new(fun),
+    }
+}
+
+pub fn map_structure_error<
+    OrigGr: GroupRef,
+    StructureErrorNew,
+    F: Fn(OrigGr::StructureErr, &OrigGr) -> StructureErrorNew + Clone,
+>(
+    gr: OrigGr,
+    fun: F,
+) -> MappedGroupRef<OrigGr, StructureErrorMapper<F>> {
+    MappedGroupRef {
+        this: gr,
+        mapper: StructureErrorMapper::new(fun),
     }
 }

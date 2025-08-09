@@ -1,6 +1,8 @@
 pub mod concrete;
 pub mod fused;
 pub use concrete::ConcreteHiearchy as Concrete;
+pub mod either_impl;
+pub use either_impl::*;
 
 #[cfg(test)]
 mod tests;
@@ -37,7 +39,7 @@ pub trait GroupRef: Clone {
     type GroupData;
 
     /// Error encountered while trying to construct the group structure
-    type StructureErr: Error;
+    type StructureErr;
 
     /// The type of leaf reference
     type LeafRef: LeafRef<LeafData = Self::LeafData, NodeData = Self::NodeData>;

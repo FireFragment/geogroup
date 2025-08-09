@@ -42,6 +42,7 @@ impl Point for geo::Point {
 /// [`SortableItem`] which specifies its time and point as its fields
 ///
 /// Generic argument `D` is for arbitrary additional data
+#[derive(Debug)]
 pub struct ConcreteSortableItem<P: Point, T: Ord + Clone, D = ()> {
     pub time: T,
     pub position: P,

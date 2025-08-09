@@ -7,6 +7,17 @@ pub enum BinTree<Leaf, InnerNode, Node> {
     Leaf(Leaf, Node),
 }
 
+impl<Leaf: std::fmt::Debug, InnerNode: std::fmt::Debug, Node: std::fmt::Debug> std::fmt::Debug
+    for BinTree<Leaf, InnerNode, Node>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InnerNode(arg0) => f.debug_tuple("InnerNode").field(arg0).finish(),
+            Self::Leaf(arg0, arg1) => f.debug_tuple("Leaf").field(arg0).field(arg1).finish(),
+        }
+    }
+}
+
 impl<Leaf, InnerNode, Node> BinTree<Leaf, InnerNode, Node> {
     pub fn get_node_data(&self) -> &Node {
         match self {
@@ -16,6 +27,7 @@ impl<Leaf, InnerNode, Node> BinTree<Leaf, InnerNode, Node> {
     }
 }
 
+#[derive(Debug)]
 pub struct BTInnerNode<Leaf, InnerNode, Node> {
     pub children: Box<[BinTree<Leaf, InnerNode, Node>; 2]>,
     pub inner_node_data: InnerNode,
