@@ -160,6 +160,7 @@ pub fn apply(ctx: &Context, params: &Params) {
         style.visuals.widgets.active.bg_stroke.color = Color32::TRANSPARENT;
 
         style.visuals.selection.bg_fill = params.accent_color;
+        style.visuals.hyperlink_color = params.accent_color;
         //style.visuals.selection.bg_fill = Color32::from_rgb(193, 113, 34);
         //style.visuals.selection.bg_fill = Color32::from_rgb(135, 8, 131);
 
