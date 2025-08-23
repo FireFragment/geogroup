@@ -34,7 +34,7 @@ pub fn ratio_to_strength(parent_separation: f32, self_separation: f32) -> f32 {
     // NOTE: Division by zero is OK here, because 1/0 = Infinity and Infinity.tanh() = 1
     (parent_separation / self_separation)
         .log2()
-        .div(2.0) // This is a magic number, the strengths just seemd right with this
+        .div(2.0) // This is a magic number, the strengths just seemed right with this
         .tanh()
 }
 
