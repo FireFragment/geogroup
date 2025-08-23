@@ -108,6 +108,12 @@ impl LazyGroup {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum StructureErr<E: std::error::Error> {
+    Pending,
+    Error(E),
+}
+
 impl TemplateHiearchy {
     pub fn root<'a>(
         &'a self,
@@ -115,7 +121,7 @@ impl TemplateHiearchy {
         GroupData = (),
         LeafData = FileData,
         NodeData = NodeData,
-        StructureErr = impl std::error::Error,
+        StructureErr = StructureErr<impl std::error::Error>,
     > + 'a {
         use lazy_hierarchy::fused;
 
@@ -133,6 +139,7 @@ impl TemplateHiearchy {
                 }
             })
             .fuse()
+            .map_structure_error(|err, _| StructureErr::Error(err))
     }
 }
 
