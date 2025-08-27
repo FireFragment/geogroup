@@ -152,6 +152,7 @@ pub struct GroupInfo {
     pub separation: Option<Distance>,
 }
 
+/// Provides [NodeInfo] for every node in the binary tree
 fn provide_info<Item: SortableItem, InnerNode>(
     tree: BinTree<Item, InnerNode, ()>,
 ) -> BinTree<Item, InnerNode, NodeInfo<Item>> {
@@ -179,8 +180,8 @@ fn provide_info<Item: SortableItem, InnerNode>(
             let tree_group_info = NodeInfo {
                 first_time: l.get_time(),
                 last_time: l.get_time(),
-                first_pos: l.get_position(),
-                last_pos: l.get_position(),
+                first_pos: l.get_position().expect("POSERR"), 
+                last_pos: l.get_position().expect("POSERR"),
             };
             BinTree::Leaf(l, tree_group_info)
         }

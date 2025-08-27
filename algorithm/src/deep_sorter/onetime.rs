@@ -20,8 +20,8 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(points: Vec<Item>) -> Bin
         let current_item = points_iter.next().unwrap();
         if let Some(next_item) = points_iter.peek() {
             let distance_to_next = current_item
-                .get_position()
-                .distance(&next_item.get_position());
+                .get_position().expect("POSERR")
+                .distance(&next_item.get_position().expect("POSERR"));
             points_with_distances.push((current_item, distance_to_next));
         } else {
             break current_item;
@@ -31,15 +31,26 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(points: Vec<Item>) -> Bin
     sort_to_binary_tree_with_distances(points_with_distances, last_point)
 }
 
+/*struct PreprocessedPoint<P, Fail> {
+    point: P,
+    distance_to_next: u64,
+    /// List of failed points between this and the next point
+    failed_until_next: Vec<Fail>
+}*/
+
+
 /// Sort points to binary tree.
 ///
 /// The algorithm always cuts points into two groups by the biggest distance
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<Item: SortableItem>(mut points: Vec<Item>) -> BinTree<Item, (), ()> {
-    points.sort_by_key(|p| p.get_time());
+pub fn sort_to_binary_tree<Item: SortableItem>(points: impl IntoIterator<Item=Item>) -> BinTree<Item, (), ()> {
+    // TODO: Don't just ignore items without position.
+    // Once fixed, edit all portions of the code marked with POSERR
+    let mut points: Vec<_> = points.into_iter().filter(|point| point.get_position().is_ok()).collect(); 
 
+    points.sort_by_key(|p| -> Item::Time {p.get_time()});
     sort_ordered_to_binary_tree(points)
 }
 

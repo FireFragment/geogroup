@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::convert::Infallible;
+
 /// Distance between two [points](Point)
 pub type Distance = u64;
 
@@ -7,10 +10,11 @@ pub type Distance = u64;
 pub trait SortableItem {
     type Time: Ord + Clone;
     type Position: Point + Clone;
+    
+    type PositionErr: Debug; // TODO: Consider removing this bound. It makes it easy to expect on the result.
 
     fn get_time(&self) -> Self::Time;
-    // TODO: Allow for failures
-    fn get_position(&self) -> Self::Position;
+    fn get_position(&self) -> Result<Self::Position, Self::PositionErr>;
 }
 
 pub trait Point {
@@ -52,28 +56,29 @@ pub struct ConcreteSortableItem<P: Point, T: Ord + Clone, D = ()> {
 
 impl<P: Point + Clone, T: Ord + Clone, D> SortableItem for ConcreteSortableItem<P, T, D> {
     type Time = T;
-
     type Position = P;
+    type PositionErr = Infallible;
 
     fn get_time(&self) -> Self::Time {
         self.time.clone()
     }
 
-    fn get_position(&self) -> Self::Position {
-        self.position.clone()
+    fn get_position(&self) -> Result<P, Infallible> {
+        Ok(self.position.clone())
     }
+    
 }
 
 impl<T: SortableItem> SortableItem for &T {
-    type Time = T::Time;
-
     type Position = T::Position;
+    type Time = T::Time;
+    type PositionErr = T::PositionErr;
 
     fn get_time(&self) -> Self::Time {
         (*self).get_time()
     }
 
-    fn get_position(&self) -> Self::Position {
+    fn get_position(&self) -> Result<Self::Position, Self::PositionErr> {
         (*self).get_position()
     }
 }
