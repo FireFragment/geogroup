@@ -33,10 +33,11 @@ pub trait TerminatableIterator: Iterator {
     where
         Self: Sized,
     {
+        let (_, est_size) = self.size_hint();
         self.enumerate().map(move |(idx, it)| {
             if idx % (interval + 1) == 0 {
                 let should_terminate = callback.call(
-                    None, // TODO: Checkout size_hint
+                    est_size.map(|est_size| ((idx as f32 / est_size as f32) * u16::MAX as f32) as u16),
                     msg_generator(&it).as_ref().map(|x| x.as_str()),
                 );
                 if should_terminate {
