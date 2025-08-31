@@ -111,13 +111,13 @@ impl TemplateHiearchy {
             .map_node_data(|n| n.node_data().to_owned()) // OPT: Possibly needless clone
             .map_leaf_data(|leaf| match leaf.leaf_data() {
                 InnerLeafData::LazySubgroup(lazy_group) => {
-                    lazy_group.read(|status| match status { 
-                        lazy_group::dynamic::View::Initializing(status) => 
-                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: status.msg.clone() }),
-                        lazy_group::dynamic::View::Finished(final_group) => 
+                    lazy_group.read(|status| match status {
+                        lazy_group::dynamic::View::Initializing(status) =>
+                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: status.msg.clone(), progress: status.progress }),
+                        lazy_group::dynamic::View::Finished(final_group) =>
                             fused::MainLeafData::Subgroup(final_group.as_group_ref().map_leaf_data(|l| LeafData::File(l.leaf_data()))),
-                        lazy_group::dynamic::View::Terminated => 
-                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: None })
+                        lazy_group::dynamic::View::Terminated =>
+                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: None, progress: None })
                     })
                 }
                 InnerLeafData::RealLeaf(file_data) => {
@@ -141,6 +141,7 @@ pub struct FileData {
 pub enum LeafData {
     File(FileData),
     LazyGroupInitializing {
-        message: Option<String>
+        message: Option<String>,
+        progress: Option<u16>
     }
 }
