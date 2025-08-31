@@ -3,6 +3,7 @@ use super::{super::*, Final};
 use std::sync::{Mutex, mpsc};
 use std::sync::OnceLock;
 
+// TODO: Terminate on drop
 /// LazyGroup which may be in a ["final" state](Final) or an "initializing" state.
 /// 
 /// In initializing state, it just returns [StructureErr]s until it's initialized into the final state.
@@ -13,6 +14,8 @@ pub struct Dynamic {
     /// If Some, we already have obtained a final group
     finalized: Arc<OnceLock<Finalized>>,
     /// When message is sent through this, we attempt to terminate the initializing thread
+    ///
+    /// Warning: if dropped, we also attempt to terminate.
     terminator: mpsc::Sender<()>
 }
 
@@ -89,7 +92,11 @@ impl Dynamic {
                         time: std::time::Instant::now() 
                     }.into();
 
-                    terminator_rx.try_recv().is_ok() // TODO: Check that the only way this could error is when there's no message
+                    match terminator_rx.try_recv() {
+                        Ok(()) => true, // Message was received, so we should terminate
+                        Err(mpsc::TryRecvError::Empty) => false, // Message was not received, so we should not terminate
+                        Err(mpsc::TryRecvError::Disconnected) => true, // Transmitter was dropped, we terminate
+                    }
                 }));
 
                 finalized.set(match ret_val {
