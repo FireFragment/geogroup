@@ -62,7 +62,7 @@ impl Final {
 
 impl Template {
     /// Potentially long-running. Returns [None] on termination
-    pub fn into_final(self, progress_callback: ProgressCallback) -> Option<lazy_group::Final> {
+    pub fn into_final(self, progress_callback: &mut ProgressCallback) -> Option<lazy_group::Final> {
         match self {
             Template::Fs(it) => Some(Final::Fs(it)),
             Template::Sorted { item_source, params } => 

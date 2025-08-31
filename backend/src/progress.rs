@@ -4,7 +4,7 @@ pub struct ProgressCallback<'a>(Box<dyn FnMut(Option<u16>, Option<&str>) -> bool
 impl<'a> ProgressCallback<'a> {
     /// Returns [`true`] if the operation should be terminated
     #[must_use]
-    fn call(&mut self, progress: Option<u16>, msg: Option<&str>) -> bool {
+    pub fn call(&mut self, progress: Option<u16>, msg: Option<&str>) -> bool {
         (self.0)(progress, msg)
     }
 }
@@ -26,7 +26,7 @@ pub trait TerminatableIterator: Iterator {
     /// `frequency` is how often is the callback called - 0 is every element, 1 is every second, 2 is every third, etc.
     fn with_progress_callback(
         self,
-        mut callback: ProgressCallback,
+        callback: &mut ProgressCallback,
         msg_generator: impl Fn(&Self::Item) -> Option<String>,
         interval: usize,
     ) -> impl Iterator<Item = Self::Item>

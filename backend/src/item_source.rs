@@ -32,9 +32,7 @@ impl From<ItemSource> for CachingItemSource {
     }
 }
 
-type Cache = ISResult;
-
-pub struct ISResult {
+pub struct Cache {
     pub paths: Vec<FileRef>,
     pub errors: Vec<anyhow::Error>,
 }
@@ -60,44 +58,34 @@ pub enum ComplexItemSource {
 
 
 impl ComplexItemSource {
-    pub fn create_cache(&self, progress_callback: ProgressCallback) -> Option<Cache> {
-        ItemSource::from(self.to_owned()).into_concrete(progress_callback)
+    pub fn create_cache(&self, _progress_callback: &mut ProgressCallback) -> Option<Cache> {
+        todo!()//ItemSource::from(self.to_owned()).into_concrete(progress_callback)
     }
 }
 impl ItemSource {
-    /// Potentially long-running
-    pub fn into_concrete(&self, progress_callback: ProgressCallback) -> Option<ISResult> {
+    /// Potentially long-running.
+    ///
+    /// The iterator yields elements at approximately regular intervals.
+    /// This can be used for progress reporting (eg. calling `with_progress_callback` on the returned iterator)
+    pub fn into_concrete<'a>(
+        self,
+    ) -> impl Iterator<Item = Result<FileRef, walkdir::Error>> {
         // TODO: Terminate by progress_callback
         match self {
             ItemSource::Enumerated(files) => {
-                Some(ISResult {
-                    paths: files.to_owned(),
-                    errors: Vec::new(),
-                })
+                Either::Left(files.into_iter().map(Ok))
             }
             ItemSource::EntireDir(dir) => {
-                let (entries, errors): (Vec<_>, Vec<_>) = WalkDir::new(&**dir)
+                Either::Right(
+                    WalkDir::new((*dir).clone())
                     .into_iter()
-                    .with_progress_callback(
-                        progress_callback,
-                        |entry| {
-                            entry
-                                .as_ref()
-                                .map_or_else(|err| err.path(), |entry| Some(entry.path()))
-                                .map(|path| path.to_string_lossy().to_string())
-                        },
-                        100,
-                    )
                     .map(|entry| match entry {
-                        Ok(entry) => Ok(entry.into_path()),
+                        Ok(entry) => Ok(entry.into_path().into()),
                         Err(err) => Err(err.into()),
                     })
-                    .partition_result();
+                )
 
-                Some(ISResult {
-                    paths: entries.into_iter().map(Into::into).collect(),
-                    errors: errors,
-                })
+
             }
         }
     }
@@ -118,7 +106,7 @@ impl CachingItemSource {
     /// In this case, `into_concrete` is garantueed to be fast.
     ///
     /// May be slow. The `progress_callback` is repeatedly called - if it returns [`true`], the function exits early.
-    pub fn prepare_cache(&self, progress_callback: ProgressCallback) -> bool {
+    pub fn prepare_cache(&self, progress_callback: &mut ProgressCallback) -> bool {
         match &self.0 {
             ItemSourceInner::Complex { it, cache } => {
                 if OnceLock::get(cache).is_none() {
@@ -143,7 +131,7 @@ impl CachingItemSource {
         match &self.0 {
             ItemSourceInner::Complex { it, cache } => {
                 &cache
-                    .get_or_init(|| it.create_cache(ProgressCallback::new_ignore())
+                    .get_or_init(|| it.create_cache(&mut ProgressCallback::new_ignore())
                     .expect("BUG: Operation was allegedly *somehow* terminated with `ProgressCallback::new_ignore()`"))
                     .paths
             }

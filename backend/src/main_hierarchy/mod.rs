@@ -72,16 +72,47 @@ pub struct LGSorted {
 
 impl LGSorted {
     /// Potentially long-running. Returns [None] if terminated by progress_callback
-    pub fn new(item_source: ItemSource, params: algorithm::Params, progress_callback: ProgressCallback) -> Option<Self> {
-        Some(Self { 
+    pub fn new(item_source: ItemSource, params: algorithm::Params, progress_callback: &mut ProgressCallback) -> Option<Self> {
+        let items = item_source.clone()
+            .into_concrete()
+            .with_progress_callback(
+                progress_callback,
+                |entry| {
+                    entry
+                        .as_ref()
+                        .map_or_else(|err| err.path(), |entry| Some(entry))
+                        .map(|path| format!("Listing files: {}", path.to_string_lossy().to_string()))
+                },
+                100,
+            )
+            .collect::<Vec<_>>().into_iter() // Used to make progress reporting more accurate
+            .with_progress_callback(
+                progress_callback,
+                |entry| {
+                    entry
+                        .as_ref()
+                        .map_or_else(|err| err.path(), |entry| Some(entry))
+                        .map(|path| format!("Reading metadata: {}", path.to_string_lossy().to_string()))
+                },
+                10,
+            ).filter_map(|entry| entry.ok()) // TODO: Don't ignore errors
+            .filter_map(|path| {
+                loaders::GeneralLoader.get_data(path.as_ref()).ok()?.as_sortable_item(FileData { path }).ok() // TODO: Don't ignore errors
+            })
+            .collect();
+
+        log::debug!("LGSorted: Loaded all files");
+        let should_terminate = progress_callback.call(None, Some("Sorting"));
+        if should_terminate {
+            return None;
+        }
+        Some(Self {
+            // TODO: Add progress callback
             sorter: algorithm::Sorter::new(
-                item_source.into_concrete(progress_callback)?.paths.into_iter().filter_map(|path| {
-                    loaders::GeneralLoader.get_data(path.as_ref()).ok()?.as_sortable_item(FileData { path }).ok() // TODO: Don't ignore errors
-                })
-                .collect(), 
+                items,
                 params
             ),  // TODO: Don't ignore errors
-            item_source, 
+            item_source,
         })
     }
 }
