@@ -4,54 +4,79 @@ use super::*;
 
 pub type Item = PathBuf;
 
-/// Unlike [`ItemSourceTemplate`] performs caching
-pub struct ItemSource(ItemSourceInner);
+/// Unlike [`ItemSource`] performs caching
+pub struct CachingItemSource(ItemSourceInner);
 
-pub enum ItemSourceTemplate {
-    Enumerated(Vec<PathBuf>),
-    Complex(ComplexItemSourceTemplate),
+#[derive(Clone, Debug)]
+pub enum ItemSource {
+    Enumerated(Vec<FileRef>),
+    /// All files in a directory, recursively
+    EntireDir(FileRef),
 }
 
-impl From<ItemSourceTemplate> for ItemSource {
-    fn from(value: ItemSourceTemplate) -> Self {
+impl From<ComplexItemSource> for ItemSource {
+    fn from(val: ComplexItemSource) -> Self { match val {
+        ComplexItemSource::EntireDir(dir) => ItemSource::EntireDir(dir),
+    } } 
+}
+
+impl From<ItemSource> for CachingItemSource {
+    fn from(value: ItemSource) -> Self {
         match value {
-            ItemSourceTemplate::Enumerated(paths) => Self(ItemSourceInner::Enumerated(paths)),
-            ItemSourceTemplate::Complex(it) => Self(ItemSourceInner::Complex {
-                it,
+            ItemSource::Enumerated(paths) => Self(ItemSourceInner::Enumerated(paths)),
+            ItemSource::EntireDir(dir) => Self(ItemSourceInner::Complex {
+                it: ComplexItemSource::EntireDir(dir),
                 cache: OnceLock::new(),
             }),
         }
     }
 }
 
-pub struct Cache {
-    pub paths: Vec<PathBuf>,
+type Cache = ISResult;
+
+pub struct ISResult {
+    pub paths: Vec<FileRef>,
     pub errors: Vec<anyhow::Error>,
 }
 
 enum ItemSourceInner {
     /// Complex, cached condition
     Complex {
-        it: ComplexItemSourceTemplate,
+        it: ComplexItemSource,
         cache: OnceLock<Cache>, // TODO: Implement watching for changes in filesystem
     },
     /// Specific enumerated items
-    Enumerated(Vec<PathBuf>),
+    Enumerated(Vec<FileRef>),
 }
 
 /// Item source which is hard to compute and therefore requires caching to be used while maintaining performance
 #[derive(Clone)]
-pub enum ComplexItemSourceTemplate {
+pub enum ComplexItemSource {
     /// All files in a directory, recursively
-    EntireDir(PathBuf),
+    EntireDir(FileRef),
 }
 
-impl ComplexItemSourceTemplate {
+
+
+
+impl ComplexItemSource {
     pub fn create_cache(&self, progress_callback: ProgressCallback) -> Option<Cache> {
+        ItemSource::from(self.to_owned()).into_concrete(progress_callback)
+    }
+}
+impl ItemSource {
+    /// Potentially long-running
+    pub fn into_concrete(&self, progress_callback: ProgressCallback) -> Option<ISResult> {
         // TODO: Terminate by progress_callback
         match self {
-            ComplexItemSourceTemplate::EntireDir(dir) => {
-                let (entries, errors): (Vec<_>, Vec<_>) = WalkDir::new(dir)
+            ItemSource::Enumerated(files) => {
+                Some(ISResult {
+                    paths: files.to_owned(),
+                    errors: Vec::new(),
+                })
+            }
+            ItemSource::EntireDir(dir) => {
+                let (entries, errors): (Vec<_>, Vec<_>) = WalkDir::new(&**dir)
                     .into_iter()
                     .with_progress_callback(
                         progress_callback,
@@ -69,8 +94,8 @@ impl ComplexItemSourceTemplate {
                     })
                     .partition_result();
 
-                Some(Cache {
-                    paths: entries,
+                Some(ISResult {
+                    paths: entries.into_iter().map(Into::into).collect(),
                     errors: errors,
                 })
             }
@@ -78,12 +103,12 @@ impl ComplexItemSourceTemplate {
     }
 }
 
-impl ItemSource {
+impl CachingItemSource {
     /// Whether or not [`Self::into_concrete`] is fast to execute.
     pub fn is_fast(&self) -> bool {
         match &self.0 {
             ItemSourceInner::Enumerated(_) => true,
-            ItemSourceInner::Complex { cache, .. } => cache.get().is_some(),
+            ItemSourceInner::Complex { cache, .. } => OnceLock::get(cache).is_some(),
         }
     }
 
@@ -96,7 +121,7 @@ impl ItemSource {
     pub fn prepare_cache(&self, progress_callback: ProgressCallback) -> bool {
         match &self.0 {
             ItemSourceInner::Complex { it, cache } => {
-                if cache.get().is_none() {
+                if OnceLock::get(cache).is_none() {
                     if let Some(new_cache) = it.create_cache(progress_callback) {
                         let _ = cache.set(new_cache); // The error is thrown iff cache is already inhabited,
                                                       // but we made sure it isn't by wrapping this in
@@ -114,7 +139,7 @@ impl ItemSource {
     }
 
     /// May be slow if cache is missing. To ensure good run time, run [`prepare_cache`] beforehand
-    pub fn into_concrete(&self) -> &Vec<PathBuf> {
+    pub fn into_concrete(&self) -> &Vec<FileRef> {
         match &self.0 {
             ItemSourceInner::Complex { it, cache } => {
                 &cache

@@ -39,12 +39,13 @@ pub enum TimeOrLocError<T, L> {
     LocationError(L),
 }
 
-impl<TimeError: Clone, LocationError: Clone> LocData<TimeError, LocationError> {
-    pub fn as_sortable_item(
+impl<TimeError, LocationError> LocData<TimeError, LocationError> {
+    pub fn as_sortable_item<D>(
         &self,
+        data: D
     ) -> Result<
-        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>>,
-        TimeOrLocError<TimeError, LocationError>,
+        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>, D>,
+        TimeOrLocError<&TimeError, &LocationError>,
     > {
         // For now, we ignore the "deltas" and just return everything as an average of values
         Ok(common::ConcreteSortableItem {
@@ -61,7 +62,7 @@ impl<TimeError: Clone, LocationError: Clone> LocData<TimeError, LocationError> {
                     .map_err(|err| TimeOrLocError::TimeError(err.to_owned()))?;
                 *start + (*end - *start) / 2
             },
-            data: (),
+            data,
         })
     }
 }

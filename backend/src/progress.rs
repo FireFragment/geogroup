@@ -1,6 +1,4 @@
 use super::*;
-
-trait Sealed {}
 pub struct ProgressCallback<'a>(Box<dyn FnMut(Option<u16>, Option<&str>) -> bool + 'a>);
 
 impl<'a> ProgressCallback<'a> {

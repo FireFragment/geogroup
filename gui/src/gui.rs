@@ -9,6 +9,7 @@ use egui::{
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
 use geogroup_backend::lazy_hierarchy::NodeRef;
+use geogroup_backend::main_hierarchy;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::thread;
@@ -361,7 +362,7 @@ pub fn show_hiearchy(
                     &hiearchy
                         .root()
                         .map_node_data(|n| n.node_data().name.unwrap_or_default())
-                        .map_leaf_data(|l| l.leaf_data().path),
+                        .map_leaf_data(|l| l.leaf_data()),
                     selected_vec,
                     0,
                     flatten_mode,
@@ -375,7 +376,7 @@ fn show_hiearchy_inner(
     ui: &mut egui::Ui,
     hiearchy: &impl lazy_hierarchy::GroupRef<
         NodeData = impl AsRef<str>,
-        LeafData = impl AsRef<Path>,
+        LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug,
     >,
     selected_vec: &mut Vec<usize>,
@@ -443,21 +444,34 @@ fn show_hiearchy_inner(
                                     );
                                 }
                                 lazy_hierarchy::NodeRef::Leaf(leaf) => {
-                                    ui.horizontal_top(|ui| {
-                                        egui::Image::new(format!(
-                                            "file://{}",
-                                            leaf.leaf_data()
-                                                .as_ref()
-                                                .to_str()
-                                                .unwrap_or("invalid file name") // This is a bit weird handling, but it works
-                                        ))
-                                        .ui(ui);
+                            
+                                    use backend::main_hierarchy::LeafData;
+                                    match leaf.leaf_data() {
+                                        LeafData::File(file) => {
+                                            ui.horizontal_top(|ui| {
+                                                egui::Image::new(format!(
+                                                    "file://{}",
+                                                    file.path
+                                                        .to_str()
+                                                        .unwrap_or("invalid file name") // This is a bit weird handling, but it works
+                                                ))
+                                                .ui(ui);
 
-                                        ui.add(
-                                            egui::Label::new(format!("{child_name}"))
-                                                .selectable(false),
-                                        )
-                                    });
+                                                ui.add(
+                                                    egui::Label::new(format!("{child_name}"))
+                                                        .selectable(false),
+                                                )
+                                            });
+                                        }
+                                        LeafData::LazyGroupInitializing { message } => {
+                                            ui.horizontal_top(|ui| {
+                                                egui::Spinner::new().ui(ui);
+                                                if let Some(msg) = message {
+                                                    ui.label(msg);
+                                                }
+                                            });
+                                        },
+                                    }
                                 }
                             };
                         });
@@ -804,12 +818,18 @@ impl MainPage {
             folder.display()
         );
 
-        let Ok(NodeRef::Group(hiearchy)) = backend::fs_hierarchy::new(folder) else {
-            unreachable!()
+        let hierarchy_template = backend::main_hierarchy::lazy_group::Template::Sorted {
+            item_source: ItemSource::EntireDir(folder.into()),
+            params: algorithm::Params::default()
         };
 
+        log::debug!("Created root group template");
+        let root_group = main_hierarchy::lazy_group::Dynamic::new(hierarchy_template);
+
+        log::debug!("Created root group");
+
         MainPage {
-            hiearchy: hiearchy.into(),
+            hiearchy: root_group.into(),
             /*hiearchy
             .into_iter()
             .map(|h| {

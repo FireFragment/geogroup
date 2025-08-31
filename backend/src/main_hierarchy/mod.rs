@@ -1,9 +1,11 @@
 use std::convert::Infallible;
-
 use derive_more::From;
-use lazy_hierarchy::GroupRef;
+use lazy_hierarchy::{concrete::Leaf, GroupRef};
 
 use super::*;
+
+
+pub mod lazy_group;
 
 /// A state of the hiearchy.
 /// It doesn't represent a concrete hiearchy, but rather abstract template for constructing such a hiearchy.
@@ -26,12 +28,12 @@ pub struct TemplateHiearchy(lazy_hierarchy::Concrete<(), InnerLeafData, NodeData
 
 impl From<fs_hierarchy::FolderRef> for TemplateHiearchy {
     fn from(value: fs_hierarchy::FolderRef) -> Self {
-        LazyGroup::from(value).into()
+        lazy_group::Dynamic::from(lazy_group::Final::from(value)).into()
     }
 }
 
-impl From<LazyGroup> for TemplateHiearchy {
-    fn from(value: LazyGroup) -> Self {
+impl From<lazy_group::Dynamic> for TemplateHiearchy {
+    fn from(value: lazy_group::Dynamic) -> Self {
         Self(lazy_hierarchy::Concrete::new(
             lazy_hierarchy::concrete::Group::new(
                 vec![lazy_hierarchy::concrete::Node::Leaf(
@@ -51,60 +53,36 @@ impl From<LazyGroup> for TemplateHiearchy {
     }
 }
 
-/// May actually represent a [lazy group](LazyGroup)
+/// May actually represent a [lazy group](lazy_group::Dynamic)
 /// ([subgroup](lazy_hierarchy::fused::MainLeafData::Subgroup) in [`lazy_hierarchy::fused`]'s terms)
 #[derive(Debug)]
 enum InnerLeafData {
-    LazySubgroup(LazyGroup),
+    LazySubgroup(lazy_group::Dynamic),
     RealLeaf(FileData),
 }
 
-#[derive(Debug, From)]
-pub enum LazyGroup {
-    Fs(fs_hierarchy::FolderRef),
-    Sorted(
-        algorithm::Sorter<
-            ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData>,
-        >,
-    ),
+
+#[derive(Debug)]
+pub struct LGSorted {
+    item_source: ItemSource,
+    sorter: algorithm::Sorter<
+        ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData>,
+    >,
 }
 
-impl LazyGroup {
-    pub fn as_group_ref<'a>(
-        &'a self,
-    ) -> impl GroupRef<
-        GroupData = (),
-        LeafData = FileData,
-        NodeData = NodeData,
-        StructureErr = std::io::Error,
-    > + 'a {
-        match self {
-            LazyGroup::Fs(folder_ref) => Either::Left(
-                folder_ref
-                    .to_owned()
-                    .map_leaf_data(|leaf| FileData {
-                        path: leaf.node_data(),
-                    })
-                    .map_node_data(|node| NodeData {
-                        name: node
-                            .node_data()
-                            .file_name()
-                            .map(|name| (*name.to_string_lossy()).to_owned()),
-                        /*.unwrap_or_else(|| {
-                            log::error!("Path ending in `..`: {:?}", node.node_data());
-                            String::new()
-                        }),*/
-                    }),
-            ),
-            LazyGroup::Sorted(sorter) => Either::Right(
-                sorter
-                    .hierarchy()
-                    .map_structure_error(|err, _| match err {})
-                    .map_node_data(|_| NodeData { name: None })
-                    .map_leaf_data(|leaf| leaf.leaf_data().data.to_owned()) // OPT: Possibly needless clone
-                    .map_group_data(|_| ()),
-            ),
-        }
+impl LGSorted {
+    /// Potentially long-running. Returns [None] if terminated by progress_callback
+    pub fn new(item_source: ItemSource, params: algorithm::Params, progress_callback: ProgressCallback) -> Option<Self> {
+        Some(Self { 
+            sorter: algorithm::Sorter::new(
+                item_source.into_concrete(progress_callback)?.paths.into_iter().filter_map(|path| {
+                    loaders::GeneralLoader.get_data(path.as_ref()).ok()?.as_sortable_item(FileData { path }).ok() // TODO: Don't ignore errors
+                })
+                .collect(), 
+                params
+            ),  // TODO: Don't ignore errors
+            item_source, 
+        })
     }
 }
 
@@ -115,11 +93,12 @@ pub enum StructureErr<E: std::error::Error> {
 }
 
 impl TemplateHiearchy {
+    /// Converts to [lazy_hierarchy::GroupRef]
     pub fn root<'a>(
         &'a self,
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = (),
-        LeafData = FileData,
+        LeafData = LeafData,
         NodeData = NodeData,
         StructureErr = StructureErr<impl std::error::Error>,
     > + 'a {
@@ -132,10 +111,17 @@ impl TemplateHiearchy {
             .map_node_data(|n| n.node_data().to_owned()) // OPT: Possibly needless clone
             .map_leaf_data(|leaf| match leaf.leaf_data() {
                 InnerLeafData::LazySubgroup(lazy_group) => {
-                    fused::MainLeafData::Subgroup(lazy_group.as_group_ref())
+                    lazy_group.read(|status| match status { 
+                        lazy_group::dynamic::View::Initializing(status) => 
+                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: status.msg.clone() }),
+                        lazy_group::dynamic::View::Finished(final_group) => 
+                            fused::MainLeafData::Subgroup(final_group.as_group_ref().map_leaf_data(|l| LeafData::File(l.leaf_data()))),
+                        lazy_group::dynamic::View::Terminated => 
+                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: None })
+                    })
                 }
                 InnerLeafData::RealLeaf(file_data) => {
-                    fused::MainLeafData::RealLeaf(file_data.to_owned()) // OPT: Possibly needless clone
+                    fused::MainLeafData::RealLeaf(LeafData::File(file_data.to_owned())) // OPT: Possibly needless clone
                 }
             })
             .fuse()
@@ -149,5 +135,12 @@ pub struct NodeData {
 }
 #[derive(Clone, Debug)]
 pub struct FileData {
-    pub path: PathBuf,
+    pub path: FileRef,
+}
+
+pub enum LeafData {
+    File(FileData),
+    LazyGroupInitializing {
+        message: Option<String>
+    }
 }
