@@ -52,11 +52,7 @@ pub(crate) fn ribbon_slider<Num: emath::Numeric>(
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.style_changed {
-            self.style_changed = false;
-            style::apply(ctx, &self.style_params);
-        }
-
+        style::possible_apply(ctx, &self.style_manager);
         for message in self.inbox.read_without_ctx() {
             message.perform(self, ctx);
         }
@@ -285,13 +281,6 @@ impl App {
                             ui.separator();
 
                             ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("Accent color");
-                                    if ui.color_edit_button_srgba(&mut self.style_params.accent_color).changed() {
-                                        self.style_changed = true;
-                                    }
-                                });
-
                                 ui.horizontal_centered(|ui| {
                                     ui.label("Color theme");
                                     egui_theme_switch::global_theme_switch(ui)
@@ -698,7 +687,7 @@ pub struct App {
     pub content: AppContent,
     pub inbox: UiInbox<Message>,
     pub args: CliArgs,
-    pub style_params: style::Params,
+    pub style_manager: style::Manager,
     pub style_changed: bool,
     pub errors: Vec<AppWideError>, // TODO: Show it on every page (every variant of AppContent)
 }
@@ -708,7 +697,7 @@ impl App {
         let mut app = Self {
             content: gui::AppContent::default(),
             inbox: UiInbox::default(),
-            style_params: style::Params::new_from_os(),
+            style_manager: style::Manager::new_from_os(),
             style_changed: false,
             errors: Vec::new(),
             args,

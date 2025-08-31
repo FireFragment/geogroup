@@ -1,18 +1,21 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::{mpsc, Arc}, time::Duration};
+
+const DEFAULT_ACCENT_COLOR: Color32 = Color32::from_rgb(67, 100, 188);
 
 use eframe::egui::{
     self, Color32, Context, FontFamily, FontId, Rounding, Stroke, Style, TextStyle, Theme, Vec2,
 };
 
-#[derive(Debug)]
-pub struct Params {
-    pub accent_color: Color32,
+pub struct Manager {
+    accent_color_stream: mpsc::Receiver<Color32>,
+    subscription: mundy::Subscription
 }
 
-impl Params {
+impl Manager {
     pub fn new_from_os() -> Self {
-        Params {
-            accent_color: mundy::Preferences::once_blocking(mundy::Interest::AccentColor, Duration::from_millis(500))
+        let (tx, rx) = mpsc::channel();
+        Manager {
+        /*accent_color: mundy::Preferences::once_blocking(mundy::Interest::AccentColor, Duration::from_millis(500))
                 .map(|preferences| preferences.accent_color.0)
                 .flatten()
                 .map(|c| Color32::from_rgb(
@@ -20,7 +23,21 @@ impl Params {
                     (c.green * u8::MAX as f64) as u8,
                     (c.blue * u8::MAX as f64) as u8
                 ))
-                .unwrap_or_else(|| Color32::from_rgb(67, 100, 188)),
+                .unwrap_or_else(|| Color32::from_rgb(67, 100, 188)),*/
+            accent_color_stream: rx,
+            subscription: mundy::Preferences::subscribe(mundy::Interest::AccentColor, move |preferences| {
+                let Some(c) = preferences.accent_color.0 else {
+                    log::error!("Got no accent color");
+                    return
+                };
+                tx.send(Color32::from_rgb(
+                    (c.red * u8::MAX as f64) as u8,
+                    (c.green * u8::MAX as f64) as u8,
+                    (c.blue * u8::MAX as f64) as u8
+                )).unwrap_or_else(|err| {
+                    log::error!("Error sending a new accent color: {err}");
+                });
+            })
         }
     }
 }
@@ -125,7 +142,28 @@ fn load_fonts(ctx: &Context) {
     ctx.set_fonts(fonts);
 }
 
-pub fn apply(ctx: &Context, params: &Params) {
+/// Apply only if needed, ie. something changed from the last call
+pub fn possible_apply(ctx: &Context, params: &Manager) {
+    if let Ok(color) = params.accent_color_stream.try_recv() {
+        apply(ctx, color);
+    }
+}
+
+/// Block and apply after having received a new accent color
+///
+/// Will not block for longer than 100ms
+pub fn initial_apply(ctx: &Context, params: &Manager) {
+    match params.accent_color_stream.recv_timeout(Duration::from_millis(100)) {
+        Ok(color) => apply(ctx, color),
+        Err(err) => {
+            log::warn!("Failed to get accent color: {err}");
+            apply(ctx, DEFAULT_ACCENT_COLOR)
+        },
+    }
+
+}
+
+pub fn apply(ctx: &Context, accent_color: Color32) {
     //ctx.set_fonts(fonts);
 
     load_fonts(ctx);
@@ -167,12 +205,12 @@ pub fn apply(ctx: &Context, params: &Params) {
         style.visuals.widgets.active.weak_bg_fill = style.visuals.widgets.active.bg_fill;
         style.visuals.widgets.active.bg_stroke.color = Color32::TRANSPARENT;
 
-        style.visuals.selection.bg_fill = params.accent_color;
-        style.visuals.hyperlink_color = params.accent_color;
+        style.visuals.selection.bg_fill = accent_color;
+        style.visuals.hyperlink_color = accent_color;
         //style.visuals.selection.bg_fill = Color32::from_rgb(193, 113, 34);
         //style.visuals.selection.bg_fill = Color32::from_rgb(135, 8, 131);
 
-        style.visuals.selection.stroke.color = if params.accent_color.g() > 128 {
+        style.visuals.selection.stroke.color = if accent_color.g() > 128 {
             Color32::BLACK
         } else {
             Color32::WHITE

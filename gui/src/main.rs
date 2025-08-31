@@ -81,7 +81,7 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
 
-            style::apply(&cc.egui_ctx, &app.style_params);
+            style::initial_apply(&cc.egui_ctx, &app.style_manager);
             Ok(Box::new(app))
         }),
     )
