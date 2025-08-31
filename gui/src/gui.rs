@@ -10,6 +10,7 @@ use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
 use geogroup_backend::lazy_hierarchy::NodeRef;
 use geogroup_backend::main_hierarchy;
+use geogroup_backend::progress;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::thread;
@@ -444,7 +445,6 @@ fn show_hiearchy_inner(
                                     );
                                 }
                                 lazy_hierarchy::NodeRef::Leaf(leaf) => {
-                            
                                     use backend::main_hierarchy::LeafData;
                                     match leaf.leaf_data() {
                                         LeafData::File(file) => {
@@ -463,11 +463,17 @@ fn show_hiearchy_inner(
                                                 )
                                             });
                                         }
-                                        LeafData::LazyGroupInitializing { message } => {
-                                            ui.horizontal_top(|ui| {
-                                                egui::Spinner::new().ui(ui);
-                                                if let Some(msg) = message {
-                                                    ui.label(msg);
+                                        LeafData::LazyGroupInitializing { message, progress } => {
+                                            ui.vertical(|ui| {
+                                                ui.horizontal_top(|ui| {
+                                                    egui::Spinner::new().ui(ui);
+                                                    if let Some(msg) = message {
+                                                        ui.label(msg);
+                                                    }
+                                                });
+                                                if let Some(progress) = progress {
+                                                    egui::ProgressBar::new(progress as f32 / u16::MAX as f32)
+                                                        .ui(ui);
                                                 }
                                             });
                                         },
