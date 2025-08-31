@@ -708,7 +708,7 @@ impl App {
         let mut app = Self {
             content: gui::AppContent::default(),
             inbox: UiInbox::default(),
-            style_params: Default::default(),
+            style_params: style::Params::new_from_os(),
             style_changed: false,
             errors: Vec::new(),
             args,

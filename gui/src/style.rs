@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use eframe::egui::{
     self, Color32, Context, FontFamily, FontId, Rounding, Stroke, Style, TextStyle, Theme, Vec2,
@@ -9,10 +9,18 @@ pub struct Params {
     pub accent_color: Color32,
 }
 
-impl Default for Params {
-    fn default() -> Self {
+impl Params {
+    pub fn new_from_os() -> Self {
         Params {
-            accent_color: Color32::from_rgb(186, 32, 68),
+            accent_color: mundy::Preferences::once_blocking(mundy::Interest::AccentColor, Duration::from_millis(500))
+                .map(|preferences| preferences.accent_color.0)
+                .flatten()
+                .map(|c| Color32::from_rgb(
+                    (c.red * u8::MAX as f64) as u8,
+                    (c.green * u8::MAX as f64) as u8,
+                    (c.blue * u8::MAX as f64) as u8
+                ))
+                .unwrap_or_else(|| Color32::from_rgb(67, 100, 188)),
         }
     }
 }
