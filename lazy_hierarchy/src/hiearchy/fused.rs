@@ -54,33 +54,30 @@ pub enum MainLeafData<T, SubGroup: GroupRef> {
 #[derive(Clone)]
 pub struct FLeafRef<
     Sg: GroupRef,
-    B: LeafRef<LeafData = MainLeafData<S::LeafData, Sg>, NodeData = S::NodeData>,
-    S: LeafRef,
->(FLeafRefInner<Sg, B, S>);
+    B: LeafRef<LeafData = MainLeafData<Sg::LeafData, Sg>, NodeData = Sg::NodeData>,
+>(FLeafRefInner<Sg, B>);
 
 #[derive(Clone)]
 enum FLeafRefInner<
     Sg: GroupRef,
-    B: LeafRef<LeafData = MainLeafData<S::LeafData, Sg>, NodeData = S::NodeData>,
-    S: LeafRef,
+    B: LeafRef<LeafData = MainLeafData<Sg::LeafData, Sg>, NodeData = Sg::NodeData>,
 > {
     /// The leaf comes from the base
     ///
     /// Constructing this where `B.leaf_data()` returns [`Subgroup`](MainLeafData::Subgroup) may lead to [panics](panic)
     Base(B),
     /// The leaf comes from a [subgroup](MainLeafData::Subgroup)
-    Subgroup(S),
+    Subgroup(Sg::LeafRef),
 }
 
 impl<
         Sg: GroupRef,
-        B: LeafRef<LeafData = MainLeafData<S::LeafData, Sg>, NodeData = S::NodeData>,
-        S: LeafRef,
-    > LeafRef for FLeafRef<Sg, B, S>
+        B: LeafRef<LeafData = MainLeafData<Sg::LeafData, Sg>, NodeData = Sg::NodeData>,
+    > LeafRef for FLeafRef<Sg, B>
 {
-    type LeafData = S::LeafData;
+    type LeafData = Sg::LeafData;
 
-    type NodeData = S::NodeData;
+    type NodeData = Sg::NodeData;
 
     fn leaf_data(&self) -> Self::LeafData {
         match &self.0 {
@@ -119,15 +116,15 @@ impl<
     type LeafData = Subgroup::LeafData;
     type GroupData = Subgroup::GroupData;
     type StructureErr = Subgroup::StructureErr;
-    type LeafRef = FLeafRef<Subgroup, BaseGroup::LeafRef, Subgroup::LeafRef>;
+    type LeafRef = FLeafRef<Subgroup, BaseGroup::LeafRef>;
 
     fn get_children(&self) -> Result<impl Iterator<Item = NodeRef<Self>>, Self::StructureErr>
     where
         Self: Sized,
     {
-        Ok(match &self.0 {
+        match &self.0 {
             FGroupRefInner::Base(base_group) => {
-                Either::Left(base_group.get_children()?.map(|child| match child {
+                Ok(Either::Left(base_group.get_children()?.map(|child| match child {
                     NodeRef::Group(child_group) => {
                         NodeRef::Group(FGroupRef(FGroupRefInner::Base(child_group)))
                     }
@@ -139,15 +136,15 @@ impl<
                             NodeRef::Group(FGroupRef(FGroupRefInner::Subgroup(subgroup)))
                         }
                     },
-                }))
+                })))
             }
             FGroupRefInner::Subgroup(group) => {
-                Either::Right(group.get_children()?.map(|child| match child {
+                Ok(Either::Right(group.get_children()?.map(|child| match child {
                     NodeRef::Group(g) => NodeRef::Group(FGroupRef(FGroupRefInner::Subgroup(g))),
                     NodeRef::Leaf(l) => NodeRef::Leaf(FLeafRef(FLeafRefInner::Subgroup(l))),
-                }))
+                })))
             }
-        })
+        }
     }
 
     fn group_data(&self) -> Self::GroupData {
