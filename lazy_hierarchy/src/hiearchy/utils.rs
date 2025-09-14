@@ -8,8 +8,10 @@ use std::{
 use super::*;
 pub mod dissolve;
 pub mod map;
+pub mod mark_root;
 pub mod with_parent;
 pub use dissolve::Dissolver;
+pub use mark_root::{MarkRootGroupRef, MarkedRootGroupData};
 pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeData};
 
 use either::Either;
@@ -153,6 +155,37 @@ pub trait GroupRefUtils: GroupRef {
         fun_should_dissolve: F,
     ) -> utils::Dissolver<Self, F> {
         utils::Dissolver::new(self, fun_should_dissolve)
+    }
+
+    /// Utility for marking the root group in a hierarchy
+    ///
+    /// This utility transforms a hierarchy's `GroupData` from type `T` to [`MarkedRootGroupData<T>`],
+    /// where [`is_root`](MarkedRootGroupData::is_root) is `true` only for the root group
+    /// (ie. the very group that was passed to this function).
+    /// All child groups will have [`is_root`](MarkedRootGroupData::is_root) set to `false`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lazy_hierarchy::{concrete::{Group, Leaf, Node}, prelude::*, utils::MarkedRootGroupData};
+    ///
+    /// let leaf = Leaf::new("leaf_data", ());
+    /// let child_group = Group::new(vec![Node::new_leaf(leaf)], "child", ());
+    /// let root_group = Group::new(vec![Node::new_group(child_group)], "root", ());
+    ///
+    /// let marked = root_group.mark_root();
+    ///
+    /// // Root group is marked as such
+    /// assert_eq!(marked.group_data(), MarkedRootGroupData { is_root: true, data: &"root" });
+    ///
+    /// // Child groups are not marked as root
+    /// let children: Vec<_> = marked.get_children().unwrap().collect();
+    /// if let lazy_hierarchy::NodeRef::Group(child) = &children[0] {
+    ///     assert_eq!(child.group_data(), MarkedRootGroupData { is_root: false, data: &"child" });
+    /// }
+    /// ```
+    fn mark_root(self) -> utils::MarkRootGroupRef<Self> {
+        utils::mark_root::mark_root(self)
     }
 
     /// `format_node` should return just a single line
