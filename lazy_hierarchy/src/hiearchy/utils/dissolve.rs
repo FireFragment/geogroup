@@ -53,7 +53,7 @@ impl<OrigGr: GroupRef, F: Fn(&OrigGr) -> bool + Clone> GroupRef for Dissolver<Or
         }
 
         Ok(
-            get_children_dissolved(self.this.clone(), &self.fun_should_dissolve.clone())?
+            get_children_dissolved(&self.this, &self.fun_should_dissolve.clone())?
                 .into_iter(),
         )
     }
@@ -68,7 +68,7 @@ impl<OrigGr: GroupRef, F: Fn(&OrigGr) -> bool + Clone> GroupRef for Dissolver<Or
 }
 
 fn get_children_dissolved<'a, OrigGr: GroupRef + 'a, F: Fn(&OrigGr) -> bool + Clone>(
-    group: OrigGr,
+    group: &OrigGr,
     fun_should_dissolve: &'a F,
 ) -> Result<Vec<NodeRef<Dissolver<OrigGr, F>>>, <OrigGr as GroupRef>::StructureErr> {
     Ok(group
@@ -79,7 +79,7 @@ fn get_children_dissolved<'a, OrigGr: GroupRef + 'a, F: Fn(&OrigGr) -> bool + Cl
                 NodeRef::Group(subgroup) => {
                     if (fun_should_dissolve)(&subgroup) {
                         Either::Right(
-                            get_children_dissolved(subgroup, fun_should_dissolve)?.into_iter(),
+                            get_children_dissolved(&subgroup, fun_should_dissolve)?.into_iter(),
                         )
                     } else {
                         Either::Left(std::iter::once(NodeRef::Group(Dissolver {
