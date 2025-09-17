@@ -102,4 +102,8 @@ impl<Item: SortableItem> Sorter<Item> {
     pub fn params(&self) -> &Params {
         &self.params
     }
+
+    pub fn params_mut(&mut self) -> &mut Params {
+        &mut self.params
+    }
 }

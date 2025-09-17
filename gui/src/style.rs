@@ -193,6 +193,8 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
             style.visuals.widgets.hovered.bg_stroke.color =
                 style.visuals.widgets.inactive.bg_fill.gamma_multiply(1.5);
 
+            style.visuals.faint_bg_color = Color32::GRAY.gamma_multiply(0.5);
+
             set_fg_color(style, Color32::WHITE);
         } else {
             set_fg_color(style, Color32::BLACK);

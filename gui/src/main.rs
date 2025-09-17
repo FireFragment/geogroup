@@ -22,6 +22,7 @@ use std::{
     ops::Deref,
     path::{Path, PathBuf},
 };
+use std::convert::Infallible;
 
 use eframe::{egui, emath, glow};
 use egui::Frame;

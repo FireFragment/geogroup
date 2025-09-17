@@ -1,13 +1,16 @@
 //! The core of this crate, the code rendering all the GUI
 
 use derive_more::From;
+use eframe::egui::Color32;
 use eframe::egui::TextStyle;
 use egui::{
     Align, Button, CursorIcon, FontFamily, FontId, Layout, Margin, ProgressBar, RichText, Sense,
     Stroke, UiBuilder, Vec2, ViewportCommand, Widget,
 };
+use egui_extras::TableBuilder;
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
+use geogroup_backend::lazy_hierarchy::concrete::Group;
 use geogroup_backend::lazy_hierarchy::NodeRef;
 use geogroup_backend::main_hierarchy;
 use geogroup_backend::progress;
@@ -60,8 +63,9 @@ impl eframe::App for App {
         if let Some(cpu_usage) = frame.info().cpu_usage {
             egui::TopBottomPanel::bottom("performance").show(ctx, |ui| {
                 let since_last_frame = ctx.input(|input| input.unstable_dt);
+                self.mean_cpu_usage = (self.mean_cpu_usage * 7.0 + (cpu_usage / (1.0 / 60.0))) / 8.0;
 
-                egui::ProgressBar::new(cpu_usage / (1.0 / 60.0))
+                egui::ProgressBar::new(self.mean_cpu_usage)
                     .rounding(egui::Rounding::ZERO)
                     .ui(ui);
                 ctx.request_repaint();
@@ -106,6 +110,10 @@ impl App {
         *self = Self::Loading("Loading files".into());*/
     }
 
+    /*fn get_concrete_parent(&self) -> & {
+        todo!()
+    }*/
+
     /// Panics if `content` is not [`AppContent::MainPage`]
     pub(crate) fn draw_main_page(&mut self, ctx: &egui::Context) {
         let AppContent::MainPage(ref mut main_page) = self.content else {
@@ -124,18 +132,26 @@ impl App {
             .frame(Frame::none())
             .show_separator_line(false)
             .show(ctx, |ui| {
-                tabbar(
+                use tabbar::Item::*;
+                enum Action { Deselect }
+                let action = tabbar(
                     ui,
                     &mut main_page.pane,
                     [
-                        (PaneContent::Grouping, "🗁 Grouping"),
-                        (PaneContent::Naming, "🏷 Naming"),
-                        (PaneContent::ManualEdit, "✏ Manual edits"),
-                        (PaneContent::Apply, "☑ Apply"),
-                        (PaneContent::Home, "🏠 Home"),
-                        (PaneContent::View, "👁 View"),
+                        (Tab(PaneContent::Grouping), "🗁 Grouping"),
+                        (Tab(PaneContent::Naming), "🏷 Naming"),
+                        (Tab(PaneContent::ManualEdit), "✏ Manual edits"),
+                        (Tab(PaneContent::Apply), "☑ Apply"),
+                        (Tab(PaneContent::Home), "🏠 Home"),
+                        (Tab(PaneContent::View), "👁 View"),
+                        (Action(Action::Deselect), "Deselect all"),
                     ],
                 );
+
+                match action {
+                    Some(Action::Deselect) => main_page.selection = Vec::new(),
+                    None => {},
+                }
             });
 
         egui::TopBottomPanel::top("ribbon content").max_height(96.0).min_height(96.0).show_separator_line(false).show_animated(ctx, main_page.pane.is_some(), |ui| {
@@ -148,53 +164,36 @@ impl App {
                 animated_pager(ui, pane, &TransitionStyle::horizontal(ui), egui::Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
-                            let mut sort_btn_clicked = false;
+                            let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = main_page.hiearchy.0.root_group_mut().children_mut()[0]
+                                else { todo!() } ;
 
-                                ui.scope(|ui| {
-                                    ui.set_max_width(128.0);
-                                    egui_extras::StripBuilder::new(ui).size(Size::remainder()).size(Size::exact(24.0)).vertical(|mut strip| {
+                            let main_hierarchy::InnerLeafData::LazySubgroup(subgroup) = leaf.leaf_data_mut() else { todo!() };
 
-                                        strip.cell(|ui| {
-                                            match main_page.is_sort_process_idle() {
-                                                true => {
-                                                    if main_page.auto_sort {
-                                                        ui.disable();
-                                                    }
-                                                    sort_btn_clicked = ui.add_sized(ui.available_size(), Button::new("⛭ Sort").fill(ui.style().visuals.selection.bg_fill)).clicked();
-                                                },
-                                                false => {
-                                                    ui.horizontal_centered(|ui| {
-                                                        ui.spinner(); //.labelled_by(label.id);
-                                                        ui.label("Sorting...")
-                                                    });
-                                                }
-                                            }
-                                        });
-
-                                        strip.cell(|ui| {
-                                            cfg_changed |= ui.checkbox(&mut main_page.auto_sort, "Sort automatically").changed();
-                                        });
-                                    });
-                                });
-
-
-                                ui.separator();
-
-                                ribbon_slider(
-                                    ui,
-                                    egui::Slider::new(
-                                        &mut main_page.operation_config.depth,
-                                        0..=backend::algorithm::MAX_DEPTH
-                                    ).custom_formatter(|num, range|  format!(".{:>2}", num*100.0 / *range.end() as f64)), // TODO: Add also custom parser
-                                    backend::algorithm::Params::default().depth,
-                                    "Depth",
-                                    "High values yield deeply nested folder structure. Low values lead to shallow structures",
-                                    Some(&mut cfg_changed),
-                                );
+                            if let Some(main_hierarchy::lazy_group::dynamic::Finalized::Success(subgroup_final)) =
+                                subgroup.get_final_mut()
+                            {
+                                match subgroup_final {
+                                    main_hierarchy::lazy_group::Final::Sorted(subgroup_sorted) => {
+                                        ribbon_slider(
+                                            ui,
+                                            egui::Slider::new(
+                                                &mut subgroup_sorted.params_mut().depth,
+                                                0..=backend::algorithm::MAX_DEPTH
+                                            ).custom_formatter(|num, range| {
+                                                format!(".{:0>2}", ((num*100.0)/(backend::algorithm::MAX_DEPTH as f64)) as u8)
+                                            }), // TODO: Add also custom parser
+                                            backend::algorithm::Params::default().depth,
+                                            "Depth",
+                                            "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                            Some(&mut cfg_changed),
+                                        );
+                                    },
+                                    _ => {} // TODO
+                                }
+                            }
                         }
                         PaneContent::Naming => {}
                         PaneContent::ManualEdit => {
-                            todo!()
                             /*if main_page.auto_sort {
                                 ui.vertical(|ui| {
                                     ui.strong("Automatic sorting is enabled");
@@ -290,9 +289,14 @@ impl App {
                         }
                     }
                 });
-
             });
         });
+
+        /*egui::SidePanel::left("colors").show(ctx, |ui| {
+            egui::ScrollArea::new([false, true]).show(ui, |ui| {
+                ctx.settings_ui(ui);
+            });
+        });*/
 
         egui::TopBottomPanel::bottom("bottom statusbar").show(ctx, |ui| {
             /*if let Some(ref progress) = main_page.progress {
@@ -350,7 +354,7 @@ pub fn show_hiearchy(
                 show_hiearchy_inner(
                     ui,
                     &hiearchy
-                        .root()
+                        .root_final()
                         .map_node_data(|n| n.node_data().name.unwrap_or_default())
                         .map_leaf_data(|l| l.leaf_data()),
                     selected_vec,
@@ -362,9 +366,173 @@ pub fn show_hiearchy(
         });
 }
 
+fn show_hiearchy_list(
+    table: TableBuilder,
+    selection_idx: &mut Option<usize>,
+    group_row_size: f32,
+    image_scale: u16,
+    items: &Vec<NodeRef<impl lazy_hierarchy::GroupRef<
+        GroupData = backend::main_hierarchy::GroupData,
+        NodeData = impl AsRef<str>,
+        LeafData = backend::main_hierarchy::LeafData,
+        StructureErr = impl Debug
+    >>>
+) {
+    table.body(|body| {
+        body.heterogeneous_rows(
+            items.iter().map(|item| match item {
+                lazy_hierarchy::NodeRef::Group(group) => {
+                    /*if let main_hierarchy::GroupData::LazySubgroupRoot = group.group_data() {
+                        group.get_children().expect("TODO").map(|child| {
+                            match child {
+                                NodeRef::Group(_) => group_row_size, // There should be no nested `LazySubgroupRoot`s
+                                NodeRef::Leaf(_) => image_scale as f32,
+                            }
+                        }).sum()
+                    } else {*/
+                        group_row_size
+                    //}
+                },
+                lazy_hierarchy::NodeRef::Leaf(_) => image_scale as f32,
+            }),
+            |mut row| {
+                let idx = row.index();
+                let child = &items[idx];
+                let child_data = child.node_data();
+                let child_name = child_data.as_ref();
+
+                let selected = *selection_idx == Some(row.index());
+                row.set_selected(selected);
+                if let lazy_hierarchy::NodeRef::Group(g) = child {
+                    if let main_hierarchy::GroupData::LazySubgroupRoot = g.group_data() {
+                        /*row.set_selected(false);
+                        row.set_hovered(false);*/
+                    }
+                }
+
+                row.col(|ui| {
+                    match child {
+                        lazy_hierarchy::NodeRef::Group(group) => {
+                            /*
+                            if let main_hierarchy::GroupData::LazySubgroupRoot = group.group_data() {
+                                ui.vertical(|ui| {
+                                    let sorter_color = if selected { ui.visuals().selection.bg_fill } else  {
+                                        let c = ui.visuals().text_color();
+                                        Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 64)
+                                    };
+
+                                    // The label
+                                    {
+                                        let mut frame = Frame::none().inner_margin(Margin::symmetric(4.0, 0.0)).begin(ui);
+
+                                        let text_color = if selected { frame.content_ui.visuals().selection.stroke.color }
+                                            else { ui.visuals().text_color() };
+                                        frame.content_ui.add(
+                                            egui::Label::new(RichText::new(format!("⚙ Sorted automatically {child_name}"))
+                                                .color(text_color))
+                                                .selectable(false)
+                                        );
+                                        let response = frame.allocate_space(ui);
+
+                                        if response.hovered() {
+                                            frame.frame.fill = ui.visuals().widgets.hovered.bg_fill;
+                                        }
+                                        if selected {
+                                            frame.frame.fill = ui.visuals().selection.bg_fill;
+                                        }
+                                        frame.paint(ui);
+                                    }
+
+
+                                    ui.horizontal_top(|ui| {
+                                        use egui_extras::{Column, TableBuilder};
+
+                                        let line_thickness = 0.0; //if selected { 4.0 } else { 2.0 };
+                                        let line_margin = 5.0 - line_thickness / 2.0;
+
+                                        ui.add_space(line_margin);
+                                        egui::Frame::none()
+                                            .fill(sorter_color)
+                                            .show(ui, |ui| {
+                                                //ui.add_space(ui.visuals().widgets.noninteractive.bg_stroke.width);
+                                                ui.add_space(line_thickness);
+                                                ui.set_height(ui.available_height());
+                                            });
+                                        ui.add_space(line_margin);
+
+                                        show_hiearchy_list(
+                                            TableBuilder::new(ui)
+                                                .column(Column::remainder())
+                                                .vscroll(false)
+                                                .sense(Sense::click()),
+                                            &mut None, // TODO: Allow selections here
+                                            group_row_size,
+                                            image_scale,
+                                            &group.get_children().expect("TODO").collect(),
+                                        );
+                                    });
+                                });
+                            } else {*/
+                                // TODO: Group names
+                                ui.add(
+                                    egui::Label::new(format!("🗁 {child_name}"))
+                                        .selectable(false),
+                                );
+                            //}
+
+                        }
+                        lazy_hierarchy::NodeRef::Leaf(leaf) => {
+                            use backend::main_hierarchy::LeafData;
+                            match leaf.leaf_data() {
+                                LeafData::File(file) => {
+                                    ui.horizontal_top(|ui| {
+                                        egui::Image::new(format!(
+                                            "file://{}",
+                                            file.path
+                                                .to_str()
+                                                .unwrap_or("invalid file name") // This is a bit weird handling, but it works
+                                        ))
+                                        .ui(ui);
+
+                                        ui.add(
+                                            egui::Label::new(format!("{child_name}"))
+                                                .selectable(false),
+                                        )
+                                    });
+                                }
+                                LeafData::LazyGroupInitializing { message, progress } => {
+                                    ui.vertical(|ui| {
+                                        ui.horizontal_top(|ui| {
+                                            egui::Spinner::new().ui(ui);
+                                            if let Some(msg) = message {
+                                                ui.label(msg);
+                                            }
+                                        });
+                                        if let Some(progress) = progress {
+                                            egui::ProgressBar::new(progress as f32 / u16::MAX as f32)
+                                                .ui(ui);
+                                        }
+                                    });
+                                },
+                            }
+                        }
+                    };
+                });
+
+                if row.response().clicked() {
+                    *selection_idx = Some(idx);
+                }
+
+                //row.set_selected(selection_highlight);
+            },
+        );
+    });
+}
+
 fn show_hiearchy_inner(
     ui: &mut egui::Ui,
     hiearchy: &impl lazy_hierarchy::GroupRef<
+        GroupData = backend::main_hierarchy::GroupData,
         NodeData = impl AsRef<str>,
         LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug,
@@ -397,91 +565,30 @@ fn show_hiearchy_inner(
     ui.push_id(current_depth, |ui| {
         let group_row_size =
             ui.style().text_styles[&TextStyle::Body].size + ui.style().spacing.item_spacing.y * 2.0;
-        TableBuilder::new(ui)
-            .column(if selected_group.is_some() {
-                Column::exact(256.0)
+
+        let mut selected_idx = selected_vec.get(current_depth).cloned();
+
+        show_hiearchy_list(
+            TableBuilder::new(ui)
+                .column(if selected_group.is_some() {
+                    Column::exact(256.0)
+                } else {
+                    Column::remainder()
+                })
+                .sense(Sense::click()),
+            &mut selected_idx,
+            group_row_size,
+            image_scale,
+            &children
+        );
+
+        if let Some(new_selected_idx) = selected_idx {
+            if let Some(prev_selected_idx) = selected_vec.get_mut(current_depth) {
+                *prev_selected_idx = new_selected_idx;
             } else {
-                Column::remainder()
-            })
-            .sense(Sense::click())
-            .body(|body| {
-                body.heterogeneous_rows(
-                    children.iter().map(|item| match item {
-                        lazy_hierarchy::NodeRef::Group(_) => group_row_size,
-                        lazy_hierarchy::NodeRef::Leaf(_) => image_scale as f32,
-                    }),
-                    |mut row| {
-                        let idx = row.index();
-
-                        row.set_selected(
-                            selected_vec
-                                .get(current_depth)
-                                .map(|s| *s == row.index())
-                                .unwrap_or(false),
-                        );
-
-                        row.col(|ui| {
-                            let child = &children[idx];
-                            let child_data = child.node_data();
-                            let child_name = child_data.as_ref();
-
-                            match child {
-                                lazy_hierarchy::NodeRef::Group(folder) => {
-                                    // TODO: Group names
-                                    ui.add(
-                                        egui::Label::new(format!("🗁 {child_name}"))
-                                            .selectable(false),
-                                    );
-                                }
-                                lazy_hierarchy::NodeRef::Leaf(leaf) => {
-                                    use backend::main_hierarchy::LeafData;
-                                    match leaf.leaf_data() {
-                                        LeafData::File(file) => {
-                                            ui.horizontal_top(|ui| {
-                                                egui::Image::new(format!(
-                                                    "file://{}",
-                                                    file.path
-                                                        .to_str()
-                                                        .unwrap_or("invalid file name") // This is a bit weird handling, but it works
-                                                ))
-                                                .ui(ui);
-
-                                                ui.add(
-                                                    egui::Label::new(format!("{child_name}"))
-                                                        .selectable(false),
-                                                )
-                                            });
-                                        }
-                                        LeafData::LazyGroupInitializing { message, progress } => {
-                                            ui.vertical(|ui| {
-                                                ui.horizontal_top(|ui| {
-                                                    egui::Spinner::new().ui(ui);
-                                                    if let Some(msg) = message {
-                                                        ui.label(msg);
-                                                    }
-                                                });
-                                                if let Some(progress) = progress {
-                                                    egui::ProgressBar::new(progress as f32 / u16::MAX as f32)
-                                                        .ui(ui);
-                                                }
-                                            });
-                                        },
-                                    }
-                                }
-                            };
-                        });
-
-                        if row.response().clicked() {
-                            if let Some(selection_idx) = selected_vec.get_mut(current_depth) {
-                                *selection_idx = idx;
-                                selected_vec.truncate(current_depth + 1);
-                            } else {
-                                selected_vec.push(idx);
-                            }
-                        }
-                    },
-                );
-            })
+                selected_vec.push(new_selected_idx);
+            }
+        }
     });
 
     if let Some(g) = selected_group {
@@ -690,6 +797,7 @@ pub struct App {
     pub style_manager: style::Manager,
     pub style_changed: bool,
     pub errors: Vec<AppWideError>, // TODO: Show it on every page (every variant of AppContent)
+    mean_cpu_usage: f32
 }
 
 impl App {
@@ -700,6 +808,7 @@ impl App {
             style_manager: style::Manager::new_from_os(),
             style_changed: false,
             errors: Vec::new(),
+            mean_cpu_usage: 1.0,
             args,
         };
 

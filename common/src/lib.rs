@@ -10,7 +10,7 @@ pub type Distance = u64;
 pub trait SortableItem {
     type Time: Ord + Clone;
     type Position: Point + Clone;
-    
+
     type PositionErr: Debug; // TODO: Consider removing this bound. It makes it easy to expect on the result.
 
     fn get_time(&self) -> Self::Time;
@@ -66,7 +66,7 @@ impl<P: Point + Clone, T: Ord + Clone, D> SortableItem for ConcreteSortableItem<
     fn get_position(&self) -> Result<P, Infallible> {
         Ok(self.position.clone())
     }
-    
+
 }
 
 impl<T: SortableItem> SortableItem for &T {

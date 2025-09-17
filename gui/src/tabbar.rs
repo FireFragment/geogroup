@@ -2,12 +2,18 @@ use super::*;
 use eframe::egui::{Align, Button, Color32, Layout, Stroke};
 use egui::Frame;
 
-pub fn tabbar<'a, TabId: PartialEq>(
+pub enum Item<TabId, ActionId = Infallible> {
+    Tab(TabId),
+    Action(ActionId)
+}
+
+pub fn tabbar<'a, TabId: PartialEq, ActionId>(
     ui: &mut egui::Ui,
     selected_tab: &mut Option<TabId>,
-    tabs: impl IntoIterator<Item = (TabId, &'a str)>,
-) {
+    tabs: impl IntoIterator<Item = (Item<TabId, ActionId>, &'a str)>,
+) -> Option<ActionId> {
     let tab_bar_bg = ui.style().visuals.selection.bg_fill;
+    let mut action = None;
 
     egui::Frame::none().fill(tab_bar_bg).show(ui, |ui| {
         let style = ui.style_mut();
@@ -38,8 +44,13 @@ pub fn tabbar<'a, TabId: PartialEq>(
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    for (tab_id, label) in tabs {
-                        ui.selectable_value(selected_tab, Some(tab_id), label);
+                    for (item, label) in tabs {
+                        match item {
+                            Item::Tab(tab_id) => {
+                                ui.selectable_value(selected_tab, Some(tab_id), label);
+                            },
+                            Item::Action(action_id) => if ui.button(label).clicked() { action = Some(action_id); },
+                        };
                     }
 
                     if selected_tab.is_some() {
@@ -64,4 +75,6 @@ pub fn tabbar<'a, TabId: PartialEq>(
             })
         });
     });
+
+    action
 }

@@ -24,7 +24,7 @@ pub mod lazy_group;
 ///
 /// If you are interested in examining the actual structure of hiearchy, see [`hiearchy::lazy`]
 #[derive(Debug)]
-pub struct TemplateHiearchy(lazy_hierarchy::Concrete<(), InnerLeafData, NodeData>);
+pub struct TemplateHiearchy(pub lazy_hierarchy::Concrete<(), InnerLeafData, NodeData>);
 
 impl From<fs_hierarchy::FolderRef> for TemplateHiearchy {
     fn from(value: fs_hierarchy::FolderRef) -> Self {
@@ -56,7 +56,7 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
 /// May actually represent a [lazy group](lazy_group::Dynamic)
 /// ([subgroup](lazy_hierarchy::fused::MainLeafData::Subgroup) in [`lazy_hierarchy::fused`]'s terms)
 #[derive(Debug)]
-enum InnerLeafData {
+pub enum InnerLeafData {
     LazySubgroup(lazy_group::Dynamic),
     RealLeaf(FileData),
 }
@@ -115,6 +115,10 @@ impl LGSorted {
             item_source,
         })
     }
+
+    pub fn params_mut(&mut self) -> &mut algorithm::Params {
+        self.sorter.params_mut()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -124,11 +128,16 @@ pub enum StructureErr<E: std::error::Error> {
 }
 
 impl TemplateHiearchy {
-    /// Converts to [lazy_hierarchy::GroupRef]
-    pub fn root<'a>(
+    /// Converts to [lazy_hierarchy::GroupRef] representing the "final" hierarchy,
+    /// ie. the form of the hierarchy to be displayed to the user. This is in contrast with [`self.0`](TemplateHiearchy::0)
+    /// which is the "template" for creating the "final" hierarchy.
+    ///
+    /// Note that groups returned by this function do NOT have 1:1 correspondence with folders
+    /// to be applied, see [GroupData::LazySubgroupRoot]
+    pub fn root_final<'a>(
         &'a self,
     ) -> impl lazy_hierarchy::GroupRef<
-        GroupData = (),
+        GroupData = GroupData,
         LeafData = LeafData,
         NodeData = NodeData,
         StructureErr = StructureErr<impl std::error::Error>,
@@ -138,7 +147,7 @@ impl TemplateHiearchy {
         self.0
             .root()
             .map_structure_error(|err, _| match err {})
-            .map_group_data(|_| ())
+            .map_group_data(|_| GroupData::Static)
             .map_node_data(|n| n.node_data().to_owned()) // OPT: Possibly needless clone
             .map_leaf_data(|leaf| match leaf.leaf_data() {
                 InnerLeafData::LazySubgroup(lazy_group) => {
@@ -146,7 +155,15 @@ impl TemplateHiearchy {
                         lazy_group::dynamic::View::Initializing(status) =>
                             fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: status.msg.clone(), progress: status.progress }),
                         lazy_group::dynamic::View::Finished(final_group) =>
-                            fused::MainLeafData::Subgroup(final_group.as_group_ref().map_leaf_data(|l| LeafData::File(l.leaf_data()))),
+                            fused::MainLeafData::Subgroup(final_group.as_group_ref()
+                                .mark_root()
+                                .map_group_data(|group|
+                                    if group.group_data().is_root {
+                                        GroupData::LazySubgroupRoot
+                                    } else { GroupData::LazySubgroupMember }
+                                )
+                                .map_leaf_data(|l| LeafData::File(l.leaf_data()))
+                            ),
                         lazy_group::dynamic::View::Terminated =>
                             fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: None, progress: None })
                     })
@@ -158,6 +175,15 @@ impl TemplateHiearchy {
             .fuse()
             .map_structure_error(|err, _| StructureErr::Error(err))
     }
+}
+
+/// 'tem is reference to the [TemplateHiearchy] this is part of
+pub enum GroupData {
+    Static,
+    /// Not a real folder to be actually applied, this represents just a rule how to
+    /// to organize files inside some folder. There may be multiple of these corresponding to a single folder.
+    LazySubgroupRoot,
+    LazySubgroupMember
 }
 
 #[derive(Clone, Debug)]
