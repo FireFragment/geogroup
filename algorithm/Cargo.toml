@@ -10,6 +10,7 @@ lazy_hierarchy = { path = "../lazy_hierarchy" }
 itertools = "0.14.0"
 log = "0.4.27"
 geogroup_common = { path = "../common", default-features = false }
+take_mut = "0.2.2"
 
 [features]
 debug_colors = ["lazy_hierarchy/colors"]

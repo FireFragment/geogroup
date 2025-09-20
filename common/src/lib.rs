@@ -3,6 +3,7 @@ use std::convert::Infallible;
 
 /// Distance between two [points](Point)
 pub type Distance = u64;
+pub type CameraId = u32;
 
 /// An item that can be sorted using the geogroup algorithm
 ///
@@ -15,6 +16,9 @@ pub trait SortableItem {
 
     fn get_time(&self) -> Self::Time;
     fn get_position(&self) -> Result<Self::Position, Self::PositionErr>;
+    fn get_camera(&self) -> CameraId {
+        0
+    }
 }
 
 pub trait Point {

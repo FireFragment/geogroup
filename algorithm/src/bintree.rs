@@ -1,11 +1,37 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, ops::{Index, IndexMut}};
 
 use lazy_hierarchy::AsGroupRef;
+
+#[derive(Debug, Clone, Hash)]
+pub enum HorizontalIdx {
+    Left, Right
+}
 
 pub enum BinTree<Leaf, InnerNode, Node> {
     InnerNode(BTInnerNode<Leaf, InnerNode, Node>),
     Leaf(Leaf, Node),
 }
+
+impl<Leaf, InnerNode, Node> Index<HorizontalIdx> for BTInnerNode<Leaf, InnerNode, Node> {
+    type Output = BinTree<Leaf, InnerNode, Node>;
+
+    fn index(&self, index: HorizontalIdx) -> &Self::Output {
+        match index {
+            HorizontalIdx::Left => &self.children[0],
+            HorizontalIdx::Right => &self.children[1],
+        }
+    }
+}
+
+impl<Leaf, InnerNode, Node> IndexMut<HorizontalIdx> for BTInnerNode<Leaf, InnerNode, Node> {
+    fn index_mut(&mut self, index: HorizontalIdx) -> &mut Self::Output {
+        match index {
+            HorizontalIdx::Left => &mut self.children[0],
+            HorizontalIdx::Right => &mut self.children[1],
+        }
+    }
+}
+
 
 impl<Leaf: std::fmt::Debug, InnerNode: std::fmt::Debug, Node: std::fmt::Debug> std::fmt::Debug
     for BinTree<Leaf, InnerNode, Node>
