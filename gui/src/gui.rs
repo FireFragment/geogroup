@@ -83,6 +83,7 @@ impl eframe::App for App {
 
 impl App {
     fn load_dir(&mut self, dir: PathBuf) {
+        // TODO: Check if it's not a file and a valid directory
         self.content = MainPage::new(dir).into();
         //
 
@@ -793,7 +794,6 @@ pub enum AppWideError {
 pub struct App {
     pub content: AppContent,
     pub inbox: UiInbox<Message>,
-    pub args: CliArgs,
     pub style_manager: style::Manager,
     pub style_changed: bool,
     pub errors: Vec<AppWideError>, // TODO: Show it on every page (every variant of AppContent)
@@ -809,7 +809,6 @@ impl App {
             style_changed: false,
             errors: Vec::new(),
             mean_cpu_usage: 1.0,
-            args,
         };
 
         let AppContent::WelcomePage(ref mut welcome_page) = app.content else {
@@ -819,8 +818,8 @@ impl App {
             )
         };
 
-        if let Some(ref dir) = app.args.dir {
-            //welcome_page.action_load_dir(&app.inbox, dir.to_owned());
+        if let Some(dir) = args.dir {
+            app.load_dir(dir);
         }
 
         app
