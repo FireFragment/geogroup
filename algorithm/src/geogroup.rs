@@ -26,6 +26,11 @@ where
 impl<Item: SortableItem + Debug> Sorter<Item> {
     /// Pretty print the resulting tree and parameters
     pub fn debug(&self) {
+        self.debug_with_fmt_leafs(|l| format!("{:?}",  l));
+    }
+
+    /// Pretty print the resulting tree and parameters
+    pub fn debug_with_fmt_leafs(&self, fmt_leaf: impl Fn(&Item) -> String) {
         println!(
             "Min. strength: {:.2}",
             self.params().depth as f32 / MAX_DEPTH as f32
@@ -40,12 +45,16 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
                             strength,
                             separation_ratio,
                         } => format!(
-                            "Strength: .{:0>2.0}, Ratio: {separation_ratio}",
+                            "Separation: {:?}, Strength: .{:0>2.0}, Ratio: {separation_ratio}",
+                            g.group_data().separation,
                             strength as f32 * 100.0 / Strength::MAX as f32
                         ),
-                        issue => format!("{issue:?}"),
+                        issue => format!(
+                            "Separation: {:?}, Strength: {issue:?}",
+                            g.group_data().separation,
+                        ),
                     },
-                    lazy_hierarchy::NodeRef::Leaf(l) => format!("{:?}", l.leaf_data()),
+                    lazy_hierarchy::NodeRef::Leaf(l) => fmt_leaf(l.leaf_data()),
                 },
                 true
             )

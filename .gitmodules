@@ -1,0 +1,3 @@
+[submodule "allmytoes"]
+	path = deps/allmytoes
+	url = https://gitlab.com/allmytoes/allmytoes
