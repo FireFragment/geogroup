@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "algorithm",
     "lazy_hierarchy",
+    "deps/allmytoes",
     "gui",
     "loaders",
     "backend",

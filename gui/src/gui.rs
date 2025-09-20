@@ -381,6 +381,7 @@ fn show_hiearchy_list(
 ) {
     table.body(|body| {
         body.heterogeneous_rows(
+            // Row heights
             items.iter().map(|item| match item {
                 lazy_hierarchy::NodeRef::Group(group) => {
                     /*if let main_hierarchy::GroupData::LazySubgroupRoot = group.group_data() {
@@ -396,6 +397,7 @@ fn show_hiearchy_list(
                 },
                 lazy_hierarchy::NodeRef::Leaf(_) => image_scale as f32,
             }),
+            // Row contents
             |mut row| {
                 let idx = row.index();
                 let child = &items[idx];
@@ -487,13 +489,19 @@ fn show_hiearchy_list(
                             match leaf.leaf_data() {
                                 LeafData::File(file) => {
                                     ui.horizontal_top(|ui| {
-                                        egui::Image::new(format!(
-                                            "file://{}",
-                                            file.path
-                                                .to_str()
-                                                .unwrap_or("invalid file name") // This is a bit weird handling, but it works
-                                        ))
-                                        .ui(ui);
+                                        match thumbnails::get(&file.path) {
+                                            thumbnails::TResult::CreationInProgressOrFailed => {
+                                                egui::Spinner::new().size(ui.available_height()).ui(ui);
+                                            },
+                                            thumbnails::TResult::Error(toe_error_type) => {},
+                                            thumbnails::TResult::Thumbnail(thumb) => {
+                                               egui::Image::new(format!(
+                                                   "file://{}",
+                                                   thumb.path
+                                               ))
+                                               .ui(ui);
+                                           },
+                                        }
 
                                         ui.add(
                                             egui::Label::new(format!("{child_name}"))

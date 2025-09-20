@@ -8,6 +8,8 @@ mod hiearchy;
 //mod long_running_container;
 mod style;
 mod tabbar;
+mod thumbnails;
+use allmytoes::AMTConfiguration;
 use backend::gg_prelude::*;
 use gui::Message;
 use tabbar::tabbar;
@@ -16,18 +18,21 @@ use backend::gg_prelude::*;
 use clap::Parser;
 use egui_extras::Size;
 use egui_inbox::UiInbox;
+use std::convert::Infallible;
+use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 use std::{
     ffi::OsStr,
     hash::{DefaultHasher, Hash, Hasher},
     ops::Deref,
     path::{Path, PathBuf},
 };
-use std::convert::Infallible;
 
 use eframe::{egui, emath, glow};
 use egui::Frame;
 use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
+
 
 #[derive(clap::Parser)]
 #[command(name = "geogroup", version, about)]
