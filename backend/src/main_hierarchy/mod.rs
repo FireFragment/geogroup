@@ -106,12 +106,16 @@ impl LGSorted {
         if should_terminate {
             return None;
         }
+        let sorter = algorithm::Sorter::new(
+            items,
+            params
+        );
+        // Useful for debugging until added to the main application
+        // sorter.debug_with_fmt_leafs(|l| l.data.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
+
         Some(Self {
             // TODO: Add progress callback
-            sorter: algorithm::Sorter::new(
-                items,
-                params
-            ),  // TODO: Don't ignore errors
+            sorter,  // TODO: Don't ignore errors
             item_source,
         })
     }
