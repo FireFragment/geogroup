@@ -20,10 +20,12 @@ use std::convert::Infallible;
 // Changing theese two may result in overflows!
 // Eg. increasing capacity of Depth is dangerous, because Depth::MAX is used in the program
 
-pub type DepthParam = Strength;
 
 /// Normally, depth and [strength](Strength) are in the range `[-1..1]`.
 /// This type however represents depth times [`i16::MAX`] for the best precision and ease of use compared to floats.
+pub type DepthParam = Strength;
+
+/// The maximum value that should be assigned to [`DepthParam`] (corresponding to user-facing value of depth `1`)
 pub const MAX_DEPTH: Strength = i16::MAX; // TODO: Convert to struct
 
 /// Normally, "strength" is in the range `[-1..1]`.
@@ -39,9 +41,7 @@ pub struct Params {
 
 impl Default for Params {
     /// The setting of parameters I personally found reasonable (there's nothing deep in theese numbers)
-    ///
-    /// Value: `Params { depth: 64 }`
     fn default() -> Self {
-        Params { depth: 64 }
+        Params { depth: MAX_DEPTH / 2 }
     }
 }
