@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use super::*;
 
@@ -6,32 +6,42 @@ use super::*;
 ///
 /// Panics on `input.is_empty()`
 pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<Item=Item>) -> BinTree<Item, (), ()> {
-    // We build the tree form left to right
-    let first_point = items.next().expect("to_binary_tree called with empty vector");
-    let mut the_bintree = BinTree::Leaf(first_point, ());
-    let BinTree::Leaf(ref first_point, ()) = the_bintree else {panic!()};
+    #[derive(Clone, Debug)]
     struct CameraPathComponent {
         pub child_index: HorizontalIdx,
         pub inner_separation: Distance,
     }
+    #[derive(Clone, Debug)]
     struct CameraInfo<Item: SortableItem> {
         pub last_point: Item::Position,
         pub path_to_last_point: Vec<CameraPathComponent>
     }
+
+    let first_point = items.next().expect("to_binary_tree called with empty vector");
+    let mut the_bintree = BinTree::Leaf(first_point, ());
+    let BinTree::Leaf(ref first_point, ()) = the_bintree else {panic!()};
     let mut cameras_paths: HashMap<CameraId, CameraInfo<Item>> = HashMap::new();
     cameras_paths.insert(first_point.get_camera(), CameraInfo {
         last_point: first_point.get_position().expect("POSERR"),
         path_to_last_point: Vec::new()
     });
 
+    // We build the tree form left to right
     for item_to_append in items {
-        let camera_info = &cameras_paths[&item_to_append.get_camera()];
+        let item_to_append_cam = item_to_append.get_camera();
+        let item_to_append_pos = item_to_append.get_position().expect("POSERR");
+
+        let camera_info = &cameras_paths[&item_to_append_cam];
         let distance_from_prev_point =
-            camera_info.last_point.distance(&item_to_append.get_position().expect("POSERR"));
+            camera_info.last_point.distance(&item_to_append_pos);
 
 
-        let node_to_replace = {
+        let (
+            node_to_replace,
+            new_item_parent_path // Path to the parent of the newly added item
+        ) = {
             let mut current_node = &mut the_bintree;
+            let mut current_node_path = Vec::new();
             // Go through the tree according to `camera_info.path_to_last_point`
             // until we find a good place to place our new point, ie. the group closest
             // to the root such that its `inner_separation` is lower than the distance between
@@ -49,20 +59,34 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
                     };
 
                     current_node = &mut group[path_component.child_index.clone()];
+                    current_node_path.push(path_component.clone());
                 }
             };
 
-            current_node
+            (current_node, current_node_path)
         };
 
+        let mut new_item_path = new_item_parent_path;
+        new_item_path.push(CameraPathComponent { child_index: HorizontalIdx::Right, inner_separation: distance_from_prev_point });
 
+        // TODO: Make sure that all camera paths are updated according to the move of `node_to_replace`
         take_mut::take(node_to_replace, |prev_val| BinTree::InnerNode(BTInnerNode {
-            children: Box::new([BinTree::Leaf(item_to_append, ()), prev_val]),
+            children: Box::new([prev_val, BinTree::Leaf(item_to_append, ())]),
             inner_node_data: (),
             node_data: ()
         }));
-    }
 
+        cameras_paths.insert(item_to_append_cam, CameraInfo {
+            last_point: item_to_append_pos,
+            path_to_last_point: new_item_path
+        });
+
+        debug_assert!(
+            cameras_paths.values().all(|info| info.path_to_last_point.is_sorted_by_key(|comp| comp.inner_separation)),
+            "Sorting behaves badly: some of camera paths are not sorted by separation: {:?}",
+            cameras_paths.values().map(|info| &info.path_to_last_point).collect_vec()
+        );
+    }
 
     the_bintree
 }
