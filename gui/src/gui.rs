@@ -490,14 +490,14 @@ fn show_hiearchy_list(
                                 LeafData::File(file) => {
                                     ui.horizontal_top(|ui| {
                                         match thumbnails::get(&file.path) {
-                                            thumbnails::TResult::CreationInProgressOrFailed => {
+                                            thumbnails::TResult::CreationInProgress => {
                                                 egui::Spinner::new().size(ui.available_height()).ui(ui);
                                             },
                                             thumbnails::TResult::Error(toe_error_type) => {},
                                             thumbnails::TResult::Thumbnail(thumb) => {
                                                egui::Image::new(format!(
                                                    "file://{}",
-                                                   thumb.path
+                                                   thumb.to_string_lossy()
                                                ))
                                                .ui(ui);
                                            },
