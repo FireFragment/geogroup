@@ -51,7 +51,11 @@ impl Final {
                 sorted.sorter
                     .hierarchy()
                     .map_structure_error(|err, _| match err {})
-                    .map_node_data(|_| NodeData { name: None })
+                    .map_node_data(|node| NodeData { name: match node {
+                        lazy_hierarchy::NodeRef::Group(gr) =>
+                            gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
+                        lazy_hierarchy::NodeRef::Leaf(_) => None,
+                    } })
                     .map_leaf_data(|leaf| leaf.leaf_data().data.to_owned()) // OPT: Possibly needless clone
                     .map_group_data(|_| ()),
             ),

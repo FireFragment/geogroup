@@ -3,6 +3,8 @@ use std::convert::Infallible;
 
 /// Distance between two [points](Point)
 pub type Distance = u64;
+
+pub const ONE_METER_DISTANCE: Distance = 65536;
 pub type CameraId = u32;
 
 /// An item that can be sorted using the geogroup algorithm

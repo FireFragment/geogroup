@@ -73,8 +73,26 @@ impl<Item: SortableItem> Sorter<Item> {
     > {
         self.deep_sorter()
             .deep_hierarchy()
-            .dissolve_by_key(|group| match group.group_data().strength {
-                StrengthInfo::Ok{strength, ..} => (strength) < MAX_DEPTH - self.params.depth,
+            .with_parent()
+            .dissolve_by_key(|group|
+                match group.group_data().strength {
+                StrengthInfo::Ok{
+                    strength,
+                    ..
+                } => {
+                    // MINIMUM DISTANCE
+                    // For this, we use parents separation, not our own, because if this group's spearation
+                    // is low but our paerents spearation is high, we don't want to dissolve this
+                    // low-separation group into the high separation group and spam it - in case of low-separation
+                    // groups, we want to only dissolve its children, so we use parent spearation when deciding whether
+                    // to dissolve
+                    group.node_data().parent
+                        .map(|parent| parent.group_data().separation)
+                        .flatten()
+                        .unwrap_or(Distance::MAX)
+                    < self.params.minimum_distance
+                    || strength < MAX_DEPTH - self.params.depth
+                },
                 StrengthInfo::Root => false,
 
                 // These shouldn't happen, but we can somehow (albeit non-perfectly) handle them anyway
@@ -87,6 +105,8 @@ impl<Item: SortableItem> Sorter<Item> {
                     false
                 },
             })
+            // Reverse with_parent call above
+            .map_node_data(|node| node.node_data().data)
     }
 }
 

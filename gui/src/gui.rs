@@ -14,6 +14,7 @@ use geogroup_backend::lazy_hierarchy::concrete::Group;
 use geogroup_backend::lazy_hierarchy::NodeRef;
 use geogroup_backend::main_hierarchy;
 use geogroup_backend::progress;
+use geogroup_backend::ONE_METER_DISTANCE;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::thread;
@@ -175,19 +176,37 @@ impl App {
                             {
                                 match subgroup_final {
                                     main_hierarchy::lazy_group::Final::Sorted(subgroup_sorted) => {
-                                        ribbon_slider(
-                                            ui,
-                                            egui::Slider::new(
-                                                &mut subgroup_sorted.params_mut().depth,
-                                                0..=backend::algorithm::MAX_DEPTH
-                                            ).custom_formatter(|num, range| {
-                                                format!(".{:0>2}", ((num*100.0)/(backend::algorithm::MAX_DEPTH as f64)) as u8)
-                                            }), // TODO: Add also custom parser
-                                            backend::algorithm::Params::default().depth,
-                                            "Depth",
-                                            "High values yield deeply nested folder structure. Low values lead to shallow structures",
-                                            Some(&mut cfg_changed),
-                                        );
+                                        ui.vertical(|ui| {
+
+                                            ribbon_slider(
+                                                ui,
+                                                egui::Slider::new(
+                                                    &mut subgroup_sorted.params_mut().depth,
+                                                    0..=backend::algorithm::MAX_DEPTH
+                                                ).custom_formatter(|num, range| {
+                                                    format!(".{:0>2}", ((num*100.0)/(backend::algorithm::MAX_DEPTH as f64)) as u8)
+                                                }), // TODO: Add also custom parser
+                                                backend::algorithm::Params::default().depth,
+                                                "Depth",
+                                                "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                                Some(&mut cfg_changed),
+                                            );
+                                            ribbon_slider(
+                                                ui,
+                                                egui::Slider::new(
+                                                    &mut subgroup_sorted.params_mut().minimum_distance,
+                                                    0..=(1_000 * ONE_METER_DISTANCE /* 10km */) // TODO: Make max the maximum distance *in the hierarchy*
+                                                )
+                                                .step_by(ONE_METER_DISTANCE as f64)
+                                                .custom_formatter(|distance, range| {
+                                                    format!("{}m", (distance / ONE_METER_DISTANCE as f64))
+                                                }), // TODO: Add also custom parser
+                                                backend::algorithm::Params::default().depth,
+                                                "Minimum distance of separated items",
+                                                "The minimum distance of consecutive items that are not in the same group. No two items going right after each other that are closer than this distance will be separated into different groups.",
+                                                Some(&mut cfg_changed),
+                                            );
+                                        });
                                     },
                                     _ => {} // TODO
                                 }

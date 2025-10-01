@@ -59,7 +59,7 @@ fn geogroup_algo_test() {
                 id: String::from("1"),
             },
         ],
-        Params { depth: MAX_DEPTH },
+        Params { depth: MAX_DEPTH, ..Default::default() },
     );
 
     sorter.debug();

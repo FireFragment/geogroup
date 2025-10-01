@@ -37,11 +37,15 @@ pub type Strength = i16; // TODO: Convert to struct
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Params {
     pub depth: DepthParam,
+    /// The minimum distance of items that are not in the same group alone.
+    /// No two items going right after each other that are closer than this distance
+    /// can be separated.
+    pub minimum_distance: Distance,
 }
 
 impl Default for Params {
-    /// The setting of parameters I personally found reasonable (there's nothing deep in theese numbers)
+    /// The setting of parameters I personally found reasonable (there's nothing deep in these numbers)
     fn default() -> Self {
-        Params { depth: MAX_DEPTH / 2 }
+        Params { depth: MAX_DEPTH / 2, minimum_distance: 100 * ONE_METER_DISTANCE }
     }
 }
