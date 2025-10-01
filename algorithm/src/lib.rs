@@ -1,4 +1,4 @@
-use geogroup_common::*;
+pub use geogroup_common::*;
 use lazy_hierarchy::*;
 
 //pub mod algo;
