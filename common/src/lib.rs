@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::convert::Infallible;
 
-/// Distance between two [points](Point)
+/// Distance between two [points](Point). Doesn't correspond 1:1 to meters, see [ONE_METER_DISTANCE]
 pub type Distance = u64;
 
 pub const ONE_METER_DISTANCE: Distance = 65536;
