@@ -17,7 +17,7 @@ pub enum ItemSource {
 impl From<ComplexItemSource> for ItemSource {
     fn from(val: ComplexItemSource) -> Self { match val {
         ComplexItemSource::EntireDir(dir) => ItemSource::EntireDir(dir),
-    } } 
+    } }
 }
 
 impl From<ItemSource> for CachingItemSource {
@@ -69,7 +69,7 @@ impl ItemSource {
     /// This can be used for progress reporting (eg. calling `with_progress_callback` on the returned iterator)
     pub fn into_concrete<'a>(
         self,
-    ) -> impl Iterator<Item = Result<FileRef, walkdir::Error>> {
+    ) -> impl Iterator<Item = Result<FileRef, walkdir::Error>> + Send {
         // TODO: Terminate by progress_callback
         match self {
             ItemSource::Enumerated(files) => {
@@ -84,8 +84,6 @@ impl ItemSource {
                         Err(err) => Err(err.into()),
                     })
                 )
-
-
             }
         }
     }

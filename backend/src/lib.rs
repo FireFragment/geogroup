@@ -4,6 +4,8 @@ use std::{
     sync::Arc
 };
 
+use rayon::prelude::ParallelIterator;
+
 pub mod caching_file_item;
 pub use caching_file_item::CachedFileSortableItem;
 //pub mod loading_file_item;

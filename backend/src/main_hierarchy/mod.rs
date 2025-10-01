@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use derive_more::From;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
+use rayon::iter::ParallelBridge as _;
 
 use super::*;
 
@@ -76,6 +77,7 @@ impl LGSorted {
         let items = item_source.clone()
             .into_concrete()
             .with_progress_callback(
+                // TODO: Don't show progress from this as this should be much faster than reading metadata of the files
                 progress_callback,
                 |entry| {
                     entry
@@ -86,6 +88,7 @@ impl LGSorted {
                 100,
             )
             .collect::<Vec<_>>().into_iter() // Used to make progress reporting more accurate
+                                             // only this way can size hint be provided
             .with_progress_callback(
                 progress_callback,
                 |entry| {
@@ -95,7 +98,9 @@ impl LGSorted {
                         .map(|path| format!("Reading metadata: {}", path.to_string_lossy().to_string()))
                 },
                 10,
-            ).filter_map(|entry| entry.ok()) // TODO: Don't ignore errors
+            )
+            .par_bridge()
+            .filter_map(|entry| entry.ok()) // TODO: Don't ignore errors
             .filter_map(|path| {
                 loaders::GeneralLoader.get_data(path.as_ref()).ok()?.as_sortable_item(FileData { path }).ok() // TODO: Don't ignore errors
             })

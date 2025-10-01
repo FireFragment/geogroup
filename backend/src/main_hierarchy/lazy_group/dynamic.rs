@@ -120,7 +120,7 @@ impl Dynamic {
             std::thread::spawn(move || {
                 log::debug!("Started a new thread for initializing a lazy group");
 
-                let ret_val = template.into_final(&mut ProgressCallback::new(&mut |progress, msg| {
+                let ret_val = template.into_final(&mut ProgressCallback::new(&mut move |progress, msg| {
                     let mut status_handle = status.lock().expect("Poisoned");
                     *status_handle = Status {
                         progress,
