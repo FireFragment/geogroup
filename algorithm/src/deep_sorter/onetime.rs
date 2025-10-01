@@ -66,6 +66,25 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
             (current_node, current_node_path)
         };
 
+        // Update camera paths which point to the moved subtree
+        for camera_info in cameras_paths.values_mut() {
+            let is_in_moved_subtree = camera_info.path_to_last_point
+                .iter()
+                .map(|info| info.child_index.clone())
+                .zip(new_item_parent_path.iter().map(|info| info.child_index.clone()))
+                .all(|(a, b)| a == b);
+            if is_in_moved_subtree
+            {
+                camera_info.path_to_last_point.insert(new_item_parent_path.len(), CameraPathComponent {
+                    child_index: HorizontalIdx::Left,
+                    inner_separation: node_to_replace
+                        .get_leftmost_leaf().0.get_position()
+                        .expect("POSERR").distance(&item_to_append_pos)
+                });
+            }
+            //.starts_with(&new_item_parent_path) {}
+        }
+
         let mut new_item_path = new_item_parent_path;
         new_item_path.push(CameraPathComponent { child_index: HorizontalIdx::Right, inner_separation: distance_from_prev_point });
 
@@ -80,10 +99,6 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
             last_point: item_to_append_pos,
             path_to_last_point: new_item_path
         });
-
-        for camera_info in cameras_paths.values_mut() {
-            if camera_info.path_to_last_point.starts_with(&new_item_parent_path) {}
-        }
 
         debug_assert!(
             cameras_paths.values().all(|info| info.path_to_last_point.is_sorted_by_key(|comp| comp.inner_separation)),

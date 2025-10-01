@@ -2,7 +2,7 @@ use std::{convert::Infallible, ops::{Index, IndexMut}};
 
 use lazy_hierarchy::AsGroupRef;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum HorizontalIdx {
     Left, Right
 }
@@ -49,6 +49,13 @@ impl<Leaf, InnerNode, Node> BinTree<Leaf, InnerNode, Node> {
         match self {
             BinTree::InnerNode(node) => &node.node_data,
             BinTree::Leaf(_, node) => node,
+        }
+    }
+
+    pub fn get_leftmost_leaf(&self) -> (&Leaf, &Node) {
+        match self {
+            BinTree::InnerNode(node) => node.children[0].get_leftmost_leaf(),
+            BinTree::Leaf(leaf, node) => (leaf, node),
         }
     }
 }
