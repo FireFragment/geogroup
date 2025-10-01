@@ -388,7 +388,8 @@ pub fn show_hiearchy(
 
 fn show_hiearchy_list(
     table: TableBuilder,
-    selection_idx: &mut Option<usize>,
+    selected_vec: &mut Vec<usize>,
+    current_depth: usize,
     group_row_size: f32,
     image_scale: u16,
     items: &Vec<NodeRef<impl lazy_hierarchy::GroupRef<
@@ -423,7 +424,7 @@ fn show_hiearchy_list(
                 let child_data = child.node_data();
                 let child_name = child_data.as_ref();
 
-                let selected = *selection_idx == Some(row.index());
+                let selected = selected_vec.get(current_depth) == Some(&row.index());
                 row.set_selected(selected);
                 if let lazy_hierarchy::NodeRef::Group(g) = child {
                     if let main_hierarchy::GroupData::LazySubgroupRoot = g.group_data() {
@@ -548,7 +549,8 @@ fn show_hiearchy_list(
                 });
 
                 if row.response().clicked() {
-                    *selection_idx = Some(idx);
+                    selected_vec.truncate(current_depth);
+                    selected_vec.push(idx);
                 }
 
                 //row.set_selected(selection_highlight);
@@ -570,6 +572,7 @@ fn show_hiearchy_inner(
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
 ) {
+    // TODO: Preseve selection through depth (and other algorithm parameters) changes
     // TODO: Maybe we don't have to crash so horribly?
     assert!(selected_vec.len() >= current_depth);
 
@@ -594,8 +597,6 @@ fn show_hiearchy_inner(
         let group_row_size =
             ui.style().text_styles[&TextStyle::Body].size + ui.style().spacing.item_spacing.y * 2.0;
 
-        let mut selected_idx = selected_vec.get(current_depth).cloned();
-
         show_hiearchy_list(
             TableBuilder::new(ui)
                 .column(if selected_group.is_some() {
@@ -604,19 +605,12 @@ fn show_hiearchy_inner(
                     Column::remainder().at_least(256.0)
                 })
                 .sense(Sense::click()),
-            &mut selected_idx,
+            selected_vec,
+            current_depth,
             group_row_size,
             image_scale,
             &children
         );
-
-        if let Some(new_selected_idx) = selected_idx {
-            if let Some(prev_selected_idx) = selected_vec.get_mut(current_depth) {
-                *prev_selected_idx = new_selected_idx;
-            } else {
-                selected_vec.push(new_selected_idx);
-            }
-        }
     });
 
     if let Some(g) = selected_group {
