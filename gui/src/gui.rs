@@ -581,7 +581,7 @@ fn show_hiearchy_inner(
         .collect_vec();
 
     let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
-        if let lazy_hierarchy::NodeRef::Group(g) = &children[*selection_idx] {
+        if let Some(lazy_hierarchy::NodeRef::Group(g)) = &children.get(*selection_idx) { // TODO: Make sure this always succesds
             Some(g)
         } else {
             None
