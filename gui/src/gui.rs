@@ -601,7 +601,7 @@ fn show_hiearchy_inner(
                 .column(if selected_group.is_some() {
                     Column::exact(256.0)
                 } else {
-                    Column::remainder()
+                    Column::remainder().at_least(256.0)
                 })
                 .sense(Sense::click()),
             &mut selected_idx,
