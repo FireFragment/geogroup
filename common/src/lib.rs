@@ -36,16 +36,16 @@ impl Point for u64 {
 #[cfg(feature = "geo")]
 impl Point for geo::Coord {
     fn distance(&self, rhs: &Self) -> Distance {
-        use geo::EuclideanDistance;
-        (self.euclidean_distance(rhs) * 65536.0) as u64
+        use geo::{GeodesicDistance, Point};
+        (GeodesicDistance::geodesic_distance(&Point::from(self.to_owned()), &Point::from(rhs.to_owned())) * (ONE_METER_DISTANCE as f64)) as u64
     }
 }
 
 #[cfg(feature = "geo")]
 impl Point for geo::Point {
     fn distance(&self, rhs: &Self) -> Distance {
-        use geo::EuclideanDistance;
-        (self.euclidean_distance(rhs) * 65536.0) as u64
+        use geo::GeodesicDistance;
+        (GeodesicDistance::geodesic_distance(self, rhs) * (ONE_METER_DISTANCE as f64)) as u64
     }
 }
 
