@@ -218,7 +218,7 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
             Color32::WHITE
         };
 
-        style.spacing.button_padding = Vec2::new(18.0, 8.0);
+        style.spacing.button_padding = Vec2::new(8.0, 4.0);
 
         // ROUNDING
         style.visuals.window_rounding = Rounding::ZERO;

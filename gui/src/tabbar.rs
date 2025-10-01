@@ -1,5 +1,5 @@
 use super::*;
-use eframe::egui::{Align, Button, Color32, Layout, Stroke};
+use eframe::egui::{Align, Button, Color32, Layout, Stroke, Vec2};
 use egui::Frame;
 
 pub enum Item<TabId, ActionId = Infallible> {
@@ -18,6 +18,8 @@ pub fn tabbar<'a, TabId: PartialEq, ActionId>(
     egui::Frame::none().fill(tab_bar_bg).show(ui, |ui| {
         let style = ui.style_mut();
         style::set_fg_color(style, style.visuals.selection.stroke.color);
+
+        style.spacing.button_padding = Vec2::new(18.0, 8.0);
 
         style.visuals.selection.bg_fill = style.visuals.panel_fill;
         style.visuals.selection.stroke.color = tab_bar_bg/*.lerp_to_gamma(Color32::WHITE, 0.5)*/; // TODO: Light mode

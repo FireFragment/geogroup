@@ -147,7 +147,7 @@ impl App {
                         (Tab(PaneContent::Apply), "☑ Apply"),
                         (Tab(PaneContent::Home), "🏠 Home"),
                         (Tab(PaneContent::View), "👁 View"),
-                        (Action(Action::Deselect), "Deselect all"),
+                        //(Action(Action::Deselect), "Deselect all"),
                     ],
                 );
 
@@ -681,7 +681,7 @@ impl App {
         egui::SidePanel::left("recents")
             .frame(Frame::default().inner_margin(Margin::same(32.0)))
             .show(ctx, |ui| {
-                ui.style_mut().spacing.button_padding *= 2.0;
+                ui.style_mut().spacing.button_padding *= 4.0;
 
                 /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
                 ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
@@ -759,7 +759,7 @@ impl App {
 
                 match welcome_page {
                     WelcomePage::Normal => {}
-                    WelcomePage::Loading(msg) => {
+                    WelcomePage::Loading(msg) => { // TODO: Remove
                         ui.horizontal(|ui| {
                             ui.spinner();
                             ui.label(&*msg);
