@@ -46,13 +46,13 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
             // until we find a good place to place our new point, ie. the group closest
             // to the root such that its `inner_separation` is lower than the distance between
             // the new item and the previous item (`distance_from_prev_point`). Once we found
-            // it, we write it to `current_node`
+            // it, we write it to `current_node`.
             for path_component in &camera_info.path_to_last_point {
-                // We found the spot for our new point
                 if path_component.inner_separation < distance_from_prev_point {
                     // We found a good place to place our point
                     break;
                 } else {
+                    // Descend deeper into the tree
                     let BinTree::InnerNode(group) = current_node else {
                         // TODO: Either confirm 100% this can't happen or handle it more gracefully
                         panic!("Path didn't work out - unexpected leaf")
@@ -80,6 +80,10 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
             last_point: item_to_append_pos,
             path_to_last_point: new_item_path
         });
+
+        for camera_info in cameras_paths.values_mut() {
+            if camera_info.path_to_last_point.starts_with(&new_item_parent_path) {}
+        }
 
         debug_assert!(
             cameras_paths.values().all(|info| info.path_to_last_point.is_sorted_by_key(|comp| comp.inner_separation)),
