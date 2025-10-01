@@ -61,6 +61,7 @@ impl eframe::App for App {
             message.perform(self, ctx);
         }
 
+        /*
         if let Some(cpu_usage) = frame.info().cpu_usage {
             egui::TopBottomPanel::bottom("performance").show(ctx, |ui| {
                 let since_last_frame = ctx.input(|input| input.unstable_dt);
@@ -73,7 +74,7 @@ impl eframe::App for App {
 
                 //std::thread::sleep(Duration::from_millis(1000 / 90));
             });
-        };
+        };*/
 
         match &mut self.content {
             AppContent::WelcomePage(_) => self.draw_welcome_page(ctx),
