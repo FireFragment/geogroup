@@ -104,6 +104,7 @@
             openssl.dev
             glib.dev
             pkg-config
+            tippecanoe
 
             clippy
             rust-analyzer

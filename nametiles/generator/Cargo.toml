@@ -1,0 +1,16 @@
+[package]
+name = "nametiles-generator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.48", features = ["derive"] }
+env_logger = "0.11.8"
+flatgeobuf = "5.0.0"
+geo = "0.29.1"
+geozero = { version = "0.14.0", default-features = false, features = ["with-geo", "with-wkb"] }
+kv = { version = "0.24.0", features = ["bincode", "bincode-value"] }
+log = "0.4.28"
+osmpbfreader = { version = "0.19.1", features = ["serde"] }
+polyline = "0.11.0"
+rayon = "1.11.0"
