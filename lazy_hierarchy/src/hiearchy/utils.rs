@@ -97,9 +97,8 @@ pub trait GroupRefUtils: GroupRef {
     }
 
     fn map_leaf_data<
-        'a,
         LeafDataNew,
-        F: Fn(&Self::LeafRef) -> LeafDataNew + 'a + std::clone::Clone,
+        F: Fn(&Self::LeafRef) -> LeafDataNew + std::clone::Clone,
     >(
         self,
         fun: F,
@@ -113,9 +112,8 @@ pub trait GroupRefUtils: GroupRef {
     }
 
     fn map_node_data<
-        'a,
         NodeDataNew,
-        F: Fn(NodeRef<Self>) -> NodeDataNew + 'a + std::clone::Clone,
+        F: Fn(NodeRef<Self>) -> NodeDataNew + Clone,
     >(
         self,
         fun: F,
@@ -129,9 +127,8 @@ pub trait GroupRefUtils: GroupRef {
     }
 
     fn map_structure_error<
-        'a,
         StructureErrorNew,
-        F: Fn(Self::StructureErr, &Self) -> StructureErrorNew + 'a + std::clone::Clone,
+        F: Fn(Self::StructureErr, &Self) -> StructureErrorNew + Clone,
     >(
         self,
         fun: F,
@@ -150,12 +147,92 @@ pub trait GroupRefUtils: GroupRef {
 
     /// Move all children from a group to its parent group if `fun_should_dissolve` returns [true] for it.
     /// Discards group data and node data for those "dissolved" groups.
-    fn dissolve_by_key<F: Fn(&Self) -> bool + Clone>(
+    fn dissolve_by_key<'a>(
+        self,
+        fun_should_dissolve: impl Fn(&Self) -> bool + Clone + 'a,
+    ) -> impl GroupRef<
+        GroupData = Self::GroupData,
+        LeafData = Self::LeafData,
+        NodeData = Self::NodeData,
+        StructureErr = Self::StructureErr,
+    >
+    {
+        utils::dissolve::new(self, fun_should_dissolve)
+            .map_node_data(|node| {
+                // There are no inherited data
+                let dissolve::NodeData { original, inherited: () } = node.node_data();
+                original
+            })
+    }
+
+    /// Move all children from a group to its parent group if `fun_should_dissolve` returns [Some] for it.
+    /// Unlike [`dissolve_by_key`], this version allows passing custom data (`InheritedData`) from dissolved groups
+    /// to their children in their [`NodeData`](GroupRef::NodeData). You will likely want to run
+    /// [`map_node_data`](Dissolver::map_node_data) on return value of this function to process the inherited data.
+    ///
+    /// # Parameters
+    /// - `fun_dissolve`: Function which determines which groups should be dissolved and generates `InheritedData`
+    /// - `fun_fold`: Function which merges multiple `InheritedData`
+    fn dissolve_by_key_and_fold<
+        InheritedData: Clone + Default,
+    >(
+        self,
+        fun_dissolve: impl Fn(&Self) -> Option<InheritedData> + Clone,
+        fun_fold: impl Fn(InheritedData, InheritedData) -> InheritedData + Clone,
+    ) -> impl GroupRef<
+        GroupData = Self::GroupData,
+        LeafData = Self::LeafData,
+        NodeData = dissolve::NodeData<Self::NodeData, InheritedData>,
+        StructureErr = Self::StructureErr,
+    >
+    where
+        Self::GroupData: Clone,
+    {
+        utils::dissolve::new_folding(self, fun_dissolve, fun_fold)
+    }
+
+    /// Move all children from a group to its parent group if `fun_should_dissolve` returns [true] for it.
+    /// This is a convenience method for the common case where you want to merge `GroupData` directly
+    /// from dissolved groups into their children.
+    ///
+    /// The merge function takes two parameters:
+    /// 1. The original group data (from the child)
+    /// 2. The group data from the dissolved parent
+    ///
+    /// And returns the merged group data.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lazy_hierarchy::prelude::*;
+    ///
+    /// // Dissolve groups where name starts with "temp_" and merge their metadata
+    /// let dissolved = hierarchy.dissolve_by_key_with_merge(
+    ///     |group| group.group_data().name.starts_with("temp_"),
+    ///     |child_data, parent_data| {
+    ///         // Merge parent's tags into child's tags
+    ///         let mut merged = child_data;
+    ///         merged.tags.extend(parent_data.tags);
+    ///         merged
+    ///     }
+    /// );
+    /// ```
+    /*fn dissolve_by_key_with_merge<F: Fn(&Self) -> bool + Clone, M: Fn(Self::GroupData, Self::GroupData) -> Self::GroupData + Clone + 'static>(
         self,
         fun_should_dissolve: F,
-    ) -> utils::Dissolver<Self, F> {
-        utils::Dissolver::new(self, fun_should_dissolve)
-    }
+        merge_group_data: M,
+    ) -> utils::Dissolver<Self, F, Self::GroupData>
+    where
+        Self::GroupData: Clone + 'static,
+    {
+        let merge_clone = merge_group_data.clone();
+        self.dissolve_by_key_with_data(
+            fun_should_dissolve,
+            |group_data| group_data,  // Convert GroupData to T (which is GroupData)
+            merge_group_data,         // Merge T (GroupData) with child's GroupData
+            move |existing_data, new_data| merge_clone(existing_data, new_data)  // Merge T with T
+        )
+    }*/
 
     /// Utility for marking the root group in a hierarchy
     ///
