@@ -22,8 +22,13 @@ pub struct Dissolver<
 
     /// T data from dissolved ancestors that should be merged into this group
     ///
-    /// Default value if the ancestor has not been dissolved
+    /// Contains `default_inherited_data` if the ancestor has not been dissolved
     inherited_data: InheritedData,
+
+
+    /// The "default" `InheritedData` for nodes which have not been dissolved
+    default_inherited_data: InheritedData,
+
     /// This is true for all [`DissolverGroupRef`]s created by API users.
     ///
     /// It's false only for children created in [`DissolverGroupRef::get_children`].
@@ -48,6 +53,7 @@ pub fn new<
         fun_dissolve: move |g| if fun_should_dissolve(g) { Some(()) } else { None },
         fun_fold: |_, _| (),
         inherited_data: (),
+        default_inherited_data: (),
 
         #[cfg(debug_assertions)]
         is_root: true,
@@ -66,6 +72,7 @@ pub fn new_folding<
         fun_dissolve,
         fun_fold,
         inherited_data: Default::default(),
+        default_inherited_data: Default::default(),
 
         #[cfg(debug_assertions)]
         is_root: true,
@@ -111,7 +118,11 @@ impl<
                 &self.this,
                 &self.fun_dissolve,
                 &self.fun_fold,
-                self.inherited_data.clone()
+                // Since `self` is NOT a dissolved group (it exists, so it's definitely very real),
+                // its children should NOT inherit its `inherited_data`, so we pass here `self.default_inherited_data`
+                // instead of `self.inherited_data`
+                self.default_inherited_data.clone(),
+                &self.default_inherited_data
             )?
             .into_iter()
         )
@@ -163,7 +174,8 @@ fn get_children_dissolved<
     parent_group: &OrigGr,
     fun_dissolve: &'a FnDissolve,
     fun_fold: &'a FnFold,
-    parent_inherited_data: InheritedData,
+    data_inherited_from_parent: InheritedData,
+    default_inherited_data: &InheritedData,
 ) -> Result<Vec<NodeRef<Dissolver<OrigGr, InheritedData, FnDissolve, FnFold>>>, <OrigGr as GroupRef>::StructureErr>
 {
     Ok(parent_group
@@ -172,14 +184,14 @@ fn get_children_dissolved<
             Ok(match child {
                 NodeRef::Leaf(leaf) => Either::Left(std::iter::once(NodeRef::Leaf(DissolverLeaf {
                     orig: leaf,
-                    inherited_data: parent_inherited_data.clone(),
+                    inherited_data: data_inherited_from_parent.clone(),
                 }))),
                 NodeRef::Group(subgroup) => {
                     if let Some(subgroup_inherited_data) = (fun_dissolve)(&subgroup) {
                         // If `subgroup` should be dissolved
-                        let new_inherited_data = (fun_fold)(parent_inherited_data.clone(), subgroup_inherited_data);
+                        let new_inherited_data = (fun_fold)(data_inherited_from_parent.clone(), subgroup_inherited_data);
                         Either::Right(
-                            get_children_dissolved(&subgroup, fun_dissolve, fun_fold, new_inherited_data)?.into_iter(),
+                            get_children_dissolved(&subgroup, fun_dissolve, fun_fold, new_inherited_data, default_inherited_data)?.into_iter(),
                         )
                     } else {
                         // If `subgroup` should not be dissolved, we map to a single element iterator (`iter::once`)
@@ -188,7 +200,8 @@ fn get_children_dissolved<
                             this: subgroup,
                             fun_dissolve: fun_dissolve.clone(),
                             fun_fold: fun_fold.clone(),
-                            inherited_data: parent_inherited_data.clone(),
+                            inherited_data: data_inherited_from_parent.clone(),
+                            default_inherited_data: default_inherited_data.clone(),
 
                             #[cfg(debug_assertions)]
                             is_root: false,

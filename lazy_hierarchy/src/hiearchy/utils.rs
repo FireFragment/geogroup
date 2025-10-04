@@ -10,9 +10,11 @@ pub mod dissolve;
 pub mod map;
 pub mod mark_root;
 pub mod with_parent;
+pub mod with_idx;
 pub use dissolve::Dissolver;
 pub use mark_root::{MarkRootGroupRef, MarkedRootGroupData};
 pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeData};
+pub use with_idx::{WithIdxGroupRef, WithIdxLeafRef};
 
 use either::Either;
 #[cfg(feature = "colors")]
@@ -167,7 +169,9 @@ pub trait GroupRefUtils: GroupRef {
 
     /// Move all children from a group to its parent group if `fun_should_dissolve` returns [Some] for it.
     /// Unlike [`dissolve_by_key`], this version allows passing custom data (`InheritedData`) from dissolved groups
-    /// to their children in their [`NodeData`](GroupRef::NodeData). You will likely want to run
+    /// to their children in their [`NodeData`](GroupRef::NodeData).
+    ///
+    /// You will likely want to run
     /// [`map_node_data`](Dissolver::map_node_data) on return value of this function to process the inherited data.
     ///
     /// # Parameters
@@ -191,48 +195,6 @@ pub trait GroupRefUtils: GroupRef {
         utils::dissolve::new_folding(self, fun_dissolve, fun_fold)
     }
 
-    /// Move all children from a group to its parent group if `fun_should_dissolve` returns [true] for it.
-    /// This is a convenience method for the common case where you want to merge `GroupData` directly
-    /// from dissolved groups into their children.
-    ///
-    /// The merge function takes two parameters:
-    /// 1. The original group data (from the child)
-    /// 2. The group data from the dissolved parent
-    ///
-    /// And returns the merged group data.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use lazy_hierarchy::prelude::*;
-    ///
-    /// // Dissolve groups where name starts with "temp_" and merge their metadata
-    /// let dissolved = hierarchy.dissolve_by_key_with_merge(
-    ///     |group| group.group_data().name.starts_with("temp_"),
-    ///     |child_data, parent_data| {
-    ///         // Merge parent's tags into child's tags
-    ///         let mut merged = child_data;
-    ///         merged.tags.extend(parent_data.tags);
-    ///         merged
-    ///     }
-    /// );
-    /// ```
-    /*fn dissolve_by_key_with_merge<F: Fn(&Self) -> bool + Clone, M: Fn(Self::GroupData, Self::GroupData) -> Self::GroupData + Clone + 'static>(
-        self,
-        fun_should_dissolve: F,
-        merge_group_data: M,
-    ) -> utils::Dissolver<Self, F, Self::GroupData>
-    where
-        Self::GroupData: Clone + 'static,
-    {
-        let merge_clone = merge_group_data.clone();
-        self.dissolve_by_key_with_data(
-            fun_should_dissolve,
-            |group_data| group_data,  // Convert GroupData to T (which is GroupData)
-            merge_group_data,         // Merge T (GroupData) with child's GroupData
-            move |existing_data, new_data| merge_clone(existing_data, new_data)  // Merge T with T
-        )
-    }*/
 
     /// Utility for marking the root group in a hierarchy
     ///
@@ -263,6 +225,45 @@ pub trait GroupRefUtils: GroupRef {
     /// ```
     fn mark_root(self) -> utils::MarkRootGroupRef<Self> {
         utils::mark_root::mark_root(self)
+    }
+
+    /// Transform a hierarchy to include index information in NodeData
+    ///
+    /// This utility transforms a hierarchy's [`NodeData`](GroupRef::NodeData) from type `T` to [`with_idx::NodeData<T>`],
+    /// where each node contains its original data plus its index within its parent group.
+    /// The root node will have index `0`.
+    ///
+    /// You will likely want to run
+    /// [`map_node_data`](GroupRefUtils::map_node_data) on return value of this function to process the inherited data.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use lazy_hierarchy::{utils, concrete::{Group, Leaf, Node}, prelude::*};
+    ///
+    /// let leaf1 = Leaf::new("leaf1", "node_data1");
+    /// let leaf2 = Leaf::new("leaf2", "node_data2");
+    /// let child_group = Group::new(vec![Node::new_leaf(leaf1), Node::new_leaf(leaf2)], "child", "child_node_data");
+    /// let root_group = Group::new(vec![Node::new_group(child_group)], "root", "root_node_data");
+    ///
+    /// let indexed = root_group.with_idx();
+    ///
+    /// // Root node has index 0
+    /// assert_eq!(indexed.node_data(), utils::with_idx::NodeData { data: &"root_node_data", index: 0 });
+    ///
+    /// // Child nodes have their respective indices
+    /// let children: Vec<_> = indexed.get_children().unwrap().collect();
+    /// let lazy_hierarchy::NodeRef::Group(child) = &children[0] else { panic!() };
+    ///
+    /// assert_eq!(child.node_data(), utils::with_idx::NodeData { data: &"child_node_data", index: 0 });
+    ///
+    /// let grandchildren: Vec<_> = child.get_children().unwrap().collect();
+    /// assert_eq!(grandchildren[0].node_data(), utils::with_idx::NodeData { data: &"node_data1", index: 0 });
+    /// assert_eq!(grandchildren[1].node_data(), utils::with_idx::NodeData { data: &"node_data2", index: 1 });
+    ///
+    /// ```
+    fn with_idx(self) -> WithIdxGroupRef<Self> {
+        WithIdxGroupRef::new(self)
     }
 
     /// `format_node` should return just a single line

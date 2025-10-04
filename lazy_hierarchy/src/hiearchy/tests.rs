@@ -110,3 +110,68 @@ fn test_map_leaf_data() {
 
     assert_eq!(collected, target);
 }
+
+#[test]
+fn test_with_idx() {
+    use concrete::*;
+
+    
+    let hierarchy = ConcreteHiearchy::new(Group::new(
+        vec![
+            Node::new_leaf(Leaf::new(10, String::from("leaf1"))),
+            Node::new_leaf(Leaf::new(20, String::from("leaf2"))),
+            Node::new_group(Group::new(
+                vec![
+                    Node::new_leaf(Leaf::new(30, String::from("nested_leaf1"))),
+                    Node::new_leaf(Leaf::new(40, String::from("nested_leaf2"))),
+                ],
+                true,
+                String::from("subgroup"),
+            )),
+        ],
+        false,
+        String::from("root"),
+    ));
+
+    let indexed = hierarchy.root().with_idx();
+    
+    // Test root node has index 0
+    let root_node_data = indexed.node_data();
+    assert_eq!(root_node_data.data, &String::from("root"));
+    assert_eq!(root_node_data.index, 0);
+    
+    // Test children have correct indices
+    let children: Vec<_> = indexed.get_children().unwrap().collect();
+    assert_eq!(children.len(), 3);
+    
+    // First leaf should have index 0
+    let leaf1_node_data = children[0].node_data();
+    assert_eq!(leaf1_node_data.data, &String::from("leaf1"));
+    assert_eq!(leaf1_node_data.index, 0);
+    
+    // Second leaf should have index 1
+    let leaf2_node_data = children[1].node_data();
+    assert_eq!(leaf2_node_data.data, &String::from("leaf2"));
+    assert_eq!(leaf2_node_data.index, 1);
+    
+    // Subgroup should have index 2
+    let subgroup_node_data = children[2].node_data();
+    assert_eq!(subgroup_node_data.data, &String::from("subgroup"));
+    assert_eq!(subgroup_node_data.index, 2);
+    
+    // Test nested children have correct indices
+    if let crate::NodeRef::Group(subgroup) = &children[2] {
+        let nested_children: Vec<_> = subgroup.get_children().unwrap().collect();
+        assert_eq!(nested_children.len(), 2);
+        
+        let nested1_node_data = nested_children[0].node_data();
+        assert_eq!(nested1_node_data.data, &String::from("nested_leaf1"));
+        assert_eq!(nested1_node_data.index, 0);
+        
+        let nested2_node_data = nested_children[1].node_data();
+        assert_eq!(nested2_node_data.data, &String::from("nested_leaf2"));
+        assert_eq!(nested2_node_data.index, 1);
+    } else {
+        panic!("Expected subgroup to be a Group");
+    }
+}

@@ -212,6 +212,7 @@ pub fn map<OrigGr: GroupRef, M: Mapper<OrigGr>>(
     MappedGroupRef { this: gr, mapper }
 }
 
+// TODO: Remove
 pub fn map_as_groupref<'m, OrigGr: GroupRef, M: Mapper<OrigGr>>(
     gr: OrigGr,
     mapper: M,
