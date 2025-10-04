@@ -9,7 +9,7 @@ use itertools::Itertools;
 pub use onetime::*;
 
 pub struct DeepSorter<Item: SortableItem> {
-    bintree: BinTree<Item, (), NodeInfo<Item>>,
+    bintree: BinTree<Item, (), StaticNodeInfo<Item>>,
 }
 
 impl<Item: SortableItem + std::fmt::Debug> std::fmt::Debug for DeepSorter<Item>
@@ -50,6 +50,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
     > + 's {
         self.bintree
             .root()
+            // TODO: Consider isolating these computations somewhere else, eg. to `geogroup.rs` or `strength.rs`
             // Calculate separation
             .map_group_data(|group_ref| {
                 let separation = group_ref
@@ -105,13 +106,26 @@ impl<Item: SortableItem> DeepSorter<Item> {
                     },
                 }
             })
-            .map_node_data(|node_ref| node_ref.node_data().data.to_owned())
+            .with_idx()
+            // "Revert" with_parent and add index to
+            .map_node_data(|node_ref| {
+                let node_data = node_ref.node_data();
+                NodeInfo { static_info: node_data.data.data.to_owned(), id: match node_data.index {
+                    0 => HorizontalIdx::Left,
+                    1 => HorizontalIdx::Right,
+                    idx => {
+                        debug_assert!(false, "Index bigger than 1 in binary tree: {idx}");
+                        HorizontalIdx::Right
+                    }
+                } }
+            })
         //
     }
 }
 
+/// Information about nodes which is generated once and then used instead of being generated on the fly
 #[derive(Debug)]
-pub struct NodeInfo<Item: SortableItem> {
+pub struct StaticNodeInfo<Item: SortableItem> {
     first_time: Item::Time,
     last_time: Item::Time,
 
@@ -119,7 +133,12 @@ pub struct NodeInfo<Item: SortableItem> {
     last_pos: Item::Position,
 }
 
-impl<Item: SortableItem> Clone for NodeInfo<Item> {
+pub struct NodeInfo<Item: SortableItem> {
+    static_info: StaticNodeInfo<Item>,
+    pub id: HorizontalIdx
+}
+
+impl<Item: SortableItem> Clone for StaticNodeInfo<Item> {
     fn clone(&self) -> Self {
         Self {
             first_time: self.first_time.clone(),
@@ -155,12 +174,12 @@ pub struct GroupInfo {
 /// Provides [NodeInfo] for every node in the binary tree
 fn provide_info<Item: SortableItem, InnerNode>(
     tree: BinTree<Item, InnerNode, ()>,
-) -> BinTree<Item, InnerNode, NodeInfo<Item>> {
+) -> BinTree<Item, InnerNode, StaticNodeInfo<Item>> {
     match tree {
         BinTree::InnerNode(node) => {
             let children = Box::new(node.children.map(|c| provide_info(c)));
             BinTree::InnerNode(BTInnerNode {
-                node_data: NodeInfo {
+                node_data: StaticNodeInfo {
                     first_time: children[0].get_node_data().first_time.clone(),
                     last_time: children[children.len() - 1]
                         .get_node_data()
@@ -177,10 +196,10 @@ fn provide_info<Item: SortableItem, InnerNode>(
             })
         }
         BinTree::Leaf(l, ()) => {
-            let tree_group_info = NodeInfo {
+            let tree_group_info = StaticNodeInfo {
                 first_time: l.get_time(),
                 last_time: l.get_time(),
-                first_pos: l.get_position().expect("POSERR"), 
+                first_pos: l.get_position().expect("POSERR"),
                 last_pos: l.get_position().expect("POSERR"),
             };
             BinTree::Leaf(l, tree_group_info)
@@ -204,7 +223,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
     fn get_time_group_mut(
         &mut self,
         time: &Item::Time,
-    ) -> Option<&mut BTInnerNode<Item, (), NodeInfo<Item>>> {
+    ) -> Option<&mut BTInnerNode<Item, (), StaticNodeInfo<Item>>> {
         get_time_group_mut(&mut self.bintree, time)
     }
 }
@@ -217,7 +236,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
 /// no newer items than `time` OR if there are no older items than `time`.
 /// This means that for `BinTree::Leaf` we always return [false].
 fn tree_contains_time<Item: SortableItem>(
-    tree: &BinTree<Item, (), NodeInfo<Item>>,
+    tree: &BinTree<Item, (), StaticNodeInfo<Item>>,
     time: &Item::Time,
 ) -> bool {
     match tree {
@@ -240,9 +259,9 @@ fn tree_contains_time<Item: SortableItem>(
 ///
 /// May panic on invalid tree, eg. invalid values //TODO: What does this mean??
 fn get_time_group_mut<'a, Item: SortableItem>(
-    tree: &'a mut BinTree<Item, (), NodeInfo<Item>>,
+    tree: &'a mut BinTree<Item, (), StaticNodeInfo<Item>>,
     time: &Item::Time,
-) -> Option<&'a mut BTInnerNode<Item, (), NodeInfo<Item>>> {
+) -> Option<&'a mut BTInnerNode<Item, (), StaticNodeInfo<Item>>> {
     match tree {
         BinTree::Leaf(_, _) => None,
         BinTree::InnerNode(node) => {

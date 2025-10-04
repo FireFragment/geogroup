@@ -1,9 +1,13 @@
 use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 
-pub use deep_sorter::{GroupInfo, NodeInfo};
+pub use deep_sorter::{GroupInfo};
 
 use super::*;
+
+pub struct NodeInfo {
+    pub id_path: Vec<HorizontalIdx>
+}
 
 pub struct Sorter<Item: SortableItem> {
     deep_sorter: DeepSorter<Item>,
@@ -68,45 +72,58 @@ impl<Item: SortableItem> Sorter<Item> {
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = GroupInfo,
         LeafData = &'s Item,
-        NodeData = NodeInfo<Item>,
+        NodeData = NodeInfo,
         StructureErr = Infallible,
     > {
         self.deep_sorter()
             .deep_hierarchy()
             .with_parent()
-            .dissolve_by_key(|group|
+            .dissolve_by_key_and_fold(|group|
                 match group.group_data().strength {
-                StrengthInfo::Ok{
-                    strength,
-                    ..
-                } => {
-                    // MINIMUM DISTANCE
-                    // For this, we use parents separation, not our own, because if this group's spearation
-                    // is low but our paerents spearation is high, we don't want to dissolve this
-                    // low-separation group into the high separation group and spam it - in case of low-separation
-                    // groups, we want to only dissolve its children, so we use parent spearation when deciding whether
-                    // to dissolve
-                    group.node_data().parent
-                        .map(|parent| parent.group_data().separation)
-                        .flatten()
-                        .unwrap_or(Distance::MAX)
-                    < self.params.minimum_distance
-                    || strength < MAX_DEPTH - self.params.depth
-                },
-                StrengthInfo::Root => false,
+                    StrengthInfo::Ok{
+                        strength,
+                        ..
+                    } => {
+                        // MINIMUM DISTANCE
+                        // For this, we use parents separation, not our own, because if this group's spearation
+                        // is low but our paerents spearation is high, we don't want to dissolve this
+                        // low-separation group into the high separation group and spam it - in case of low-separation
+                        // groups, we want to only dissolve its children, so we use parent spearation when deciding whether
+                        // to dissolve
+                        if group.node_data().parent
+                                .map(|parent| parent.group_data().separation)
+                                .flatten()
+                                .unwrap_or(Distance::MAX)
+                            < self.params.minimum_distance
+                            || strength < MAX_DEPTH - self.params.depth
+                        {
+                            Some(vec![group.node_data().data.id])
+                        } else { None }
+                    },
+                    StrengthInfo::Root => None,
 
-                // These shouldn't happen, but we can somehow (albeit non-perfectly) handle them anyway
-                StrengthInfo::LessThan2Children => {
-                    log::error!("Found a node with less than two children in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
-                    true
-                }
-                StrengthInfo::NoSiblings => {
-                    log::error!("Found a node with no siblings in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
-                    false
+                    // These shouldn't happen, but we can somehow (albeit non-perfectly) handle them anyway
+                    StrengthInfo::LessThan2Children => {
+                        log::error!("Found a node with less than two children in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
+                        Some(vec![group.node_data().data.id])
+                    }
+                    StrengthInfo::NoSiblings => {
+                        log::error!("Found a node with no siblings in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
+                        None
+                    },
                 },
-            })
+                |mut path1, path2| {
+                    path1.extend_from_slice(&path2);
+                    path1
+                }
+            )
             // Reverse with_parent call above
-            .map_node_data(|node| node.node_data().data)
+            .map_node_data(|node| {
+                let node_data = node.node_data();
+                let mut id_path = node_data.inherited;
+                id_path.push(node_data.original.data.id);
+                NodeInfo { id_path }
+            })
     }
 }
 

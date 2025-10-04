@@ -4,7 +4,8 @@ use lazy_hierarchy::AsGroupRef;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum HorizontalIdx {
-    Left, Right
+    Left = 0,
+    Right = 1
 }
 
 pub enum BinTree<Leaf, InnerNode, Node> {
