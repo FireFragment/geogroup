@@ -5,6 +5,7 @@ use std::{
 };
 
 use rayon::prelude::ParallelIterator;
+use std::iter;
 
 pub mod caching_file_item;
 pub use caching_file_item::CachedFileSortableItem;
@@ -13,6 +14,7 @@ pub mod fs_hierarchy;
 pub mod item_source;
 pub mod main_hierarchy;
 pub mod progress;
+pub mod selection;
 pub use geogroup_common::*;
 pub use gg_prelude::*;
 

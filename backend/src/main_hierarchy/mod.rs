@@ -42,12 +42,14 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                         InnerLeafData::LazySubgroup(value),
                         NodeData {
                             name: Some(String::from("Root")), // TODO: Translate
+                            local_id_path: None,
                         },
                     ),
                 )],
                 (),
                 NodeData {
                     name: Some(String::from("Root")), // TODO: Translate
+                    local_id_path: None,
                 },
             ),
         ))
@@ -142,7 +144,7 @@ impl TemplateHiearchy {
     /// which is the "template" for creating the "final" hierarchy.
     ///
     /// Note that groups returned by this function do NOT have 1:1 correspondence with folders
-    /// to be applied, see [GroupData::LazySubgroupRoot]
+    /// to be applied, see [GroupData::LazySubgroupRoot] which does not correspond to a folder.
     pub fn root_final<'a>(
         &'a self,
     ) -> impl lazy_hierarchy::GroupRef<
@@ -198,6 +200,11 @@ pub enum GroupData {
 #[derive(Clone, Debug)]
 pub struct NodeData {
     pub name: Option<String>,
+    /// If you join all `local_id_path`s of a node's parents up to the first [None],
+    /// you get an _identification path_ of the node. It's unique in the subtree of the first node whose `local_id_path` is None.
+    /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
+    /// animating the nodes etc.
+    pub local_id_path: Option<Vec<u8>>
 }
 #[derive(Clone, Debug)]
 pub struct FileData {

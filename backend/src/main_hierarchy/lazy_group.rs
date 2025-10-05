@@ -41,6 +41,7 @@ impl Final {
                             .node_data()
                             .file_name()
                             .map(|name| (*name.to_string_lossy()).to_owned()),
+                        local_id_path: None
                         /*.unwrap_or_else(|| {
                                 log::error!("Path ending in `..`: {:?}", node.node_data());
                                 String::new()
@@ -56,7 +57,9 @@ impl Final {
                             lazy_hierarchy::NodeRef::Group(gr) =>
                                 gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
                             lazy_hierarchy::NodeRef::Leaf(_) => None,
-                        } */ Some(format!("{}", node.node_data().id_path.into_iter().map(|id| id as u8).join("/")))
+                        } */ Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
+
+                        local_id_path: Some(node.node_data().local_id_path.into_iter().map(|id| id as u8).collect())
                     })
                     .map_leaf_data(|leaf| leaf.leaf_data().data.to_owned()) // OPT: Possibly needless clone
                     .map_group_data(|_| ()),
@@ -71,7 +74,7 @@ impl Template {
     pub fn into_final(self, progress_callback: &mut ProgressCallback) -> Option<lazy_group::Final> {
         match self {
             Template::Fs(it) => Some(Final::Fs(it)),
-            Template::Sorted { item_source, params } => 
+            Template::Sorted { item_source, params } =>
                 Some(LGSorted::new(item_source, params, progress_callback)?.into()),
         }
     }

@@ -6,7 +6,10 @@ pub use deep_sorter::{GroupInfo};
 use super::*;
 
 pub struct NodeInfo {
-    pub id_path: Vec<HorizontalIdx>
+    /// If you join all `local_id_path`s of a node's parents, you get the unique _identification path_ of the node.
+    /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
+    /// animating the nodes etc.
+    pub local_id_path: Vec<HorizontalIdx>
 }
 
 pub struct Sorter<Item: SortableItem> {
@@ -122,7 +125,7 @@ impl<Item: SortableItem> Sorter<Item> {
                 let node_data = node.node_data();
                 let mut id_path = node_data.inherited;
                 id_path.push(node_data.original.data.id);
-                NodeInfo { id_path }
+                NodeInfo { local_id_path: id_path }
             })
     }
 }
