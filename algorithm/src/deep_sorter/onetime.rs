@@ -101,7 +101,7 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
         });
 
         debug_assert!(
-            cameras_paths.values().all(|info| info.path_to_last_point.is_sorted_by_key(|comp| comp.inner_separation)),
+            cameras_paths.values().all(|info| info.path_to_last_point.is_sorted_by_key(|comp| Distance::MAX - comp.inner_separation)),
             "Sorting behaves badly: some of camera paths are not sorted by separation: {:?}",
             cameras_paths.values().map(|info| &info.path_to_last_point).collect_vec()
         );
