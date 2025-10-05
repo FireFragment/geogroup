@@ -364,11 +364,13 @@ impl App {
 pub fn show_hiearchy(
     ui: &mut egui::Ui,
     hiearchy: &backend::main_hierarchy::TemplateHiearchy,
-    selected_vec: &mut Vec<usize>,
+    selection: &mut Vec<backend::selection::PathComponent>,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
 ) {
-    egui::ScrollArea::horizontal()
+    let mut selecion_indices = hiearchy.selection_to_indices(selection.iter().cloned()).collect_vec();
+
+    let selection_modified = egui::ScrollArea::horizontal()
         .stick_to_right(true)
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
@@ -378,18 +380,23 @@ pub fn show_hiearchy(
                         .root_final()
                         .map_node_data(|n| n.node_data().name.unwrap_or_default())
                         .map_leaf_data(|l| l.leaf_data()),
-                    selected_vec,
+                    &mut selecion_indices,
                     0,
                     flatten_mode,
                     image_scale,
                 )
-            });
-        });
+            }).inner
+        }).inner;
+
+    if selection_modified {
+        *selection = hiearchy.indices_to_selection(selecion_indices.into_iter()).collect();
+    }
 }
 
+/// Returns true if selection was modified
 fn show_hiearchy_list(
     table: TableBuilder,
-    selected_vec: &mut Vec<usize>,
+    selected_indices: &mut Vec<usize>,
     current_depth: usize,
     group_row_size: f32,
     image_scale: u16,
@@ -399,7 +406,9 @@ fn show_hiearchy_list(
         LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug
     >>>
-) {
+) -> bool {
+    let mut selection_modified = false;
+
     table.body(|body| {
         body.heterogeneous_rows(
             // Row heights
@@ -425,7 +434,7 @@ fn show_hiearchy_list(
                 let child_data = child.node_data();
                 let child_name = child_data.as_ref();
 
-                let selected = selected_vec.get(current_depth) == Some(&row.index());
+                let selected = selected_indices.get(current_depth) == Some(&row.index());
                 row.set_selected(selected);
                 if let lazy_hierarchy::NodeRef::Group(g) = child {
                     if let main_hierarchy::GroupData::LazySubgroupRoot = g.group_data() {
@@ -550,16 +559,20 @@ fn show_hiearchy_list(
                 });
 
                 if row.response().clicked() {
-                    selected_vec.truncate(current_depth);
-                    selected_vec.push(idx);
+                    selected_indices.truncate(current_depth);
+                    selected_indices.push(idx);
+                    selection_modified = true;
                 }
 
                 //row.set_selected(selection_highlight);
             },
         );
     });
+
+    selection_modified
 }
 
+/// Returns whether the selection was modified.
 fn show_hiearchy_inner(
     ui: &mut egui::Ui,
     hiearchy: &impl lazy_hierarchy::GroupRef<
@@ -568,14 +581,14 @@ fn show_hiearchy_inner(
         LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug,
     >,
-    selected_vec: &mut Vec<usize>,
+    selected_indices: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
-) {
+) -> bool {
     // TODO: Preseve selection through depth (and other algorithm parameters) changes
     // TODO: Maybe we don't have to crash so horribly?
-    assert!(selected_vec.len() >= current_depth);
+    debug_assert!(selected_indices.len() >= current_depth);
 
     use egui_extras::{Column, TableBuilder};
 
@@ -584,7 +597,7 @@ fn show_hiearchy_inner(
         .expect("TODO") //TODO: Handle
         .collect_vec();
 
-    let selected_group = if let Some(selection_idx) = selected_vec.get(current_depth) {
+    let selected_group = if let Some(selection_idx) = selected_indices.get(current_depth) {
         if let Some(lazy_hierarchy::NodeRef::Group(g)) = &children.get(*selection_idx) { // TODO: Make sure this always succesds
             Some(g)
         } else {
@@ -594,7 +607,7 @@ fn show_hiearchy_inner(
         None
     };
 
-    ui.push_id(current_depth, |ui| {
+    let selection_modified_rn = ui.push_id(current_depth, |ui| {
         let group_row_size =
             ui.style().text_styles[&TextStyle::Body].size + ui.style().spacing.item_spacing.y * 2.0;
 
@@ -606,24 +619,25 @@ fn show_hiearchy_inner(
                     Column::remainder().at_least(256.0)
                 })
                 .sense(Sense::click()),
-            selected_vec,
+            selected_indices,
             current_depth,
             group_row_size,
             image_scale,
             &children
-        );
-    });
+        )
+    }).inner;
 
-    if let Some(g) = selected_group {
+    let selection_modified_rec = if let Some(g) = selected_group {
         show_hiearchy_inner(
             ui,
             g,
-            selected_vec,
+            selected_indices,
             current_depth + 1,
             flatten_mode,
             image_scale,
         )
-    }
+    } else { false };
+    selection_modified_rec || selection_modified_rn
 }
 
 pub(crate) fn error_ui(ui: &mut egui::Ui, error: &str) {
@@ -859,7 +873,7 @@ struct MainPage {
     pane: Option<PaneContent>,
     hiearchy: backend::main_hierarchy::TemplateHiearchy,
     flatten_mode: Option<FlattenMode>,
-    selection: Vec<usize>,
+    selection: Vec<backend::selection::PathComponent>,
     image_scale: u16,
     progress: Option<Progress>,
     /// Config controlling the entire operation, including sorting, naming, etc.
