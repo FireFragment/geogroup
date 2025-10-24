@@ -80,7 +80,7 @@ fn load_fonts(ctx: &Context) {
 
         fonts
             .font_data
-            .insert(FONT_REGULAR.to_owned(), FontData::from_owned(buf));
+            .insert(FONT_REGULAR.to_owned(), FontData::from_owned(buf).into());
     }
     {
         let handle = SystemSource::new()
@@ -97,7 +97,7 @@ fn load_fonts(ctx: &Context) {
 
         fonts
             .font_data
-            .insert(FONT_BOLD.to_owned(), FontData::from_owned(buf));
+            .insert(FONT_BOLD.to_owned(), FontData::from_owned(buf).into());
     }
     {
         let handle = SystemSource::new()
@@ -114,7 +114,7 @@ fn load_fonts(ctx: &Context) {
 
         fonts
             .font_data
-            .insert(FONT_LIGHT.to_owned(), FontData::from_owned(buf));
+            .insert(FONT_LIGHT.to_owned(), FontData::from_owned(buf).into());
     }
 
     if let Some(vec) = fonts.families.get_mut(&FontFamily::Proportional) {
@@ -221,13 +221,13 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
         style.spacing.button_padding = Vec2::new(8.0, 4.0);
 
         // ROUNDING
-        style.visuals.window_rounding = Rounding::ZERO;
-        style.visuals.menu_rounding = Rounding::ZERO;
-        style.visuals.widgets.active.rounding = Rounding::ZERO;
-        style.visuals.widgets.hovered.rounding = Rounding::ZERO;
-        style.visuals.widgets.inactive.rounding = Rounding::ZERO;
-        style.visuals.widgets.noninteractive.rounding = Rounding::ZERO;
-        style.visuals.widgets.open.rounding = Rounding::ZERO;
+        style.visuals.window_corner_radius = Rounding::ZERO;
+        style.visuals.menu_corner_radius = Rounding::ZERO;
+        style.visuals.widgets.active.corner_radius = Rounding::ZERO;
+        style.visuals.widgets.hovered.corner_radius = Rounding::ZERO;
+        style.visuals.widgets.inactive.corner_radius = Rounding::ZERO;
+        style.visuals.widgets.noninteractive.corner_radius = Rounding::ZERO;
+        style.visuals.widgets.open.corner_radius = Rounding::ZERO;
 
         // MISCELLANEOUS
         style.interaction.selectable_labels = false;

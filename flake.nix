@@ -105,6 +105,7 @@
             glib.dev
             pkg-config
             tippecanoe
+            protobuf
 
             clippy
             rust-analyzer

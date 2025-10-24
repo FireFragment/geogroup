@@ -180,6 +180,7 @@ fn get_children_dissolved<
 {
     Ok(parent_group
         .get_children()?
+    .into_iter()
         .map(move |child| {
             Ok(match child {
                 NodeRef::Leaf(leaf) => Either::Left(std::iter::once(NodeRef::Leaf(DissolverLeaf {

@@ -6,8 +6,8 @@ edition = "2021"
 
 [dependencies]
 geogroup_backend = { path = "../backend" }
-eframe = "0.29.1"
-egui_extras = { version = "0.29.1", features = ["all_loaders"] }
+eframe = "0.32.3"
+egui_extras = { version = "0.32.3", features = ["all_loaders"] }
 image = { version = "0.25", features = ["jpeg", "png"] }
 env_logger = { version = "0.10", default-features = false, features = [
     "auto-color",
@@ -17,8 +17,8 @@ rfd = "0.15.0"
 egui_inbox = "0.5.0"
 chrono = "0.4.38"
 clap = { version = "4.5.22", features = ["cargo", "derive", "env"] }
-egui_transition_animation = "=0.1.1"
-egui-theme-switch = "=0.2.1"
+egui_transition_animation = "=0.1.6"
+egui-theme-switch = "0.4.0"
 log = "0.4.26"
 font-kit = "0.14.2"
 dotenv = "0.15.0"
@@ -26,4 +26,5 @@ thiserror = "2.0.12"
 derive_more = { version = "2.0.1", features = ["from"] }
 mundy = { version = "0.2.0", default-features = false, features = ["accent-color", "async-io", "callback"]}
 allmytoes = { path = "../deps/allmytoes" }
+futures = "0.3.31"
 # futures-lite = "2.6.1"

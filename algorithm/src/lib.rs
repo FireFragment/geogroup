@@ -14,6 +14,7 @@ pub use bintree::*;
 pub use deep_sorter::{DeepSorter, StrengthInfo};
 use lazy_hierarchy::prelude::*;
 use std::convert::Infallible;
+use either::Either;
 //pub use algo::sort;
 //pub use algo::sort_just_points;
 

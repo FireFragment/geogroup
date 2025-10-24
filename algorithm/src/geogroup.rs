@@ -1,3 +1,4 @@
+use std::{hash::Hash, rc::Rc, sync::Arc};
 use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 
@@ -5,19 +6,20 @@ pub use deep_sorter::{GroupInfo};
 
 use super::*;
 
-pub struct NodeInfo {
+pub struct NodeInfo<NDItem = ()> {
     /// If you join all `local_id_path`s of a node's parents, you get the unique _identification path_ of the node.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
-    pub local_id_path: Vec<HorizontalIdx>
+    pub local_id_path: Vec<HorizontalIdx>,
+    pub name: Option<Vec<NDItem>>
 }
 
-pub struct Sorter<Item: SortableItem> {
-    deep_sorter: DeepSorter<Item>,
+pub struct Sorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash = ()> {
+    deep_sorter: Arc<DeepSorter<Item, NDItem>>,
     params: Params,
 }
 
-impl<Item: SortableItem + Debug> Debug for Sorter<Item>
+impl<Item: SortableItem + Debug, NDItem: Clone + PartialEq + Eq + Hash + Debug> Debug for Sorter<Item, NDItem>
 where
     Item::Time: std::fmt::Debug,
     Item::Position: std::fmt::Debug,
@@ -30,7 +32,7 @@ where
     }
 }
 
-impl<Item: SortableItem + Debug> Sorter<Item> {
+impl<Item: SortableItem + Debug, NDItem: Clone + PartialEq + Eq + Hash> Sorter<Item, NDItem> {
     /// Pretty print the resulting tree and parameters
     pub fn debug(&self) {
         self.debug_with_fmt_leafs(|l| format!("{:?}",  l));
@@ -69,13 +71,13 @@ impl<Item: SortableItem + Debug> Sorter<Item> {
     }
 }
 
-impl<Item: SortableItem> Sorter<Item> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> Sorter<Item, NDItem> {
     pub fn hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = GroupInfo,
         LeafData = &'s Item,
-        NodeData = NodeInfo,
+        NodeData = NodeInfo<NDItem>,
         StructureErr = Infallible,
     > {
         self.deep_sorter()
@@ -124,28 +126,29 @@ impl<Item: SortableItem> Sorter<Item> {
             .map_node_data(|node| {
                 let node_data = node.node_data();
                 let mut id_path = node_data.inherited;
+                let name = node_data.original.data.get_naming_data().cloned();
                 id_path.push(node_data.original.data.id);
-                NodeInfo { local_id_path: id_path }
+                NodeInfo { local_id_path: id_path, name }
             })
     }
 }
 
 /// # Simple getters and setters
-impl<Item: SortableItem> Sorter<Item> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> Sorter<Item, NDItem> {
     /// This sorts all items to binary tree, potentially long-running
     pub fn new(items: Vec<Item>, params: Params) -> Self {
         Self {
-            deep_sorter: DeepSorter::new(items),
+            deep_sorter: Arc::new(DeepSorter::new(items)),
             params,
         }
     }
 
-    pub fn deep_sorter_mut(&mut self) -> &mut DeepSorter<Item> {
-        &mut self.deep_sorter
+    pub fn deep_sorter(&self) -> &DeepSorter<Item, NDItem> {
+        &*self.deep_sorter
     }
 
-    pub fn deep_sorter(&self) -> &DeepSorter<Item> {
-        &self.deep_sorter
+    pub fn deep_sorter_rc(&self) -> Arc<DeepSorter<Item, NDItem>> {
+        self.deep_sorter.clone()
     }
 
     pub fn params(&self) -> &Params {

@@ -1,21 +1,25 @@
 mod onetime;
+pub mod naming;
 //#[cfg(test)]
 //mod test;
 
-use std::{convert::Infallible, ops::Div};
+use core::fmt;
+use std::{cell::OnceCell, convert::Infallible, ops::Div, sync::OnceLock};
 
 use crate::*;
 use itertools::Itertools;
+use std::hash::Hash;
 pub use onetime::*;
 
-pub struct DeepSorter<Item: SortableItem> {
-    bintree: BinTree<Item, (), StaticNodeInfo<Item>>,
+pub struct DeepSorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> {
+    bintree: BinTree<Item, (), StaticNodeInfo<Item, NDItem>>,
 }
 
-impl<Item: SortableItem + std::fmt::Debug> std::fmt::Debug for DeepSorter<Item>
+
+impl<Item: SortableItem + fmt::Debug, NDItem: fmt::Debug + Clone + PartialEq + Eq + Hash> fmt::Debug for DeepSorter<Item, NDItem>
 where
-    Item::Time: std::fmt::Debug,
-    Item::Position: std::fmt::Debug,
+    Item::Time: fmt::Debug,
+    Item::Position: fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeepSorter")
@@ -39,14 +43,15 @@ pub fn ratio_to_strength(parent_separation: f32, self_separation: f32) -> f32 {
 }
 
 /// # Sorting methods
-impl<Item: SortableItem> DeepSorter<Item> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> DeepSorter<Item, NDItem> {
     pub fn deep_hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = GroupInfo,
         LeafData = &'s Item,
-        NodeData = NodeInfo<Item>,
+        NodeData = NodeInfo<'s, Item, NDItem>,
         StructureErr = Infallible,
+        //LeafRef = impl Send,
     > + 's {
         self.bintree
             .root()
@@ -110,7 +115,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
             // "Revert" with_parent and add index to
             .map_node_data(|node_ref| {
                 let node_data = node_ref.node_data();
-                NodeInfo { static_info: node_data.data.data.to_owned(), id: match node_data.index {
+                NodeInfo { static_info: node_data.data.data, id: match node_data.index {
                     0 => HorizontalIdx::Left,
                     1 => HorizontalIdx::Right,
                     idx => {
@@ -125,26 +130,35 @@ impl<Item: SortableItem> DeepSorter<Item> {
 
 /// Information about nodes which is generated once and then used instead of being generated on the fly
 #[derive(Debug)]
-pub struct StaticNodeInfo<Item: SortableItem> {
+pub struct StaticNodeInfo<Item: SortableItem, NDItem> {
     first_time: Item::Time,
     last_time: Item::Time,
 
     first_pos: Item::Position,
     last_pos: Item::Position,
+
+    naming_data: OnceLock<Vec<NDItem>>,
 }
 
-pub struct NodeInfo<Item: SortableItem> {
-    static_info: StaticNodeInfo<Item>,
-    pub id: HorizontalIdx
+pub struct NodeInfo<'hier, Item: SortableItem, NDItem> {
+    static_info: &'hier StaticNodeInfo<Item, NDItem>,
+    pub id: HorizontalIdx,
 }
 
-impl<Item: SortableItem> Clone for StaticNodeInfo<Item> {
+impl<'hier, Item: SortableItem, NDItem> NodeInfo<'hier, Item, NDItem> {
+    pub fn get_naming_data(&self) -> Option<&Vec<NDItem>> {
+        self.static_info.naming_data.get()
+    }
+}
+
+impl<Item: SortableItem, NDItem: Clone> Clone for StaticNodeInfo<Item, NDItem> {
     fn clone(&self) -> Self {
         Self {
             first_time: self.first_time.clone(),
             last_time: self.last_time.clone(),
             first_pos: self.first_pos.clone(),
             last_pos: self.last_pos.clone(),
+            naming_data: self.naming_data.clone(),
         }
     }
 }
@@ -172,9 +186,9 @@ pub struct GroupInfo {
 }
 
 /// Provides [NodeInfo] for every node in the binary tree
-fn provide_info<Item: SortableItem, InnerNode>(
+fn provide_info<Item: SortableItem, InnerNode, NDItem>(
     tree: BinTree<Item, InnerNode, ()>,
-) -> BinTree<Item, InnerNode, StaticNodeInfo<Item>> {
+) -> BinTree<Item, InnerNode, StaticNodeInfo<Item, NDItem>> {
     match tree {
         BinTree::InnerNode(node) => {
             let children = Box::new(node.children.map(|c| provide_info(c)));
@@ -190,6 +204,7 @@ fn provide_info<Item: SortableItem, InnerNode>(
                         .get_node_data()
                         .last_pos
                         .clone(),
+                    naming_data: OnceLock::new()
                 },
                 children,
                 inner_node_data: node.inner_node_data,
@@ -201,13 +216,14 @@ fn provide_info<Item: SortableItem, InnerNode>(
                 last_time: l.get_time(),
                 first_pos: l.get_position().expect("POSERR"),
                 last_pos: l.get_position().expect("POSERR"),
+                naming_data: OnceLock::new()
             };
             BinTree::Leaf(l, tree_group_info)
         }
     }
 }
 
-impl<Item: SortableItem> DeepSorter<Item> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> DeepSorter<Item, NDItem> {
     /// This sorts all items to binary tree, potentially long-running
     pub fn new(items: Vec<Item>) -> Self {
         //points.sort_unstable_by_key(|it| it.get_time());
@@ -223,7 +239,7 @@ impl<Item: SortableItem> DeepSorter<Item> {
     fn get_time_group_mut(
         &mut self,
         time: &Item::Time,
-    ) -> Option<&mut BTInnerNode<Item, (), StaticNodeInfo<Item>>> {
+    ) -> Option<&mut BTInnerNode<Item, (), StaticNodeInfo<Item, NDItem>>> {
         get_time_group_mut(&mut self.bintree, time)
     }
 }
@@ -235,8 +251,8 @@ impl<Item: SortableItem> DeepSorter<Item> {
 /// Returns false if the `tree` itself is out of range, that is if there are either
 /// no newer items than `time` OR if there are no older items than `time`.
 /// This means that for `BinTree::Leaf` we always return [false].
-fn tree_contains_time<Item: SortableItem>(
-    tree: &BinTree<Item, (), StaticNodeInfo<Item>>,
+fn tree_contains_time<Item: SortableItem, NDItem>(
+    tree: &BinTree<Item, (), StaticNodeInfo<Item, NDItem>>,
     time: &Item::Time,
 ) -> bool {
     match tree {
@@ -258,10 +274,10 @@ fn tree_contains_time<Item: SortableItem>(
 /// # Panics
 ///
 /// May panic on invalid tree, eg. invalid values //TODO: What does this mean??
-fn get_time_group_mut<'a, Item: SortableItem>(
-    tree: &'a mut BinTree<Item, (), StaticNodeInfo<Item>>,
+fn get_time_group_mut<'a, Item: SortableItem, NDItem>(
+    tree: &'a mut BinTree<Item, (), StaticNodeInfo<Item, NDItem>>,
     time: &Item::Time,
-) -> Option<&'a mut BTInnerNode<Item, (), StaticNodeInfo<Item>>> {
+) -> Option<&'a mut BTInnerNode<Item, (), StaticNodeInfo<Item, NDItem>>> {
     match tree {
         BinTree::Leaf(_, _) => None,
         BinTree::InnerNode(node) => {

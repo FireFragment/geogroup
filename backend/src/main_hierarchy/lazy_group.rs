@@ -57,7 +57,11 @@ impl Final {
                             lazy_hierarchy::NodeRef::Group(gr) =>
                                 gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
                             lazy_hierarchy::NodeRef::Leaf(_) => None,
-                        } */ Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
+                        } */
+
+                        //Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
+
+                        node.node_data().name.map(|name_vec| name_vec.join(", ")),
 
                         local_id_path: Some(node.node_data().local_id_path.into_iter().map(|id| id as u8).collect())
                     })

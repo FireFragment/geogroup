@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{collections::HashSet, convert::Infallible, hash::Hash, thread};
 use derive_more::From;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
@@ -70,11 +70,15 @@ pub struct LGSorted {
     item_source: ItemSource,
     sorter: algorithm::Sorter<
         ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData>,
+        String
     >,
+    tokio_rt: tokio::runtime::Runtime
 }
 
 impl LGSorted {
     /// Potentially long-running. Returns [None] if terminated by progress_callback
+    ///
+    /// For naming, requires to be run inside of tokio runtime
     pub fn new(item_source: ItemSource, params: algorithm::Params, progress_callback: &mut ProgressCallback) -> Option<Self> {
         let items = item_source.clone()
             .into_concrete()
@@ -120,10 +124,43 @@ impl LGSorted {
         // Useful for debugging until added to the main application
         // sorter.debug_with_fmt_leafs(|l| l.data.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
 
+
+        let rt = tokio::runtime::Builder::new_current_thread().build().expect("TODO");
+        {
+            let ds = sorter.deep_sorter_rc();
+            //thread::spawn(|| {
+            //let rt_guard = rt.enter();
+
+            let join_handle = rt.block_on(async move { // TODO: Don't block
+                // Construct a local task set that can run `!Send` futures.
+                let local = tokio::task::LocalSet::new();
+
+                // Run the local task set.
+                local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
+
+                        let reader = nametiles_reader::NametilesConnection::new_from_file(
+                            &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
+                        ).await.expect("TODO");
+
+                        //ds.try_naming(async move |_| todo!()).await;
+                        ds.try_naming(async move |item| {
+                            reader.get_name(geo::Coord::from(item.position))
+                                .await.map(|it| HashSet::from_iter(it.into_iter()))
+                                .unwrap_or_else(|err| HashSet::new()) // TODO: Handle
+                        }).await;
+                });
+
+                local.await;
+            });
+            //});
+
+        }
+
         Some(Self {
             // TODO: Add progress callback
             sorter,  // TODO: Don't ignore errors
             item_source,
+            tokio_rt: rt
         })
     }
 

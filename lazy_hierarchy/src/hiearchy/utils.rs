@@ -89,12 +89,7 @@ pub trait GroupRefUtils: GroupRef {
     fn map_group_data<GroupDataNew, F: Fn(&Self) -> GroupDataNew + Clone>(
         self,
         fun: F,
-    ) -> impl GroupRef<
-        GroupData = GroupDataNew,
-        LeafData = Self::LeafData,
-        NodeData = Self::NodeData,
-        StructureErr = Self::StructureErr,
-    > {
+    ) -> utils::map::MappedGroupRef<Self, utils::map::GroupDataMapper<F>> {
         utils::map::map_group_data(self, fun)
     }
 
@@ -119,12 +114,7 @@ pub trait GroupRefUtils: GroupRef {
     >(
         self,
         fun: F,
-    ) -> impl GroupRef<
-        GroupData = Self::GroupData,
-        LeafData = Self::LeafData,
-        NodeData = NodeDataNew,
-        StructureErr = Self::StructureErr,
-    > {
+    ) -> utils::map::MappedGroupRef<Self, utils::map::NodeDataMapper<F>>  {
         utils::map::map_node_data(self, fun)
     }
 

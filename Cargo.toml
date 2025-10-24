@@ -7,7 +7,7 @@ members = [
     "gui",
     "loaders",
     "backend",
-    "naming", "common", "nametiles/generator",
+    "naming", "common", "nametiles/generator", "nametiles/reader",
     #"apply",
 ]
 #default-members = ["gui"]

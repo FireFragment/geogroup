@@ -350,6 +350,34 @@ impl App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            /*if let Some(ppos) = ui.input(|i| i.pointer.latest_pos()) {
+                println!("Hovering");
+
+
+                ui.add(egui::Label::new("Before"));
+
+                let cursor = ui.cursor();
+                //ui.put(egui::Rect::from_x_y_ranges(ppos.x.., ppos.y..), egui::Label::new("cursor1"));
+
+                //ui.allocate_ui_at_rect(egui::Rect::from_x_y_ranges(ppos.x.., ppos.y..), |ui| ui.label("cursor2"));
+                //ui.place(egui::Rect::from_x_y_ranges(ppos.x.., ppos.y..), egui::Label::new("cursor3"));
+                //
+
+                ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(egui::Rect::from_x_y_ranges(ppos.x.., ppos.y..))
+                )
+                .add(egui::Label::new("Cursor 4"));
+
+                //
+                //ui.allocate_ui_at_rect(cursor, |ui| ui.label("After manipulated"));
+
+                //ui.allocate_rect(cursor, Sense::all());
+
+                ui.add(egui::Label::new("After ato"));
+            }*/
+
+
             show_hiearchy(
                 ui,
                 &main_page.hiearchy,
@@ -651,9 +679,9 @@ fn widgetvisuals_to_frame(
     egui::Frame {
         fill: visuals.bg_fill,
         stroke: visuals.bg_stroke,
-        inner_margin: Margin::symmetric(button_padding.x, button_padding.y),
-        rounding: visuals.rounding,
-        ..egui::Frame::none()
+        inner_margin: Margin::symmetric(button_padding.x as i8, button_padding.y as i8),
+        corner_radius: visuals.corner_radius,
+        ..egui::Frame::NONE
     }
 }
 
@@ -693,7 +721,7 @@ impl App {
         let welcome_page = welcome_page.to_owned();
 
         egui::SidePanel::left("recents")
-            .frame(Frame::default().inner_margin(Margin::same(32.0)))
+            .frame(Frame::default().inner_margin(Margin::same(32)))
             .show(ctx, |ui| {
                 ui.style_mut().spacing.button_padding *= 4.0;
 
@@ -786,7 +814,7 @@ impl App {
             .frame(
                 Frame::default()
                     .fill(ctx.style().visuals.panel_fill)
-                    .inner_margin(Margin::same(32.0)),
+                    .inner_margin(Margin::same(32)),
             )
             .show(ctx, |ui| {
                 // TODO: Actually implement
