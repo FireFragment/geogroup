@@ -406,12 +406,13 @@ pub fn show_hiearchy(
                     ui,
                     &hiearchy
                         .root_final()
-                        .map_node_data(|n| n.node_data().name.unwrap_or_default())
+                        .map_node_data(|n| n.node_data().name)
                         .map_leaf_data(|l| l.leaf_data()),
                     &mut selecion_indices,
                     0,
                     flatten_mode,
                     image_scale,
+                    "show_hierarchy".into()
                 )
             }).inner
         }).inner;
@@ -430,10 +431,11 @@ fn show_hiearchy_list(
     image_scale: u16,
     items: &Vec<NodeRef<impl lazy_hierarchy::GroupRef<
         GroupData = backend::main_hierarchy::GroupData,
-        NodeData = impl AsRef<str>,
+        NodeData = Option<impl AsRef<str>>,
         LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug
-    >>>
+    >>>,
+    id: egui::Id
 ) -> bool {
     let mut selection_modified = false;
 
@@ -535,10 +537,7 @@ fn show_hiearchy_list(
                                 });
                             } else {*/
                                 // TODO: Group names
-                                ui.add(
-                                    egui::Label::new(format!("🗁 {child_name}"))
-                                        .selectable(false),
-                                );
+                                name_label(ui, child_name, true, id.with(idx));
                             //}
 
                         }
@@ -560,11 +559,7 @@ fn show_hiearchy_list(
                                                .ui(ui);
                                            },
                                         }
-
-                                        ui.add(
-                                            egui::Label::new(format!("{child_name}"))
-                                                .selectable(false),
-                                        )
+                                        name_label(ui, child_name, false, id.with(idx));
                                     });
                                 }
                                 LeafData::LazyGroupInitializing { message, progress } => {
@@ -600,12 +595,34 @@ fn show_hiearchy_list(
     selection_modified
 }
 
+fn name_label(ui: &mut egui::Ui, label: Option<impl AsRef<str>>, is_group: bool, id: impl Into<egui::Id>) {
+    let prefix = if is_group { "🗁 " } else { "" };
+    let label = label.map(|s| s.as_ref().to_string());
+    egui_transition_animation::animated_pager_with_direction(
+        ui,
+        label,
+        &TransitionStyle { ..TransitionStyle::fade() },
+        id.into(),
+        |_, _| true,
+        |ui, label| {
+            ui.add(egui::Label::new(
+                if let Some(label) = label {
+                    format!("{prefix}{label}").into()
+                } else {
+                    RichText::new(format!("{prefix}Naming...")).italics()
+                }
+            ).selectable(false));
+    });
+
+
+}
+
 /// Returns whether the selection was modified.
 fn show_hiearchy_inner(
     ui: &mut egui::Ui,
     hiearchy: &impl lazy_hierarchy::GroupRef<
         GroupData = backend::main_hierarchy::GroupData,
-        NodeData = impl AsRef<str>,
+        NodeData = Option<impl AsRef<str>>,
         LeafData = backend::main_hierarchy::LeafData,
         StructureErr = impl Debug,
     >,
@@ -613,6 +630,7 @@ fn show_hiearchy_inner(
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
+    mut id: egui::Id
 ) -> bool {
     // TODO: Preseve selection through depth (and other algorithm parameters) changes
     // TODO: Maybe we don't have to crash so horribly?
@@ -626,6 +644,7 @@ fn show_hiearchy_inner(
         .collect_vec();
 
     let selected_group = if let Some(selection_idx) = selected_indices.get(current_depth) {
+        id = id.with(selection_idx);
         if let Some(lazy_hierarchy::NodeRef::Group(g)) = &children.get(*selection_idx) { // TODO: Make sure this always succesds
             Some(g)
         } else {
@@ -651,7 +670,8 @@ fn show_hiearchy_inner(
             current_depth,
             group_row_size,
             image_scale,
-            &children
+            &children,
+            id.with("list")
         )
     }).inner;
 
@@ -663,6 +683,7 @@ fn show_hiearchy_inner(
             current_depth + 1,
             flatten_mode,
             image_scale,
+            id.with("next")
         )
     } else { false };
     selection_modified_rec || selection_modified_rn
@@ -679,7 +700,10 @@ fn widgetvisuals_to_frame(
     egui::Frame {
         fill: visuals.bg_fill,
         stroke: visuals.bg_stroke,
-        inner_margin: Margin::symmetric(button_padding.x as i8, button_padding.y as i8),
+        inner_margin: Margin::symmetric(
+            (button_padding.x - visuals.bg_stroke.width) as i8,
+            (button_padding.y - visuals.bg_stroke.width) as i8,
+        ),
         corner_radius: visuals.corner_radius,
         ..egui::Frame::NONE
     }
@@ -723,7 +747,7 @@ impl App {
         egui::SidePanel::left("recents")
             .frame(Frame::default().inner_margin(Margin::same(32)))
             .show(ctx, |ui| {
-                ui.style_mut().spacing.button_padding *= 4.0;
+                ui.style_mut().spacing.button_padding = Vec2::new(32.0, 16.0);
 
                 /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
                 ui.style_mut().visuals.widgets.inactive.weak_bg_fill =

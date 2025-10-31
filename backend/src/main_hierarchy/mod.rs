@@ -72,7 +72,6 @@ pub struct LGSorted {
         ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData>,
         String
     >,
-    tokio_rt: tokio::runtime::Runtime
 }
 
 impl LGSorted {
@@ -131,27 +130,30 @@ impl LGSorted {
             //thread::spawn(|| {
             //let rt_guard = rt.enter();
 
-            let join_handle = rt.block_on(async move { // TODO: Don't block
-                // Construct a local task set that can run `!Send` futures.
-                let local = tokio::task::LocalSet::new();
+            thread::spawn(move || {
+                let join_handle = rt.block_on(async move { // TODO: Don't block
+                    // Construct a local task set that can run `!Send` futures.
+                    let local = tokio::task::LocalSet::new();
 
-                // Run the local task set.
-                local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
+                    // Run the local task set.
+                    local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
 
-                        let reader = nametiles_reader::NametilesConnection::new_from_file(
-                            &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
-                        ).await.expect("TODO");
+                            let reader = nametiles_reader::NametilesConnection::new_from_file(
+                                &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
+                            ).await.expect("TODO");
 
-                        //ds.try_naming(async move |_| todo!()).await;
-                        ds.try_naming(async move |item| {
-                            reader.get_name(geo::Coord::from(item.position))
-                                .await.map(|it| HashSet::from_iter(it.into_iter()))
-                                .unwrap_or_else(|err| HashSet::new()) // TODO: Handle
-                        }).await;
+                            //ds.try_naming(async move |_| todo!()).await;
+                            ds.try_naming(async move |item| {
+                                reader.get_name(geo::Coord::from(item.position))
+                                    .await.map(|it| HashSet::from_iter(it.into_iter()))
+                                    .unwrap_or_else(|err| HashSet::new()) // TODO: Handle
+                            }).await;
+                    });
+
+                    local.await;
                 });
-
-                local.await;
             });
+
             //});
 
         }
@@ -160,7 +162,6 @@ impl LGSorted {
             // TODO: Add progress callback
             sorter,  // TODO: Don't ignore errors
             item_source,
-            tokio_rt: rt
         })
     }
 
