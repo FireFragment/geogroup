@@ -28,7 +28,9 @@
           ];
         };
 
-        buildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
+        buildRustCrateForPkgs = crate: pkgs.buildRustCrate.override {
+          rustc = pkgs.rust-bin.stable.latest.default;
+          cargo = pkgs.rust-bin.stable.latest.default;
           defaultCrateOverrides = pkgs.defaultCrateOverrides // {
             rav1e = attrs: {
                 CARGO_ENCODED_RUSTFLAGS = "";
@@ -40,6 +42,11 @@
             yeslogic-fontconfig-sys = attrs: {
                 nativeBuildInputs = [ pkgs.pkg-config ];
                 buildInputs = [ pkgs.fontconfig ];
+            };
+
+            mvt-reader = attrs: { # For future reference: you must replace underscores (_) with dashes (-) in crate names for this to work
+              nativeBuildInputs = [ pkgs.protobuf_29 ];
+              PROTOC = "${pkgs.protobuf_29}/bin/protoc";
             };
           };
         };
@@ -72,7 +79,7 @@
         ]);
 
         rust =
-            (pkgs.rust-bin.stable.latest.default.override {
+            (pkgs.rust-bin.stable."1.91.0".default.override {
                   extensions = [ "rust-src" "cargo" "rustc" ];
             });
       in {
