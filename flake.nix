@@ -28,9 +28,15 @@
           ];
         };
 
+
+        rust =
+            (pkgs.rust-bin.stable."1.91.0".default.override {
+                  extensions = [ "rust-src" "cargo" "rustc" ];
+            });
+
         buildRustCrateForPkgs = crate: pkgs.buildRustCrate.override {
-          rustc = pkgs.rust-bin.stable.latest.default;
-          cargo = pkgs.rust-bin.stable.latest.default;
+          rustc = rust;
+          cargo = rust;
           defaultCrateOverrides = pkgs.defaultCrateOverrides // {
             rav1e = attrs: {
                 CARGO_ENCODED_RUSTFLAGS = "";
@@ -77,11 +83,6 @@
           libXi
           pkg-config
         ]);
-
-        rust =
-            (pkgs.rust-bin.stable."1.91.0".default.override {
-                  extensions = [ "rust-src" "cargo" "rustc" ];
-            });
       in {
         packages.default = pkgs.symlinkJoin {
           name = "geogroup_gui";
