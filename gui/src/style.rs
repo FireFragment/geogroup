@@ -164,6 +164,7 @@ pub fn initial_apply(ctx: &Context, params: &Manager) {
 }
 
 pub fn apply(ctx: &Context, accent_color: Color32) {
+
     //ctx.set_fonts(fonts);
 
     load_fonts(ctx);
@@ -182,7 +183,7 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
             }
         }
         if style.visuals.dark_mode {
-            style.visuals.panel_fill = Color32::BLACK; //Color32::from_rgb(28, 28, 38);
+            style.visuals.panel_fill = Color32::from_rgb(28, 28, 33);
 
             style.visuals.widgets.inactive.bg_fill =
                 Color32::from_rgb(28, 28, 38).gamma_multiply(1.5); //Color32::from_rgb(42, 42, 64);
@@ -200,9 +201,9 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
             set_fg_color(style, Color32::BLACK);
         }
 
-        style.visuals.widgets.hovered.expansion = -2.0;
-        style.visuals.widgets.hovered.bg_stroke.width = 2.0;
-        style.visuals.widgets.active.expansion = 0.0;
+        //style.visuals.widgets.hovered.expansion = -2.0;
+        //style.visuals.widgets.hovered.bg_stroke.width = 2.0;
+        //style.visuals.widgets.active.expansion = 0.0;
         style.visuals.widgets.active.bg_fill = style.visuals.widgets.hovered.bg_stroke.color;
         style.visuals.widgets.active.weak_bg_fill = style.visuals.widgets.active.bg_fill;
         style.visuals.widgets.active.bg_stroke.color = Color32::TRANSPARENT;
@@ -218,7 +219,7 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
             Color32::WHITE
         };
 
-        style.spacing.button_padding = Vec2::new(8.0, 4.0);
+        //style.spacing.button_padding = Vec2::new(8.0, 4.0);
 
         // ROUNDING
         style.visuals.window_corner_radius = Rounding::ZERO;

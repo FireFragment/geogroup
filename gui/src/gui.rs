@@ -19,6 +19,8 @@ use std::fmt::Debug;
 use std::ops::RangeInclusive;
 use std::thread;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use thiserror::Error;
 
 use super::*;
@@ -55,6 +57,13 @@ pub(crate) fn ribbon_slider<Num: emath::Numeric>(
 }
 
 impl eframe::App for App {
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        match visuals.dark_mode {
+            true => egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180).to_normalized_gamma_f32(),
+            false => egui::Color32::from_rgba_unmultiplied(u8::MAX, u8::MAX, u8::MAX, 128).to_normalized_gamma_f32(),
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         style::possible_apply(ctx, &self.style_manager);
         for message in self.inbox.read_without_ctx() {
@@ -161,10 +170,9 @@ impl App {
             let Some(pane) = main_page.pane.clone() else { return };
 
             ui.add_space(4.0);
-            let mut cfg_changed = false;
 
             ui.with_layout(Layout::left_to_right(Align::TOP).with_cross_justify(true), |ui| {
-                animated_pager(ui, pane, &TransitionStyle::horizontal(ui), egui::Id::from("ribbon"), |ui, pane| {
+                animated_pager(ui, pane, &TransitionStyle::horizontal(ui).with_fade(), egui::Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
                             let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = main_page.hiearchy.0.root_group_mut().children_mut()[0]
@@ -190,23 +198,34 @@ impl App {
                                                 backend::algorithm::Params::default().depth,
                                                 "Depth",
                                                 "High values yield deeply nested folder structure. Low values lead to shallow structures",
-                                                Some(&mut cfg_changed),
+                                                None,
                                             );
-                                            ribbon_slider(
-                                                ui,
-                                                egui::Slider::new(
-                                                    &mut subgroup_sorted.params_mut().minimum_distance,
-                                                    0..=(1_000 * ONE_METER_DISTANCE /* 10km */) // TODO: Make max the maximum distance *in the hierarchy*
-                                                )
-                                                .step_by(ONE_METER_DISTANCE as f64)
-                                                .custom_formatter(|distance, range| {
-                                                    format!("{}m", (distance / ONE_METER_DISTANCE as f64))
-                                                }), // TODO: Add also custom parser
-                                                backend::algorithm::Params::default().depth,
-                                                "Minimum distance of separated items",
-                                                "The minimum distance of consecutive items that are not in the same group. No two items going right after each other that are closer than this distance will be separated into different groups.",
-                                                Some(&mut cfg_changed),
-                                            );
+                                            ui.horizontal(|ui| {
+                                                let label = ui
+                                                    .label("Minimum distance of separated items")
+                                                    .on_hover_cursor(CursorIcon::Help)
+                                                    .on_hover_text("The minimum distance of consecutive items that are not in the same group. No two items going right after each other that are closer than this distance will be separated into different groups.");
+
+                                                let meters = subgroup_sorted.params_mut().minimum_distance / ONE_METER_DISTANCE;
+                                                // TODO: Add custom parser
+                                                egui::DragValue::new(&mut subgroup_sorted.params_mut().minimum_distance)
+                                                    .speed({
+                                                        ONE_METER_DISTANCE as f32 * match meters {
+                                                            ..1000 => 1.0,
+                                                            1000..5000 => 100.0,
+                                                            5000.. => 1000.0
+                                                        }
+                                                    })
+                                                    .custom_formatter(|dist, _| {
+                                                        let meters = dist as u64 / ONE_METER_DISTANCE;
+                                                        match meters {
+                                                            ..1000 => {format!("{meters}m")},
+                                                            1000..5000 => {format!("{:.1}km", meters as f32 / 1000.0)}
+                                                            5000.. => {format!("{}km", (meters as f32 / 1000.0).round())}
+                                                        }
+                                                    })
+                                                    .ui(ui);
+                                            });
                                         });
                                     },
                                     _ => {} // TODO
@@ -295,7 +314,7 @@ impl App {
                                 48,
                                 "Image size",
                                 "Height of image previews",
-                                Some(&mut cfg_changed),
+                                None,
                             );
 
                             ui.separator();
@@ -596,25 +615,20 @@ fn show_hiearchy_list(
 }
 
 fn name_label(ui: &mut egui::Ui, label: Option<impl AsRef<str>>, is_group: bool, id: impl Into<egui::Id>) {
-    let prefix = if is_group { "🗁 " } else { "" };
+    if is_group {
+        ui.label("🗁");
+    };
     let label = label.map(|s| s.as_ref().to_string());
-    egui_transition_animation::animated_pager_with_direction(
-        ui,
-        label,
-        &TransitionStyle { ..TransitionStyle::fade() },
-        id.into(),
-        |_, _| true,
-        |ui, label| {
-            ui.add(egui::Label::new(
-                if let Some(label) = label {
-                    format!("{prefix}{label}").into()
-                } else {
-                    RichText::new(format!("{prefix}Naming...")).italics()
-                }
-            ).selectable(false));
-    });
-
-
+    if label.is_none() {
+        ui.spinner();
+    }
+    ui.add(egui::Label::new(
+        if let Some(label) = label {
+            label.into()
+        } else {
+            RichText::new(format!("Naming...")).italics()
+        }
+    ).selectable(false));
 }
 
 /// Returns whether the selection was modified.
