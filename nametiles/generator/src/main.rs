@@ -138,7 +138,7 @@ fn main() {
     let objs_of_interest_bucket = tmp_db.osm_elems_bucket();
 
     //log::info!("Total of {} elements were extracted from the PBF file.", objs_of_interest_bucket.len());
-    log::info!("Constructing polyogons from the relations");
+    log::info!("Constructing polygons from the relations");
 
     let relations = objs_of_interest_bucket.iter()
         .map(|it| it.unwrap().value().unwrap())
