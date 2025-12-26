@@ -9,7 +9,7 @@ use geogroup_common as common;
 pub mod exif_loader;
 pub use exif_loader::ExifLoader;
 
-mod general_loader;
+pub mod general_loader;
 pub use general_loader::GeneralLoader;
 pub use general_loader::LoadingReturnValue;
 
@@ -44,23 +44,41 @@ impl<TimeError, LocationError> LocData<TimeError, LocationError> {
         &self,
         data: D
     ) -> Result<
-        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>, D>,
-        TimeOrLocError<&TimeError, &LocationError>,
+        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>, D, &LocationError>,
+        &TimeError,
     > {
         // For now, we ignore the "deltas" and just return everything as an average of values
         Ok(common::ConcreteSortableItem {
             position: self
                 .location
                 .as_ref()
-                .map_err(|err| TimeOrLocError::LocationError(err.to_owned()))?
-                .center()
-                .into(),
+                .map(|b| b.center().into()),
             time: {
                 let [start, end] = self
                     .time
-                    .as_ref()
-                    .map_err(|err| TimeOrLocError::TimeError(err.to_owned()))?;
+                    .as_ref()?;
                 *start + (*end - *start) / 2
+            },
+            data,
+        })
+    }
+
+    pub fn into_sortable_item<D>(
+        self,
+        data: D
+    ) -> Result<
+        common::ConcreteSortableItem<geo::Point, DateTime<chrono::FixedOffset>, D, LocationError>,
+        TimeError,
+    > where LocationError: Clone {
+        // For now, we ignore the "deltas" and just return everything as an average of values
+        Ok(common::ConcreteSortableItem {
+            position: self
+                .location
+                .map(|b| b.center().into()),
+            time: {
+                let [start, end] = self
+                    .time?;
+                start + (end - start) / 2
             },
             data,
         })

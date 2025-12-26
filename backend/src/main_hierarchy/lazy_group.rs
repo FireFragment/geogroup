@@ -53,15 +53,18 @@ impl Final {
                     .hierarchy()
                     .map_structure_error(|err, _| match err {})
                     .map_node_data(|node| NodeData {
-                        name: /*match node {
-                            lazy_hierarchy::NodeRef::Group(gr) =>
-                                gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
-                            lazy_hierarchy::NodeRef::Leaf(_) => None,
-                        } */
+                        name: node.node_data().name.map(|name_res| match name_res {
+                            Ok(name_vec) => name_vec.join(", "),
+                            Err(err) => format!("Naming failed: {err}"),
+                        }),
+                            /*match node {
+                                lazy_hierarchy::NodeRef::Group(gr) =>
+                                    gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
+                                lazy_hierarchy::NodeRef::Leaf(_) => None,
+                            } */
 
-                        //Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
+                            //Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
 
-                        node.node_data().name.map(|name_vec| name_vec.join(", ")),
 
                         local_id_path: Some(node.node_data().local_id_path.into_iter().map(|id| id as u8).collect())
                     })

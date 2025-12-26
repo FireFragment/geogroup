@@ -64,14 +64,24 @@ pub enum InnerLeafData {
     RealLeaf(FileData),
 }
 
-
+/// Lazy group (hence the acronym `LG`) which uses the geogroup algorithm to sort its contents
 #[derive(Debug)]
 pub struct LGSorted {
     item_source: ItemSource,
     sorter: algorithm::Sorter<
-        ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData>,
-        String
+        ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData, geogroup_loaders::general_loader::LocationError>,
+        String,
+        geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>
     >,
+}
+
+#[derive(Error, Debug)]
+pub enum NamingLeafErr {
+    #[error("Nametiles-related error: {0}")]
+    NametilesErr(#[from] nametiles_reader::Error),
+
+    #[error("Failed to get photo's location: {0}")]
+    LocationErr(#[from] geogroup_loaders::general_loader::LocationError),
 }
 
 impl LGSorted {
@@ -105,9 +115,25 @@ impl LGSorted {
                 10,
             )
             .par_bridge()
-            .filter_map(|entry| entry.ok()) // TODO: Don't ignore errors
+            .filter_map(|entry| {
+                if let Err(err) = &entry {
+                    log::error!("Failed to read file: {err}");
+                }
+
+                entry.ok() // TODO: Don't ignore errors
+            })
             .filter_map(|path| {
-                loaders::GeneralLoader.get_data(path.as_ref()).ok()?.as_sortable_item(FileData { path }).ok() // TODO: Don't ignore errors
+                let loc_data_result = loaders::GeneralLoader.get_data(path.as_ref());
+                if let Err(err) = &loc_data_result {
+                    log::error!("Failed to read metadata of file {}:\nWhen calling `get_data`\n{err}\n{err:?}", path.to_string_lossy());
+                }
+                let loc_data = loc_data_result.ok()?; // TODO: Don't ignore errors
+
+                let si_result = loc_data.into_sortable_item(FileData { path: path.clone() });
+                if let Err(err) = &si_result {
+                    log::error!("Failed to read metadata of file {}:\nWhen converting to SortableItem\n{err}\n{err:?}", path.to_string_lossy());
+                }
+                si_result.ok() // TODO: Don't ignore errors
             })
             .collect();
 
@@ -137,17 +163,16 @@ impl LGSorted {
 
                     // Run the local task set.
                     local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
+                        let reader = nametiles_reader::NametilesConnection::new_from_file(
+                            &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
+                        ).await.expect("TODO");
 
-                            let reader = nametiles_reader::NametilesConnection::new_from_file(
-                                &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
-                            ).await.expect("TODO");
-
-                            //ds.try_naming(async move |_| todo!()).await;
-                            ds.try_naming(async move |item| {
-                                reader.get_name(geo::Coord::from(item.position))
-                                    .await.map(|it| HashSet::from_iter(it.into_iter()))
-                                    .unwrap_or_else(|err| HashSet::new()) // TODO: Handle
-                            }).await;
+                        //ds.try_naming(async move |_| todo!()).await;
+                        ds.try_naming(async move |item| {
+                            reader.get_name(geo::Coord::from(*item.position.as_ref().map_err(|p| p.clone())?))
+                                .await.map(|it| HashSet::from_iter(it.into_iter()))
+                                .map_err(|e| NamingLeafErr::from(e))
+                        }).await;
                     });
 
                     local.await;

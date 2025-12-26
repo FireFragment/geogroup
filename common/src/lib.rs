@@ -51,26 +51,27 @@ impl Point for geo::Point {
 
 /// [`SortableItem`] which specifies its time and point as its fields
 ///
-/// Generic argument `D` is for arbitrary additional data
+/// Generic argument `D` is for arbitrary additional data, `PE` is for errors instead of positions
 #[derive(Debug)]
-pub struct ConcreteSortableItem<P: Point, T: Ord + Clone, D = ()> {
+pub struct ConcreteSortableItem<P: Point, T: Ord + Clone, D = (), PE: Clone = Infallible> {
     pub time: T,
-    pub position: P,
+    pub position: Result<P, PE>,
     /// Arbitrary additional data
     pub data: D,
 }
 
-impl<P: Point + Clone, T: Ord + Clone, D> SortableItem for ConcreteSortableItem<P, T, D> {
+
+impl<P: Point + Clone, T: Ord + Clone, D, PE: std::error::Error + Clone> SortableItem for ConcreteSortableItem<P, T, D, PE> {
     type Time = T;
     type Position = P;
-    type PositionErr = Infallible;
+    type PositionErr = PE;
 
     fn get_time(&self) -> Self::Time {
         self.time.clone()
     }
 
-    fn get_position(&self) -> Result<P, Infallible> {
-        Ok(self.position.clone())
+    fn get_position(&self) -> Result<P, PE> {
+        self.position.clone()
     }
 
 }

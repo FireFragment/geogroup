@@ -1,8 +1,42 @@
 use futures::{FutureExt, StreamExt};
+use itertools::Itertools as _;
 use std::hash::Hash;
 use std::{collections::HashSet, iter};
 
 use super::*;
+
+#[derive(thiserror::Error, Debug, Clone, Hash)]
+pub enum NamingErr<LeafNamingError> {
+    /// Couldn't name group, because no child has successful name
+    #[error("All descendants of the group failed to be named")]
+    ChildrenFailed,
+    /// This is a leaf and the naming failed
+    #[error(transparent)]
+    Leaf(#[from] LeafNamingError),
+}
+
+/// Return value of [`try_naming_generic`]
+pub enum NamingRes<NDItem, LeafNameErr> {
+    /// We don't return the error if it's already named, because that would require cloning it which may not be possible
+    AlreadyNamed(Option<HashSet<NDItem>>),
+    NewlyNamed(Result<HashSet<NDItem>, NamingErr<LeafNameErr>>),
+}
+
+impl<NDItem, LeafNameErr> NamingRes<NDItem, LeafNameErr> {
+    pub fn into_option(self) -> Option<HashSet<NDItem>> {
+        match self {
+            NamingRes::AlreadyNamed(inner) => inner,
+            NamingRes::NewlyNamed(inner) => inner.ok(),
+        }
+    }
+
+    pub fn as_option(&self) -> Option<&HashSet<NDItem>> {
+        match self {
+            NamingRes::AlreadyNamed(inner) => inner.as_ref(),
+            NamingRes::NewlyNamed(inner) => inner.as_ref().ok(),
+        }
+    }
+}
 
 // TODO: Extract to naming
 /// `fun_name_node` should use interior mutability.
@@ -16,23 +50,31 @@ use super::*;
 /// `fun_name_node` - sets name of the node. If it has already been named, the behavior could be arbitrary
 /// (either that it sets the value again or ignores it)
 /// `fun_node_name` - get name of the node if it has already been named
+///     - The outer option means whether the name has been set (ie. if this returns [`None`], it means that it has not been set)
+///     - The inner option is [`None`] iff there was attempt to name the file, but it failed (ie. if this returns `Some(None)`, it means that we attempted to name the file, but it failed)
 pub async fn try_naming_generic<
     'a,
     G: lazy_hierarchy::GroupRef<StructureErr = impl fmt::Debug> + 'a,
     NDItem: PartialEq + Eq + Hash + Clone,
+    LeafNameErr,
 >(
     node: lazy_hierarchy::NodeRef<G>,
-    fun_get_leaf_name: &impl AsyncFn(&G::LeafRef) -> HashSet<NDItem>,
-    fun_name_node: &impl AsyncFn(&lazy_hierarchy::NodeRef<G>, &HashSet<NDItem>),
-    fun_node_name: &impl AsyncFn(&lazy_hierarchy::NodeRef<G>) -> Option<HashSet<NDItem>>,
-) -> HashSet<NDItem> {
+    fun_get_leaf_name: &impl AsyncFn(&G::LeafRef) -> Result<HashSet<NDItem>, LeafNameErr>,
+    fun_name_node: &impl AsyncFn(
+        &lazy_hierarchy::NodeRef<G>,
+        Result<HashSet<NDItem>, NamingErr<LeafNameErr>>,
+    ),
+    fun_node_name: &impl AsyncFn(
+        &lazy_hierarchy::NodeRef<G>,
+    ) -> Option<Option<HashSet<NDItem>>>,
+) -> NamingRes<NDItem, LeafNameErr> {
     fun_node_name(&node)
         .await
-        .map(|it| Either::Left(async { it }))
+        .map(|it| Either::Left(async { NamingRes::AlreadyNamed(it) }))
         .unwrap_or(Either::Right(async {
-            match &node {
+            NamingRes::NewlyNamed(match &node {
                 NodeRef::Group(group) => {
-                    let full_names = futures::future::join_all(
+                    let new_full_names = futures::future::join_all(
                         group.get_children().expect("TODO").map(|child| {
                             //HashSet::<NDItem>::new()
                             Box::pin(try_naming_generic(
@@ -42,11 +84,15 @@ pub async fn try_naming_generic<
                                 fun_node_name,
                             ))
                         }),
-                    ).await;
+                    )
+                    .await;
 
-                    let name_of_this = full_names
-                        .clone()
-                        .into_iter()
+                    // Is `None` iff no children were named successfully
+                    let name_of_this = new_full_names
+                        .iter()
+                        .map(|it| it.as_option())
+                        .flatten() // Ignore error names when naming parent
+                        .cloned()
                         .reduce(|acc_name, name_to_add| {
                             if acc_name.is_empty() {
                                 name_to_add
@@ -56,27 +102,50 @@ pub async fn try_naming_generic<
                                     .filter(|acc_name_item| name_to_add.contains(acc_name_item))
                                     .collect()
                             }
-                        }).unwrap_or_default(); // TODO: Is this the correct default?
+                        });
 
-                    for (child, mut child_name) in group.get_children().expect("TODO").zip(full_names) {
-                        for nditem_to_remove in &name_of_this {
-                            child_name.remove(nditem_to_remove);
-                        }
-                        fun_name_node(&child, &child_name).await;
+                    //match name_of_this {}
+
+                    // Write the actual naming data to children
+                    for (child, child_full_name) in
+                        group.get_children().expect("TODO").zip(new_full_names)
+                    {
+                        let child_full_name = match child_full_name {
+                            // If it's already named, we don't need to write the data to it again
+                            NamingRes::AlreadyNamed(_) => continue,
+                            NamingRes::NewlyNamed(data) => data,
+                        };
+                        let child_name = child_full_name.map(|mut child_full_name| {
+                            // This unwrap suceeds: name_of_this could only be `None` when no children were
+                            // named successfully and in such case, this part of code doesn't run at all
+                            for nditem_to_remove in name_of_this.as_ref().unwrap() {
+                                child_full_name.remove(nditem_to_remove);
+                            }
+                            child_full_name
+                        });
+                        fun_name_node(&child, child_name).await;
                     }
 
-                    name_of_this
+                    match name_of_this {
+                        Some(name) => Ok(name),
+                        None => Err(NamingErr::ChildrenFailed),
+                    }
                 }
-                NodeRef::Leaf(leaf) => fun_get_leaf_name(&leaf).await,
-            }
+                NodeRef::Leaf(leaf) => fun_get_leaf_name(&leaf).await.map_err(|e| e.into()),
+            })
         }))
         .await
 }
 
-impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> DeepSorter<Item, NDItem> {
-    pub async fn try_naming(&self, fun_get_leaf_name: impl AsyncFn(&Item) -> HashSet<NDItem>) {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr>
+    DeepSorter<Item, NDItem, NamingErr<LeafNameErr>>
+{
+    pub async fn try_naming(
+        &self,
+        fun_get_leaf_name: impl AsyncFn(&Item) -> Result<HashSet<NDItem>, LeafNameErr>,
+    ) {
         // TODO: Do some locks so that it can't be launched multiple times simoultaneously
-        try_naming_generic(
+        let root_name = try_naming_generic(
             lazy_hierarchy::NodeRef::Group(self.deep_hierarchy()),
             &async |leaf| fun_get_leaf_name(leaf.leaf_data()).await,
             &async |node, name| {
@@ -84,16 +153,29 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash> DeepSorter<Item,
                     .node_data()
                     .static_info
                     .naming_data
-                    .set(name.into_iter().cloned().collect());
+                    .set(name.map(|n| n.into_iter().collect()));
             },
             &async |node| {
                 node.node_data()
                     .static_info
                     .naming_data
                     .get()
-                    .map(|n| n.into_iter().cloned().collect())
+                    .map(|n| n.as_ref().ok().map(|n| n.iter().cloned().collect()))
             },
         )
         .await;
+
+        match root_name {
+            NamingRes::AlreadyNamed(_) => {},
+            NamingRes::NewlyNamed(hash_set) => {
+                let res = self.deep_hierarchy()
+                    .node_data()
+                    .static_info
+                    .naming_data
+                    .set(hash_set.map(|n| n.into_iter().collect()));
+                debug_assert!(res.is_ok()) // The cell should have been unitialized, because `AlreadyNamed` branch would be taken otherwise
+            },
+        }
+
     }
 }

@@ -127,10 +127,11 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
 ///
 /// Panics on `input.is_empty()`
 pub fn sort_to_binary_tree<Item: SortableItem>(points: impl IntoIterator<Item=Item>) -> BinTree<Item, (), ()> {
-    // TODO: Don't just ignore items without position.
-    // Once fixed, edit all portions of the code marked with POSERR
-    let mut points: Vec<_> = points.into_iter().filter(|point| point.get_position().is_ok()).collect();
 
-    points.sort_by_key(|p| -> Item::Time {p.get_time()});
-    sort_ordered_to_binary_tree(points.into_iter())
+    //points.sort_by_key(|p| -> Item::Time {p.get_time()});
+    sort_ordered_to_binary_tree(points.into_iter()
+        .filter(|point| point.get_position().is_ok()) // TODO: Don't just ignore items without position.
+                                                      // Once fixed, edit all portions of the code marked with POSERR
+        .sorted_by_key(|p| p.get_time())
+    )
 }

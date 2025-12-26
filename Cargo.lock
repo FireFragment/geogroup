@@ -2368,6 +2368,7 @@ dependencies = [
  "lazy_hierarchy",
  "log",
  "take_mut",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
