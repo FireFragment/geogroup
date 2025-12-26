@@ -164,7 +164,7 @@ impl LGSorted {
                     // Run the local task set.
                     local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
                         let reader = nametiles_reader::NametilesConnection::new_from_file(
-                            &PathBuf::from("/nix/data/Programming/Rust/photo_sorter_2/nametiles/generator/out.pmtiles") // TODO: Remove
+                            &PathBuf::from("/nix/temporary/nametilesgen/out.pmtiles") // TODO: Remove
                         ).await.expect("TODO");
 
                         //ds.try_naming(async move |_| todo!()).await;
