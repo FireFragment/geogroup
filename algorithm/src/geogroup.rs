@@ -13,7 +13,7 @@ pub struct NodeInfo<'a, NDItem = (), NameErr = Infallible> {
     /// animating the nodes etc.
     pub local_id_path: Vec<HorizontalIdx>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
-    pub name: Option<&'a Result<Vec<NDItem>, NameErr>>
+    pub name: Option<Result<Vec<NDItem>, &'a NameErr>>
 }
 
 pub struct Sorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash = (), NameErr = Infallible> {
@@ -79,13 +79,35 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = GroupInfo,
         LeafData = &'s Item,
-        NodeData = NodeInfo<NDItem, NameErr>,
+        NodeData = NodeInfo<'s, NDItem, NameErr>,
         StructureErr = Infallible,
     > {
+        /// Data that is passed from dissolved groups to their children
+        #[derive(Clone, Debug)]
+        struct InheritedData<NDItem> {
+            path_part: Vec<HorizontalIdx>,
+            naming_data: Vec<NDItem>
+        }
+
+        impl<NDItem> Default for InheritedData<NDItem> {
+            fn default() -> Self {
+                Self { path_part: Default::default(), naming_data: Default::default() }
+            }
+        }
+
         self.deep_sorter()
             .deep_hierarchy()
             .with_parent()
-            .dissolve_by_key_and_fold(|group|
+            .dissolve_by_key_and_fold(|group| {
+                let create_inherited_data = || InheritedData {
+                    path_part: vec![group.node_data().data.id],
+                    naming_data: group.node_data().data.get_naming_data()
+                        .map(|res| res.as_ref().ok())
+                        .flatten()
+                        .cloned()
+                        .unwrap_or_else(|| Vec::new()),
+                };
+
                 match group.group_data().strength {
                     StrengthInfo::Ok{
                         strength,
@@ -104,7 +126,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
                             < self.params.minimum_distance
                             || strength < MAX_DEPTH - self.params.depth
                         {
-                            Some(vec![group.node_data().data.id])
+                            Some(create_inherited_data())
                         } else { None }
                     },
                     StrengthInfo::Root => None,
@@ -112,24 +134,27 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
                     // These shouldn't happen, but we can somehow (albeit non-perfectly) handle them anyway
                     StrengthInfo::LessThan2Children => {
                         log::error!("Found a node with less than two children in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
-                        Some(vec![group.node_data().data.id])
+                        Some(create_inherited_data())
                     }
                     StrengthInfo::NoSiblings => {
                         log::error!("Found a node with no siblings in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
                         None
                     },
-                },
-                |mut path1, path2| {
-                    path1.extend_from_slice(&path2);
-                    path1
+                }},
+                |mut data1, data2| {
+                    data1.path_part.extend_from_slice(&data2.path_part);
+                    data1.naming_data.extend_from_slice(&data2.naming_data);
+                    data1
                 }
             )
             // Reverse with_parent call above
             .map_node_data(|node| {
                 let node_data = node.node_data();
-                let mut id_path = node_data.inherited;
+                let mut id_path = node_data.inherited.path_part;
                 id_path.push(node_data.original.data.id.clone());
-                let name = node_data.original.data.get_naming_data();
+                let name = node_data.original.data.get_naming_data().map(|n|
+                    n.as_ref().map(|name| [name.clone(), node_data.inherited.naming_data].concat()
+                ));
                 NodeInfo { local_id_path: id_path, name }
             })
     }
