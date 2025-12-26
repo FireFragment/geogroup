@@ -72,7 +72,7 @@ pub enum LoaderSpecificFatalError {
     Exif(#[from] <ExifLoader as DataLoader>::FatalError),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum LocationError {
     #[error(transparent)]
     Exif(#[from] <ExifLoader as DataLoader>::LocationError),
