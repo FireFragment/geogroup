@@ -16,6 +16,7 @@ pub enum NamingErr<LeafNamingError> {
 }
 
 /// Return value of [`try_naming_generic`]
+#[derive(Debug, Clone)]
 pub enum NamingRes<NDItem, LeafNameErr> {
     /// We don't return the error if it's already named, because that would require cloning it which may not be possible
     AlreadyNamed(Option<HashSet<NDItem>>),
