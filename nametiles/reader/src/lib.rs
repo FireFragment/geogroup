@@ -11,14 +11,40 @@ pub struct NametilesConnection {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
+    #[error("PMTiles format error: {0}")]
     PmtError(#[from] PmtError),
-    #[error("Tile {0:?} is missing")]
-    TileMissing(
-        pmtiles::TileCoord
-    ),
-    #[error(transparent)]
-    MvtError(#[from] mvt_reader::error::ParserError)
+    #[error("Tile {0:?} is missing from the nametile dataset")]
+    TileMissing(pmtiles::TileCoord),
+    /// Cast from [`mvt_reader::error::ParserError`]
+    #[error("MVT format error: {0}")]
+    MvtError(String)
+}
+
+impl From<mvt_reader::error::ParserError> for Error {
+    fn from(value: mvt_reader::error::ParserError) -> Self {
+        Self::MvtError(value.to_string())
+    }
+}
+
+/// Like [`Error`], but also implements [`Clone`]. Suberrors are not represented as they came, but as strings to allow clonability
+#[derive(Error, Debug, Clone)]
+pub enum SimpleError {
+    #[error("PMTiles format error: {0}")]
+    PmtError(String),
+    #[error("Tile {0:?} is missing from the nametile dataset")]
+    TileMissing(pmtiles::TileCoord),
+    #[error("MVT format error: {0}")]
+    MvtError(String)
+}
+
+impl From<Error> for SimpleError {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::PmtError(err) => Self::PmtError(err.to_string()),
+            Error::TileMissing(tile) => Self::TileMissing(tile),
+            Error::MvtError(err) => Self::MvtError(err.to_string()),
+        }
+    }
 }
 
 impl NametilesConnection {

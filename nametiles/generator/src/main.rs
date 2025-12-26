@@ -58,39 +58,49 @@ fn cmp_tag<'a>(tags: &osmpbfreader::Tags, key: &str, vals: impl IntoIterator<Ite
 }
 
 fn include_in_tiles(obj: &osmpbfreader::OsmObj) -> bool {
-    obj.is_relation()
-        && (
-            cmp_tag(obj.tags(), "type", ["boundary"])
-            || (
-                cmp_tag(obj.tags(), "type", ["multipolygon"]) && (
-                    cmp_tag(obj.tags(), "leisure", [
-                        "bathing_place",
-                        "beach_resort",
-                        "garden",
-                        "golf_course",
-                        "high_ropes_course",
-                        "horse_riding",
-                        "ice_rink",
-                        "marina",
-                        "miniature_golf",
-                        "nature_reserve",
-                        "outdoor_seating",
-                        "park",
-                        "pitch",
-                        "playground",
-                        "resort",
-                        "sports_centre",
-                        "sports_hall",
-                        "summer_camp",
-                        "swimming_area",
-                        "trampoline_park",
-                        "water_park",
-                    ])
-                    || obj.tags().contains_key("natural")
-                    || obj.tags().contains_key("landuse")
-                )
+    // TODO: Also condsider single ways=
+    (obj.is_relation() && cmp_tag(obj.tags(), "type", ["boundary"])) // Accept all boundary relations
+        || (
+            // Accept ways and multipolygons with "tags of interest"
+            // Important! Update also `include_way_in_tiles` when updating this
+            has_tags_of_interest(obj.tags()) && (
+                obj.way().is_some_and(|way| way.is_closed()) ||
+                (obj.is_relation() && cmp_tag(obj.tags(), "type", ["multipolygon"]))
             )
         )
+}
+
+// Important! Update also `include_in_tiles` when updating this
+fn include_way_in_tiles(way: &osmpbfreader::Way) -> bool {
+    way.is_closed() && has_tags_of_interest(&way.tags)
+}
+
+fn has_tags_of_interest(tags: &osmpbfreader::Tags) -> bool {
+    cmp_tag(tags, "leisure", [
+        "bathing_place",
+        "beach_resort",
+        "garden",
+        "golf_course",
+        "high_ropes_course",
+        "horse_riding",
+        "ice_rink",
+        "marina",
+        "miniature_golf",
+        "nature_reserve",
+        "outdoor_seating",
+        "park",
+        "pitch",
+        "playground",
+        "resort",
+        "sports_centre",
+        "sports_hall",
+        "summer_camp",
+        "swimming_area",
+        "trampoline_park",
+        "water_park",
+    ])
+    || tags.contains_key("natural")
+    || tags.contains_key("landuse")
 }
 
 
@@ -101,7 +111,9 @@ fn include_in_tiles(obj: &osmpbfreader::OsmObj) -> bool {
 #[command(version, about, long_about = None)]
 struct Args {
     /// Path of the .osm.pbf file. Get one at https://www.geofabrik.de/data/download.html
-    input: PathBuf,
+    ///
+    /// If skipped, already existing data in cache will be reused.
+    input: Option<PathBuf>,
 }
 
 fn main() {
@@ -109,10 +121,8 @@ fn main() {
     let args = Args::parse();
 
     log::info!("Started");
-    let mut pbf_reader = OsmPbfReader::new(File::open(args.input).unwrap());
-    log::info!("OsmPbfReader created");
 
-    log::info!("Finding all boundary relations and their members...");
+    log::info!("Opening the database...");
 
     struct RelMember {
         way_id: i64,
@@ -124,32 +134,43 @@ fn main() {
     let mut tmp_db = KvStoreOSM(kv::Store::new(kv::Config::new("/nix/temporary/nametilesgen/db")).unwrap());
 
 
-    if true {
+    log::info!("Database opened");
+
+    if let Some(pbf_path) = args.input {
+
+        log::info!("Creating OsmPbfReader...");
+        let mut pbf_reader = OsmPbfReader::new(File::open(pbf_path).unwrap());
+        log::info!("OsmPbfReader created");
+
+        log::info!("Finding all boundary relations and their members...");
         pbf_reader
             .get_objs_and_deps_store(include_in_tiles, &mut tmp_db)
             .unwrap();
+
+        log::info!("...done");
+    } else {
+        log::info!("PBF path not provided - using already cached element database")
     }
-
-
-    log::info!("...done");
-
-    //log::info!("");
 
     let objs_of_interest_bucket = tmp_db.osm_elems_bucket();
 
     //log::info!("Total of {} elements were extracted from the PBF file.", objs_of_interest_bucket.len());
     log::info!("Constructing polygons from the relations");
 
-    let relations = objs_of_interest_bucket.iter()
+    let relations_of_interest = objs_of_interest_bucket.iter()
         .map(|it| it.unwrap().value().unwrap())
         .filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.relation().cloned());
+
+    let ways_of_interest = objs_of_interest_bucket.iter()
+        .map(|it| it.unwrap().value().unwrap())
+        .filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.way().cloned());
 
     struct ProcessedBoundary {
         pub boundary: LineString,
         pub name: String
     }
 
-    let relation_processing_results = relations.par_bridge().map(|relation| {
+    let relation_processing_results = relations_of_interest.par_bridge().map(|relation| {
         if !include_in_tiles(&relation.clone().into()) {
             return Result::Err(());
         }
@@ -270,6 +291,12 @@ fn main() {
         }).par_bridge())
     });
 
+    let ways_processing_results = ways_of_interest.par_bridge().filter(include_way_in_tiles).flat_map(|way| {
+        let Some(name) = get_name(&way.tags) else {
+            return None;
+        };
+        Some(ProcessedBoundary { boundary: osm_way_to_coords(&objs_of_interest_bucket, way).collect(), name })
+    });
 
     let (polygons_tx, polygons_rx) = mpsc::channel::<ProcessedBoundary>();
 
@@ -306,10 +333,12 @@ fn main() {
     relation_processing_results
         .filter_map(|res| res.ok()) // TODO: Don't ignore failures
         .flatten()
+        .chain(ways_processing_results)
         .for_each(|boundary| {
             polygons_tx.send(boundary).unwrap();
                 //println!("Sending..");
         });
+
         /*let (success, failed) = relation_processing_results.map(|res| {
         match res {
             Ok(_) => (1, 0),
