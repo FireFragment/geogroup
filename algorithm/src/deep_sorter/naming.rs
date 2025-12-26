@@ -89,7 +89,7 @@ pub async fn try_naming_generic<
                     .await;
 
                     // Is `None` iff no children were named successfully
-                    let name_of_this = new_full_names
+                    let full_name_of_this = new_full_names
                         .iter()
                         .map(|it| it.as_option())
                         .flatten() // Ignore error names when naming parent
@@ -117,9 +117,9 @@ pub async fn try_naming_generic<
                             NamingRes::NewlyNamed(data) => data,
                         };
                         let child_name = child_full_name.map(|mut child_full_name| {
-                            // This unwrap suceeds: name_of_this could only be `None` when no children were
+                            // This unwrap suceeds: full_name_of_this could only be `None` when no children were
                             // named successfully and in such case, this part of code doesn't run at all
-                            for nditem_to_remove in name_of_this.as_ref().unwrap() {
+                            for nditem_to_remove in full_name_of_this.as_ref().unwrap() {
                                 child_full_name.remove(nditem_to_remove);
                             }
                             child_full_name
@@ -127,7 +127,7 @@ pub async fn try_naming_generic<
                         fun_name_node(&child, child_name).await;
                     }
 
-                    match name_of_this {
+                    match full_name_of_this {
                         Some(name) => Ok(name),
                         None => Err(NamingErr::ChildrenFailed),
                     }
