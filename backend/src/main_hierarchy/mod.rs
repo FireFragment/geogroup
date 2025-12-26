@@ -125,13 +125,13 @@ impl LGSorted {
             .filter_map(|path| {
                 let loc_data_result = loaders::GeneralLoader.get_data(path.as_ref());
                 if let Err(err) = &loc_data_result {
-                    log::error!("Failed to read metadata of file {}:\nWhen calling `get_data`\n{err}\n{err:?}", path.to_string_lossy());
+                    log::error!("Failed to read metadata of file {}:\n{err}\nDeveloper info:\n  {err:?}\n  When calling `get_data`", path.to_string_lossy());
                 }
                 let loc_data = loc_data_result.ok()?; // TODO: Don't ignore errors
 
                 let si_result = loc_data.into_sortable_item(FileData { path: path.clone() });
                 if let Err(err) = &si_result {
-                    log::error!("Failed to read metadata of file {}:\nWhen converting to SortableItem\n{err}\n{err:?}", path.to_string_lossy());
+                    log::error!("Failed to read metadata of file {}:\n{err}\nDeveloper info:\n  {err:?}\n  When converting to SortableItem", path.to_string_lossy());
                 }
                 si_result.ok() // TODO: Don't ignore errors
             })
