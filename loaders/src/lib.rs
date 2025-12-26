@@ -30,7 +30,7 @@ pub struct LocData<
     location: Result<geo::Rect, LocationError>,
 }
 
-#[derive(Error)]
+#[derive(Error, Debug)]
 pub enum TimeOrLocError<T, L> {
     #[error("failed to get datetime of an item: {0}")]
     TimeError(T),
