@@ -130,7 +130,6 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSor
 }
 
 /// Information about nodes which is generated once and then used instead of being generated on the fly
-#[derive(Debug)]
 pub struct StaticNodeInfo<Item: SortableItem, NDItem, NameErr> {
     first_time: Item::Time,
     last_time: Item::Time,
@@ -309,4 +308,15 @@ pub struct GroupRef<'a, Item: SortableItem>(&'a [Item]);
 #[non_exhaustive]
 pub struct GroupMetadata {
     pub strength: u8,
+}
+
+impl<'hier, Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>, NDItem: fmt::Debug, NameErr: fmt::Debug> fmt::Debug for NodeInfo<'hier, Item, NDItem, NameErr> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NodeInfo").field("static_info", &self.static_info).field("id", &self.id).finish()
+    }
+}
+impl<Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>, NDItem: fmt::Debug, NameErr: fmt::Debug> fmt::Debug for StaticNodeInfo<Item, NDItem, NameErr> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StaticNodeInfo").field("first_time", &self.first_time).field("last_time", &self.last_time).field("first_pos", &self.first_pos).field("last_pos", &self.last_pos).field("naming_data", &self.naming_data).finish()
+    }
 }
