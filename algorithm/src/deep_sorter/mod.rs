@@ -146,6 +146,8 @@ pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
 }
 
 impl<'hier, Item: SortableItem, NDItem, NameErr> NodeInfo<'hier, Item, NDItem, NameErr> {
+    /// Returns [`None`] if the item has not yet been assigned a name,
+    /// returns `Some(Err)` it there was a failed attempt to assign a name
     pub fn get_naming_data<'s>(&'s self) -> Option<&'hier Result<Vec<NDItem>, NameErr>> {
         self.static_info.naming_data.get()
     }
