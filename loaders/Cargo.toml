@@ -9,6 +9,8 @@ geo = "0.28.0"
 thiserror = "1.0.63"
 chrono = { version = "0.4.38", optional = true }
 geogroup_common = { path = "../common" }
+nom-exif = "2.5.4"
+log = { version = "0.4.29", features = ["kv"] }
 
 [features]
 default = ["exif"]

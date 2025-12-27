@@ -3,13 +3,13 @@ use std::str::{from_utf8, Utf8Error};
 use super::*;
 
 #[derive(Clone, Debug)]
-pub struct ExifLoader;
+pub struct KamdakExifLoader;
 
-impl DataLoader for ExifLoader {
+impl DataLoader for KamdakExifLoader {
     type LocationError = CommonError;
     type TimeError = TimeError;
     type FatalError = FatalError;
-    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<ExifLoader>, Self::FatalError> {
+    fn get_data(&self, file: &Path) -> Result<LoaderSpecificLocData<KamdakExifLoader>, Self::FatalError> {
         let file = std::fs::File::open(file).map_err(FatalError::CannotReadFile)?;
         let exif_data =
             exif::Reader::new().read_from_container(&mut std::io::BufReader::new(&file))?;
