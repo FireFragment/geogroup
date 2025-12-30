@@ -1,7 +1,8 @@
-use std::{collections::HashSet, convert::Infallible, hash::Hash, thread};
 use derive_more::From;
+use geogroup_loaders::MutDataLoader as _;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
+use std::{collections::HashSet, convert::Infallible, hash::Hash, thread};
 
 use super::*;
 
@@ -64,14 +65,19 @@ pub enum InnerLeafData {
     RealLeaf(FileData),
 }
 
-/// Lazy group (hence the acronym `LG`) which uses the geogroup algorithm to sort its contents
+/// [Lazy group](lazy_group::Final) (hence the acronym `LG`) which uses the geogroup algorithm to sort its contents
 #[derive(Debug)]
 pub struct LGSorted {
     item_source: ItemSource,
     sorter: algorithm::Sorter<
-        ConcreteSortableItem<geo_lib::Point, DateTime<chrono::FixedOffset>, FileData, geogroup_loaders::general_loader::LocationError>,
+        ConcreteSortableItem<
+            geo_lib::Point,
+            DateTime<chrono::FixedOffset>,
+            FileData,
+            geogroup_loaders::general_loader::LocationError,
+        >,
         String,
-        geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>
+        geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>,
     >,
 }
 
@@ -88,8 +94,12 @@ impl LGSorted {
     /// Potentially long-running. Returns [None] if terminated by progress_callback
     ///
     /// For naming, requires to be run inside of tokio runtime
-    pub fn new(item_source: ItemSource, params: algorithm::Params, progress_callback: &mut ProgressCallback) -> Option<Self> {
-        let items = item_source.clone()
+    pub fn new(
+        item_source: ItemSource,
+        params: algorithm::Params,
+        progress_callback: &mut ProgressCallback,
+    ) -> Option<Self> {
+        let items: Vec<_> = item_source.clone()
             .into_concrete()
             .with_progress_callback(
                 // TODO: Don't show progress from this as this should be much faster than reading metadata of the files
@@ -122,8 +132,8 @@ impl LGSorted {
 
                 entry.ok() // TODO: Don't ignore errors
             })
-            .filter_map(|path| {
-                let loc_data_result = loaders::GeneralLoader.get_data(path.as_ref());
+            .map_init(||loaders::GeneralLoader::default(), move |loader, path| {
+                let loc_data_result = loader.get_data_mut(path.as_ref());
                 if let Err(err) = &loc_data_result {
                     log::error!("Failed to read metadata of file {}:\n{err}\nDeveloper info:\n  {err:?}\n  When calling `get_data`", path.to_string_lossy());
                 }
@@ -135,44 +145,54 @@ impl LGSorted {
                 }
                 si_result.ok() // TODO: Don't ignore errors
             })
+            .flatten()
             .collect();
 
-        log::debug!("LGSorted: Loaded all files");
+        log::debug!("LGSorted: Loaded all {} files", items.len());
         let should_terminate = progress_callback.call(None, Some("Sorting"));
         if should_terminate {
             return None;
         }
-        let sorter = algorithm::Sorter::new(
-            items,
-            params
-        );
+        let sorter = algorithm::Sorter::new(items, params);
         // Useful for debugging until added to the main application
         // sorter.debug_with_fmt_leafs(|l| l.data.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
 
-
-        let rt = tokio::runtime::Builder::new_current_thread().build().expect("TODO");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("TODO");
         {
             let ds = sorter.deep_sorter_rc();
             //thread::spawn(|| {
             //let rt_guard = rt.enter();
 
             thread::spawn(move || {
-                let join_handle = rt.block_on(async move { // TODO: Don't block
+                let join_handle = rt.block_on(async move {
+                    // TODO: Don't block
                     // Construct a local task set that can run `!Send` futures.
                     let local = tokio::task::LocalSet::new();
 
                     // Run the local task set.
-                    local.spawn_local(async move { // TODO: Why can't I just spawn it normally?
+                    local.spawn_local(async move {
+                        // TODO: Why can't I just spawn it normally?
                         let reader = nametiles_reader::NametilesConnection::new_from_file(
-                            &PathBuf::from("/nix/temporary/nametilesgen/out.pmtiles") // TODO: Remove
-                        ).await.expect("TODO");
+                            &PathBuf::from("/nix/temporary/nametilesgen/out.pmtiles"), // TODO: Remove
+                        )
+                        .await
+                        .expect("TODO");
+
+                        log::debug!("LGSorted: Starting naming");
 
                         //ds.try_naming(async move |_| todo!()).await;
                         ds.try_naming(async move |item| {
-                            reader.get_name(geo::Coord::from(*item.position.as_ref().map_err(|p| p.clone())?))
-                                .await.map(|it| HashSet::from_iter(it.into_iter()))
+                            reader
+                                .get_name(geo::Coord::from(
+                                    *item.position.as_ref().map_err(|p| p.clone())?,
+                                ))
+                                .await
+                                .map(|it| HashSet::from_iter(it.into_iter()))
                                 .map_err(|e| NamingLeafErr::from(e))
-                        }).await;
+                        })
+                        .await;
                     });
 
                     local.await;
@@ -180,12 +200,11 @@ impl LGSorted {
             });
 
             //});
-
         }
 
         Some(Self {
             // TODO: Add progress callback
-            sorter,  // TODO: Don't ignore errors
+            sorter, // TODO: Don't ignore errors
             item_source,
         })
     }
@@ -224,26 +243,38 @@ impl TemplateHiearchy {
             .map_group_data(|_| GroupData::Static)
             .map_node_data(|n| n.node_data().to_owned()) // OPT: Possibly needless clone
             .map_leaf_data(|leaf| match leaf.leaf_data() {
-                InnerLeafData::LazySubgroup(lazy_group) => {
-                    lazy_group.read(|status| match status {
-                        lazy_group::dynamic::View::Initializing(status) =>
-                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: status.msg.clone(), progress: status.progress }),
-                        lazy_group::dynamic::View::Finished(final_group) =>
-                            fused::MainLeafData::Subgroup(final_group.as_group_ref()
+                InnerLeafData::LazySubgroup(lazy_group) => lazy_group.read(|status| match status {
+                    lazy_group::dynamic::View::Initializing(status) => {
+                        fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing {
+                            message: status.msg.clone(),
+                            progress: status.progress,
+                        })
+                    }
+                    lazy_group::dynamic::View::Finished(final_group) => {
+                        fused::MainLeafData::Subgroup(
+                            final_group
+                                .as_group_ref()
                                 .mark_root()
-                                .map_group_data(|group|
+                                .map_group_data(|group| {
                                     if group.group_data().is_root {
                                         GroupData::LazySubgroupRoot
-                                    } else { GroupData::LazySubgroupMember }
-                                )
-                                .map_leaf_data(|l| LeafData::File(l.leaf_data()))
-                            ),
-                        lazy_group::dynamic::View::Terminated =>
-                            fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing{ message: None, progress: None })
-                    })
-                }
+                                    } else {
+                                        GroupData::LazySubgroupMember
+                                    }
+                                })
+                                .map_leaf_data(|l| LeafData::File(l.leaf_data())),
+                        )
+                    }
+                    lazy_group::dynamic::View::Terminated => {
+                        fused::MainLeafData::RealLeaf(LeafData::LazyGroupInitializing {
+                            message: None,
+                            progress: None,
+                        })
+                    }
+                }),
                 InnerLeafData::RealLeaf(file_data) => {
-                    fused::MainLeafData::RealLeaf(LeafData::File(file_data.to_owned())) // OPT: Possibly needless clone
+                    fused::MainLeafData::RealLeaf(LeafData::File(file_data.to_owned()))
+                    // OPT: Possibly needless clone
                 }
             })
             .fuse()
@@ -257,7 +288,7 @@ pub enum GroupData {
     /// Not a real folder to be actually applied, this represents just a rule how to
     /// to organize files inside some folder. There may be multiple of these corresponding to a single folder.
     LazySubgroupRoot,
-    LazySubgroupMember
+    LazySubgroupMember,
 }
 
 #[derive(Clone, Debug)]
@@ -267,7 +298,7 @@ pub struct NodeData {
     /// you get an _identification path_ of the node. It's unique in the subtree of the first node whose `local_id_path` is None.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
-    pub local_id_path: Option<Vec<u8>>
+    pub local_id_path: Option<Vec<u8>>,
 }
 #[derive(Clone, Debug)]
 pub struct FileData {
@@ -278,6 +309,6 @@ pub enum LeafData {
     File(FileData),
     LazyGroupInitializing {
         message: Option<String>,
-        progress: Option<u16>
-    }
+        progress: Option<u16>,
+    },
 }

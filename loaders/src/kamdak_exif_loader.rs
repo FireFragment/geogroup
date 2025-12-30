@@ -2,10 +2,10 @@ use std::str::{from_utf8, Utf8Error};
 
 use super::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct KamdakExifLoader;
 
-impl DataLoader for KamdakExifLoader {
+impl ImmutDataLoader for KamdakExifLoader {
     type LocationError = CommonError;
     type TimeError = TimeError;
     type FatalError = FatalError;

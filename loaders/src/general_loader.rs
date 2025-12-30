@@ -1,20 +1,22 @@
 use super::*;
 
 /// A loader combining all the loaders in this crate
-pub struct GeneralLoader;
+#[derive(Default)]
+pub struct GeneralLoader(ExifLoader);
+
 
 /// Return value when trying to load data from a file.
 pub type LoadingReturnValue = Result<
     LoaderSpecificLocData<GeneralLoader>,
-    <general_loader::GeneralLoader as DataLoader>::FatalError,
+    <general_loader::GeneralLoader as MutDataLoader>::FatalError,
 >;
 
-impl DataLoader for GeneralLoader {
+impl MutDataLoader for GeneralLoader {
     type FatalError = FatalError;
     type LocationError = LocationError;
     type TimeError = TimeError;
 
-    fn get_data(&self, file: &Path) -> LoadingReturnValue {
+    fn get_data_mut(&mut self, file: &Path) -> LoadingReturnValue {
         if !file.is_file() {
             return Err(FatalError::NotAFile);
         };
@@ -26,8 +28,8 @@ impl DataLoader for GeneralLoader {
             .ok_or(FatalError::NonUnicodeFileName)?
             .to_string();
 
-        if ExifLoader.supported_extensions().contains(&extension) {
-            match ExifLoader.get_data(file) {
+        if self.0.supported_extensions_m().contains(&extension) {
+            match self.0.get_data_mut(file) {
                 Ok(v) => Ok(v.convert_errors()),
                 Err(e) => Err(LoaderSpecificFatalError::from(e).into()),
             }
@@ -36,8 +38,8 @@ impl DataLoader for GeneralLoader {
         }
     }
 
-    fn supported_extensions(&self) -> Vec<String> {
-        ExifLoader.supported_extensions()
+    fn supported_extensions_m(&self) -> Vec<String> {
+        self.0.supported_extensions_m()
     }
 }
 
@@ -69,17 +71,17 @@ pub enum FatalError {
 #[derive(thiserror::Error, Debug)]
 pub enum LoaderSpecificFatalError {
     #[error(transparent)]
-    Exif(#[from] <ExifLoader as DataLoader>::FatalError),
+    Exif(#[from] <ExifLoader as MutDataLoader>::FatalError),
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum LocationError {
     #[error(transparent)]
-    Exif(#[from] <ExifLoader as DataLoader>::LocationError),
+    Exif(#[from] <ExifLoader as MutDataLoader>::LocationError),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum TimeError {
     #[error(transparent)]
-    Exif(#[from] <ExifLoader as DataLoader>::TimeError),
+    Exif(#[from] <ExifLoader as MutDataLoader>::TimeError),
 }

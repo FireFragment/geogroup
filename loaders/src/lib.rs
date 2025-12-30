@@ -8,12 +8,12 @@ use geogroup_common as common;
 #[cfg(feature = "exif")]
 pub mod kamdak_exif_loader;
 pub use kamdak_exif_loader as exif_loader;
-pub use exif_loader::KamdakExifLoader as ExifLoader;
+pub use exif_loader::KamdakExifLoader;
 
 
 #[cfg(feature = "exif")]
 pub mod nom_exif_loader;
-pub use nom_exif_loader::NomExifLoader;
+pub use nom_exif_loader::NomExifLoader as ExifLoader;
 
 pub mod general_loader;
 pub use general_loader::GeneralLoader;
@@ -21,8 +21,8 @@ pub use general_loader::LoadingReturnValue;
 
 #[derive(Clone, Debug)]
 pub struct LocData<
-    TimeError = <GeneralLoader as DataLoader>::TimeError,
-    LocationError = <GeneralLoader as DataLoader>::LocationError,
+    TimeError = <GeneralLoader as MutDataLoader>::TimeError,
+    LocationError = <GeneralLoader as MutDataLoader>::LocationError,
 > {
     /// Time range of the file.
     /// First element must always be before or equal to the second element.
@@ -123,7 +123,7 @@ impl<FromTimeError, FromLocationError> LocData<FromTimeError, FromLocationError>
 
 /// [`LocData`] with errors corresponding to errors of a specific [`DataLoader`]
 pub type LoaderSpecificLocData<Loader> =
-    LocData<<Loader as DataLoader>::TimeError, <Loader as DataLoader>::LocationError>;
+    LocData<<Loader as MutDataLoader>::TimeError, <Loader as MutDataLoader>::LocationError>;
 
 #[derive(Error, Debug)]
 pub enum LocationError {
@@ -132,7 +132,7 @@ pub enum LocationError {
     ExifError(#[from] exif_loader::CommonError),
 }
 
-pub trait DataLoader {
+pub trait ImmutDataLoader {
     /// Error preventing loading time from a file
     type TimeError: StdError;
     /// Error preventing loading location from a file
@@ -146,6 +146,35 @@ pub trait DataLoader {
     fn supported_extensions(&self) -> Vec<String>;
 }
 
-pub fn get_data(file: &Path) -> LoadingReturnValue {
-    GeneralLoader.get_data(file)
+pub trait MutDataLoader {
+    /// Error preventing loading time from a file
+    type TimeError: StdError;
+    /// Error preventing loading location from a file
+    type LocationError: StdError;
+    /// Error preventing loading *any* data from a file, other than already provided in [`GenericFatalError`]
+    type FatalError: StdError;
+
+    fn get_data_mut(&mut self, file: &Path) -> Result<LoaderSpecificLocData<Self>, Self::FatalError>;
+
+    /// List of file extensions this loader supports. Same as
+    fn supported_extensions_m(&self) -> Vec<String>;
 }
+
+impl<T: ImmutDataLoader + ?Sized> MutDataLoader for T {
+    type TimeError = <Self as ImmutDataLoader>::TimeError;
+    type LocationError = <Self as ImmutDataLoader>::LocationError;
+    type FatalError = <Self as ImmutDataLoader>::FatalError;
+
+    fn get_data_mut(&mut self, file: &Path) -> Result<LoaderSpecificLocData<Self>, Self::FatalError> {
+        ImmutDataLoader::get_data(&*self, file)
+    }
+
+    fn supported_extensions_m(&self) -> Vec<String> {
+        ImmutDataLoader::supported_extensions(&*self)
+    }
+}
+
+/*pub fn get_data(file: &Path) -> LoadingReturnValue {
+    GeneralLoader::default().get_data_mut(file)
+}
+*/

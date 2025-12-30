@@ -30,7 +30,7 @@ use std::{
 
 use eframe::{egui, emath, glow};
 use egui::Frame;
-use geogroup_backend::{self as backend, loaders::DataLoader as _, naming::RevGeocoder};
+use geogroup_backend::{self as backend, loaders::ImmutDataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
 
 

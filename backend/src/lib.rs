@@ -32,7 +32,7 @@ pub mod gg_prelude {
 
     pub use lazy_hierarchy;
     pub use lazy_hierarchy::prelude::*;
-    pub use loaders::DataLoader as _;
+    pub use loaders::ImmutDataLoader as _;
     pub use progress::ProgressCallback;
     pub use progress::TerminatableIterator as _;
     pub use item_source::ItemSource;
