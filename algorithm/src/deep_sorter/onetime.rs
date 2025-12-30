@@ -130,7 +130,9 @@ pub fn sort_to_binary_tree<Item: SortableItem>(points: impl IntoIterator<Item=It
 
     //points.sort_by_key(|p| -> Item::Time {p.get_time()});
     sort_ordered_to_binary_tree(points.into_iter()
-        .filter(|point| point.get_position().is_ok()) // TODO: Don't just ignore items without position.
+        .filter(|point| point.get_position()
+            .inspect_err(|e| log::trace!("Silently dropping a file - reason:\n{e:?}")).is_ok()
+        )                                             // TODO: Don't just ignore items without position.
                                                       // Once fixed, edit all portions of the code marked with POSERR
         .sorted_by_key(|p| p.get_time())
     )
