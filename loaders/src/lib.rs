@@ -8,12 +8,12 @@ use geogroup_common as common;
 #[cfg(feature = "exif")]
 pub mod kamdak_exif_loader;
 pub use kamdak_exif_loader as exif_loader;
-pub use exif_loader::KamdakExifLoader;
+pub use exif_loader::KamdakExifLoader as ExifLoader;
 
 
 #[cfg(feature = "exif")]
 pub mod nom_exif_loader;
-pub use nom_exif_loader::NomExifLoader as ExifLoader;
+pub use nom_exif_loader::NomExifLoader;
 
 pub mod general_loader;
 pub use general_loader::GeneralLoader;
