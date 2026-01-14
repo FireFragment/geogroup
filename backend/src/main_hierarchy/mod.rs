@@ -81,10 +81,10 @@ pub struct LGSorted {
     >,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum NamingLeafErr {
     #[error("Nametiles-related error: {0}")]
-    NametilesErr(#[from] nametiles_reader::Error),
+    NametilesErr(#[from] nametiles_reader::SimpleError),
 
     #[error("Failed to get photo's location: {0}")]
     LocationErr(#[from] geogroup_loaders::general_loader::LocationError),
@@ -190,7 +190,7 @@ impl LGSorted {
                                 ))
                                 .await
                                 .map(|it| HashSet::from_iter(it.into_iter()))
-                                .map_err(|e| NamingLeafErr::from(e))
+                                .map_err(|e| NamingLeafErr::from(nametiles_reader::SimpleError::from(e)))
                         })
                         .await;
                     });

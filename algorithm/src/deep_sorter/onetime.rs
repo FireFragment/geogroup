@@ -1,11 +1,12 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, iter};
 
 use super::*;
 
 /// Same as [`sort_to_binary_tree`], but assumes that the points are ordered.
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<Item=Item>) -> BinTree<Item, (), ()> {
+pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut items: impl Iterator<Item=Item>)
+-> BinTree<Item, NDItem, NameErr, TyFalse> {
     #[derive(Clone, Debug)]
     struct CameraPathComponent {
         pub child_index: HorizontalIdx,
@@ -18,18 +19,29 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
     }
 
     let first_point = items.next().expect("to_binary_tree called with empty vector");
-    let mut the_bintree = BinTree::Leaf(first_point, ());
-    let BinTree::Leaf(ref first_point, ()) = the_bintree else {panic!()};
+    let mut the_bintree = BinTree::Leaf(first_point, TyOption::new_empty());
+    let BinTree::Leaf(ref first_point, _) = the_bintree else {panic!()};
     let mut cameras_paths: HashMap<CameraId, CameraInfo<Item>> = HashMap::new();
     cameras_paths.insert(first_point.get_camera(), CameraInfo {
         last_point: first_point.get_position().expect("POSERR"),
         path_to_last_point: Vec::new()
     });
 
+    // This iterator yields items with position along with all items without position right before it.
+    let positioned_items = iter::from_fn(|| {
+        let mut items_before_without_pos = Vec::new();
+        while let Some(current_item) = items.next() {
+            if let Ok(current_item_position) = current_item.get_position() {
+                return Some((items_before_without_pos, current_item, current_item_position));
+            }
+            items_before_without_pos.push(current_item);
+        }
+        None // TODO: Don't ignore the last run of items without a position
+    });
+
     // We build the tree form left to right
-    for item_to_append in items {
+    for (items_before_without_pos, item_to_append, item_to_append_pos) in positioned_items {
         let item_to_append_cam = item_to_append.get_camera();
-        let item_to_append_pos = item_to_append.get_position().expect("POSERR");
 
         let camera_info = &cameras_paths[&item_to_append_cam];
         let distance_from_prev_point =
@@ -78,7 +90,7 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
                 camera_info.path_to_last_point.insert(new_item_parent_path.len(), CameraPathComponent {
                     child_index: HorizontalIdx::Left,
                     inner_separation: node_to_replace
-                        .get_leftmost_leaf().0.get_position()
+                        .get_leftmost_item().get_position()
                         .expect("POSERR").distance(&item_to_append_pos)
                 });
             }
@@ -90,9 +102,9 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
 
         // TODO: Make sure that all camera paths are updated according to the move of `node_to_replace`
         take_mut::take(node_to_replace, |prev_val| BinTree::InnerNode(BTInnerNode {
-            children: Box::new([prev_val, BinTree::Leaf(item_to_append, ())]),
-            inner_node_data: (),
-            node_data: ()
+            positioned_children: Box::new([prev_val, BinTree::Leaf(item_to_append, TyOption::new_empty())]),
+            node_data: TyOption::new_empty(),
+            additional_middle_leaves: items_before_without_pos
         }));
 
         cameras_paths.insert(item_to_append_cam, CameraInfo {
@@ -126,14 +138,6 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem>(mut items: impl Iterator<
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<Item: SortableItem>(points: impl IntoIterator<Item=Item>) -> BinTree<Item, (), ()> {
-
-    //points.sort_by_key(|p| -> Item::Time {p.get_time()});
-    sort_ordered_to_binary_tree(points.into_iter()
-        .filter(|point| point.get_position()
-            .inspect_err(|e| log::trace!("Silently dropping a file - reason:\n{e:?}")).is_ok()
-        )                                             // TODO: Don't just ignore items without position.
-                                                      // Once fixed, edit all portions of the code marked with POSERR
-        .sorted_by_key(|p| p.get_time())
-    )
+pub fn sort_to_binary_tree<Item: SortableItem, NDItem, NameErr,>(points: impl IntoIterator<Item=Item>) -> BinTree<Item, NDItem, NameErr, TyFalse> {
+    sort_ordered_to_binary_tree(points.into_iter().sorted_by_key(|p| p.get_time()))
 }

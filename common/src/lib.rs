@@ -14,7 +14,7 @@ pub trait SortableItem {
     type Time: Ord + Clone;
     type Position: Point + Clone;
 
-    type PositionErr: Debug; // TODO: Consider removing this bound. It makes it easy to expect on the result.
+    type PositionErr: Debug + Clone; // TODO: Consider removing this bound. It makes it easy to expect on the result.
 
     fn get_time(&self) -> Self::Time;
     fn get_position(&self) -> Result<Self::Position, Self::PositionErr>;

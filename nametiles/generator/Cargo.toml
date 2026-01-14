@@ -14,3 +14,4 @@ log = "0.4.28"
 osmpbfreader = { version = "0.19.1", features = ["serde"] }
 polyline = "0.11.0"
 rayon = "1.11.0"
+unwrap-infallible = "1.0.0"

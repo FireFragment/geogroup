@@ -1,23 +1,31 @@
-mod onetime;
 pub mod naming;
+mod onetime;
 //#[cfg(test)]
 //mod test;
 
 use core::fmt;
-use std::{cell::OnceCell, convert::Infallible, ops::Div, sync::OnceLock};
+use std::{
+    cell::OnceCell,
+    convert::Infallible,
+    ops::{Div, RangeInclusive},
+    sync::OnceLock,
+};
 
 use crate::*;
 use itertools::Itertools;
-use std::hash::Hash;
 pub use onetime::*;
+use std::hash::Hash;
+use unwrap_infallible::UnwrapInfallible as _;
 
 pub struct DeepSorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> {
-    bintree: BinTree<Item, (), StaticNodeInfo<Item, NDItem, NameErr>>,
+    bintree: BinTree<Item, NDItem, NameErr, TyTrue>,
 }
 
-
-impl<Item: SortableItem + fmt::Debug, NDItem: fmt::Debug + Clone + PartialEq + Eq + Hash, NameErr: fmt::Debug> fmt::Debug
-    for DeepSorter<Item, NDItem, NameErr>
+impl<
+        Item: SortableItem + fmt::Debug,
+        NDItem: fmt::Debug + Clone + PartialEq + Eq + Hash,
+        NameErr: fmt::Debug,
+    > fmt::Debug for DeepSorter<Item, NDItem, NameErr>
 where
     Item::Time: fmt::Debug,
     Item::Position: fmt::Debug,
@@ -44,7 +52,9 @@ pub fn ratio_to_strength(parent_separation: f32, self_separation: f32) -> f32 {
 }
 
 /// # Sorting methods
-impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSorter<Item, NDItem, NameErr> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
+    DeepSorter<Item, NDItem, NameErr>
+{
     pub fn deep_hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
@@ -62,9 +72,9 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSor
                 let separation = group_ref
                     .get_children()
                     .unwrap_or_else(|e| match e {})
-                    .map(|child| child.node_data())
+                    .filter_map(|child| child.node_data().fl_pos_opt().cloned())
                     .tuple_windows()
-                    .map(|(first, second)| first.last_pos.distance(&second.first_pos))
+                    .map(|(item1, item2)| item1.last.distance(&item2.first))
                     .max();
 
                 if separation.is_none() {
@@ -108,7 +118,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSor
                             StrengthInfo::NoSiblings
                         }
                     } else {
-                        StrengthInfo::LessThan2Children
+                        StrengthInfo::LessThan2ChildrenWithLocation
                     },
                 }
             })
@@ -116,50 +126,94 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSor
             // "Revert" with_parent and add index to
             .map_node_data(|node_ref| {
                 let node_data = node_ref.node_data();
-                NodeInfo { static_info: node_data.data.data, id: match node_data.index {
-                    0 => HorizontalIdx::Left,
-                    1 => HorizontalIdx::Right,
-                    idx => {
-                        debug_assert!(false, "Index bigger than 1 in binary tree: {idx}");
-                        HorizontalIdx::Right
-                    }
-                } }
+                NodeInfo {
+                    static_info: node_data.data.data,
+                    id: match node_data.index {
+                        0 => HorizontalIdx::Left,
+                        1 => HorizontalIdx::Right,
+                        idx => {
+                            // TODO: This CAN happen when there're items in the middle
+                            debug_assert!(false, "Index bigger than 1 in binary tree: {idx}");
+                            HorizontalIdx::Right
+                        }
+                    },
+                }
             })
         //
     }
 }
 
 /// Information about nodes which is generated once and then used instead of being generated on the fly
-pub struct StaticNodeInfo<Item: SortableItem, NDItem, NameErr> {
-    first_time: Item::Time,
-    last_time: Item::Time,
+///
+/// `PosErr` is used mainly as a way to sometimes make sure that first and last position is included, so it's
+/// often set to [`Infallible`]
+pub struct StaticNodeInfo<Item: SortableItem, NDItem, NameErr, PosErr = Infallible> {
+    /// `fl` means "first and last" here
+    pub fl_time: FirstLast<Item::Time>,
+    /// `fl` means "first and last" here
+    /// It's recommended to access this using the `fl_pos` method instead of through the field
+    pub fl_pos: Result<FirstLast<Item::Position>, PosErr>,
 
-    first_pos: Item::Position,
-    last_pos: Item::Position,
-
-    naming_data: OnceLock<Result<Vec<NDItem>, NameErr>>,
+    pub naming_data: OnceLock<Result<Vec<NDItem>, NameErr>>,
 }
 
-pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
-    static_info: &'hier StaticNodeInfo<Item, NDItem, NameErr>,
-    pub id: HorizontalIdx,
-}
+impl<Item: SortableItem, NDItem, NameErr> StaticNodeInfo<Item, NDItem, NameErr, Infallible> {
+    pub fn fl_pos(&self) -> &FirstLast<Item::Position> {
+        self.fl_pos.as_ref().map_err(|e| *e).unwrap_infallible()
+    }
 
-impl<'hier, Item: SortableItem, NDItem, NameErr> NodeInfo<'hier, Item, NDItem, NameErr> {
-    /// Returns [`None`] if the item has not yet been assigned a name,
-    /// returns `Some(Err)` it there was a failed attempt to assign a name
-    pub fn get_naming_data<'s>(&'s self) -> Option<&'hier Result<Vec<NDItem>, NameErr>> {
-        self.static_info.naming_data.get()
+    pub fn generalize_err<E>(self) -> StaticNodeInfo<Item, NDItem, NameErr, E> {
+        StaticNodeInfo {
+            fl_time: self.fl_time,
+            fl_pos: self.fl_pos.map_err(|e| match e {}),
+            naming_data: self.naming_data,
+        }
     }
 }
 
-impl<Item: SortableItem, NDItem: Clone, NameErr: Clone> Clone for StaticNodeInfo<Item, NDItem, NameErr> {
+impl<Item: SortableItem, NDItem, NameErr, PosErr> StaticNodeInfo<Item, NDItem, NameErr, PosErr> {
+    pub fn fl_pos_opt(&self) -> Option<&FirstLast<Item::Position>> {
+        self.fl_pos.as_ref().ok()
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct FirstLast<T> {
+    pub first: T,
+    pub last: T,
+}
+
+impl<T: Clone> FirstLast<T> {
+    pub fn new_single(t: T) -> Self {
+        Self {
+            first: t.clone(),
+            last: t,
+        }
+    }
+}
+
+pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
+    static_info: MaybeBorrowed<'hier, StaticNodeInfo<Item, NDItem, NameErr, Item::PositionErr>>,
+    pub id: HorizontalIdx,
+}
+
+impl<'hier, Item: SortableItem, NDItem: Clone, NameErr: Clone>
+    NodeInfo<'hier, Item, NDItem, NameErr>
+{
+    /// Returns [`None`] if the item has not yet been assigned a name,
+    /// returns `Some(Err)` it there was a failed attempt to assign a name
+    pub fn get_naming_data<'s: 'hier>(&'s self) -> Option<Result<Vec<NDItem>, NameErr>> {
+        self.static_info.naming_data.get().cloned()
+    }
+}
+
+impl<Item: SortableItem, NDItem: Clone, NameErr: Clone, PosErr: Clone> Clone
+    for StaticNodeInfo<Item, NDItem, NameErr, PosErr>
+{
     fn clone(&self) -> Self {
         Self {
-            first_time: self.first_time.clone(),
-            last_time: self.last_time.clone(),
-            first_pos: self.first_pos.clone(),
-            last_pos: self.last_pos.clone(),
+            fl_time: self.fl_time.clone(),
+            fl_pos: self.fl_pos.clone(),
             naming_data: self.naming_data.clone(),
         }
     }
@@ -167,8 +221,8 @@ impl<Item: SortableItem, NDItem: Clone, NameErr: Clone> Clone for StaticNodeInfo
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StrengthInfo {
-    /// Strength couldn't be determined because this group has less than two children.
-    LessThan2Children,
+    /// Strength couldn't be determined because this group has less than two children with known location.
+    LessThan2ChildrenWithLocation,
     /// Strength couldn't be determined because this group has no siblings (ie. its parent has only one child)
     /// AND this group has 2 children or more (if it had less, this would be [`StrengthInfo::LessThan2Children`])
     NoSiblings,
@@ -188,44 +242,70 @@ pub struct GroupInfo {
 }
 
 /// Provides [NodeInfo] for every node in the binary tree
-fn provide_info<Item: SortableItem, InnerNode, NDItem, NameErr>(
-    tree: BinTree<Item, InnerNode, ()>,
-) -> BinTree<Item, InnerNode, StaticNodeInfo<Item, NDItem, NameErr>> {
+///
+/// Expects that all leaves in the binary tree
+/// (but not in [`additional_middle_leaves`](BTInnerNode::additional_middle_leaves) contain location - otherwise panics.
+fn provide_info<Item: SortableItem, NDItem, NameErr>(
+    tree: BinTree<Item, NDItem, NameErr, TyFalse>,
+) -> BinTree<Item, NDItem, NameErr, TyTrue> {
     match tree {
         BinTree::InnerNode(node) => {
-            let children = Box::new(node.children.map(|c| provide_info(c)));
+            let children = Box::new(node.positioned_children.map(|c| provide_info(c)));
             BinTree::InnerNode(BTInnerNode {
                 node_data: StaticNodeInfo {
-                    first_time: children[0].get_node_data().first_time.clone(),
-                    last_time: children[children.len() - 1]
-                        .get_node_data()
-                        .last_time
-                        .clone(),
-                    first_pos: children[0].get_node_data().first_pos.clone(),
-                    last_pos: children[children.len() - 1]
-                        .get_node_data()
-                        .last_pos
-                        .clone(),
-                    naming_data: OnceLock::new()
-                },
-                children,
-                inner_node_data: node.inner_node_data,
+                    naming_data: OnceLock::new(),
+                    fl_time: FirstLast {
+                        first: children
+                            .first()
+                            .unwrap()
+                            .get_node_info()
+                            .fl_time
+                            .first
+                            .clone(),
+                        last: children
+                            .last()
+                            .unwrap()
+                            .get_node_info()
+                            .fl_time
+                            .last
+                            .clone(),
+                    },
+                    fl_pos: Ok(FirstLast {
+                        first: children
+                            .first()
+                            .unwrap()
+                            .get_node_info()
+                            .fl_pos()
+                            .first
+                            .clone(),
+                        last: children
+                            .last()
+                            .unwrap()
+                            .get_node_info()
+                            .fl_pos()
+                            .last
+                            .clone(),
+                    }),
+                }
+                .into(),
+                positioned_children: children,
+                additional_middle_leaves: node.additional_middle_leaves,
             })
         }
-        BinTree::Leaf(l, ()) => {
+        BinTree::Leaf(l, TyOption::Empty(())) => {
             let tree_group_info = StaticNodeInfo {
-                first_time: l.get_time(),
-                last_time: l.get_time(),
-                first_pos: l.get_position().expect("POSERR"),
-                last_pos: l.get_position().expect("POSERR"),
-                naming_data: OnceLock::new()
+                fl_time: FirstLast::new_single(l.get_time()),
+                fl_pos: Ok(FirstLast::new_single(l.get_position().expect("provide_info called with a tree which has item in the binary tree that hasn't position "))),
+                naming_data: OnceLock::new(),
             };
-            BinTree::Leaf(l, tree_group_info)
+            BinTree::Leaf(l, tree_group_info.into())
         }
     }
 }
 
-impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSorter<Item, NDItem, NameErr> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
+    DeepSorter<Item, NDItem, NameErr>
+{
     /// This sorts all items to binary tree, potentially long-running
     pub fn new(items: Vec<Item>) -> Self {
         //points.sort_unstable_by_key(|it| it.get_time());
@@ -237,13 +317,13 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> DeepSor
 
     //pub fn add_items(&mut self, item: impl IntoIterator<Item = Item>) { todo!() }
 
-    /// Get the smallest group which still encapsulates a given time
-    fn get_time_group_mut(
-        &mut self,
-        time: &Item::Time,
-    ) -> Option<&mut BTInnerNode<Item, (), StaticNodeInfo<Item, NDItem, NameErr>>> {
-        get_time_group_mut(&mut self.bintree, time)
-    }
+    // /// Get the smallest group which still encapsulates a given time
+    // fn get_time_group_mut(
+    //     &mut self,
+    //     time: &Item::Time,
+    // ) -> Option<&mut BTInnerNode<Item, (), StaticNodeInfo<Item, NDItem, NameErr>>> {
+    //     get_time_group_mut(&mut self.bintree, time)
+    // }
 }
 
 /// Check if a [`BinTree`] contains the given time.
@@ -260,7 +340,7 @@ fn tree_contains_time<Item: SortableItem, NDItem, NameErr>(
     match tree {
         BinTree::Leaf(_, _) => false,
         BinTree::InnerNode(node) => {
-            !(node.node_data.first_time > *time || node.node_data.last_time < *time)
+            !(node.node_data.fl_time.first > *time || node.node_data.fl_time.last < *time)
         }
     }
 }
@@ -283,20 +363,20 @@ fn get_time_group_mut<'a, Item: SortableItem, NDItem, NameErr>(
     match tree {
         BinTree::Leaf(_, _) => None,
         BinTree::InnerNode(node) => {
-            if node.node_data.first_time > *time || node.node_data.last_time < *time {
+            if node.node_data.fl_time.first > *time || node.node_data.fl_time.last < *time {
                 return None;
             }
             // The following code is a bit dirty, because using just recursion into this function and
             // checking for `None` leads to borrow checker crying
 
             // First check if left child contains a more specific group
-            if tree_contains_time(&node.children[0], time) {
-                return get_time_group_mut(&mut node.children[0], time);
+            if tree_contains_time(&node.positioned_children[0], time) {
+                return get_time_group_mut(&mut node.positioned_children[0], time);
             }
 
             // Then check if right child contains a more specific group
-            if tree_contains_time(&node.children[1], time) {
-                return get_time_group_mut(&mut node.children[1], time);
+            if tree_contains_time(&node.positioned_children[1], time) {
+                return get_time_group_mut(&mut node.positioned_children[1], time);
             }
 
             // If neither child contains it, this node is the smallest containing group
@@ -312,13 +392,32 @@ pub struct GroupMetadata {
     pub strength: u8,
 }
 
-impl<'hier, Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>, NDItem: fmt::Debug, NameErr: fmt::Debug> fmt::Debug for NodeInfo<'hier, Item, NDItem, NameErr> {
+impl<
+        'hier,
+        Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>,
+        NDItem: fmt::Debug,
+        NameErr: fmt::Debug,
+    > fmt::Debug for NodeInfo<'hier, Item, NDItem, NameErr>
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NodeInfo").field("static_info", &self.static_info).field("id", &self.id).finish()
+        f.debug_struct("NodeInfo")
+            .field("static_info", &self.static_info)
+            .field("id", &self.id)
+            .finish()
     }
 }
-impl<Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>, NDItem: fmt::Debug, NameErr: fmt::Debug> fmt::Debug for StaticNodeInfo<Item, NDItem, NameErr> {
+impl<
+        Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug>,
+        NDItem: fmt::Debug,
+        NameErr: fmt::Debug,
+        PosErr: fmt::Debug,
+    > fmt::Debug for StaticNodeInfo<Item, NDItem, NameErr, PosErr>
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StaticNodeInfo").field("first_time", &self.first_time).field("last_time", &self.last_time).field("first_pos", &self.first_pos).field("last_pos", &self.last_pos).field("naming_data", &self.naming_data).finish()
+        f.debug_struct("StaticNodeInfo")
+            .field("fl_time", &self.fl_time)
+            .field("fl_pos", &self.fl_pos)
+            .field("naming_data", &self.naming_data)
+            .finish()
     }
 }

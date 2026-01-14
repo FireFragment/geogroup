@@ -138,11 +138,13 @@ pub async fn try_naming_generic<
         .await
 }
 
-impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr>
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clone>
     DeepSorter<Item, NDItem, NamingErr<LeafNameErr>>
 {
+    /// Argument `leaf_err_missing_position` is `LeafNameErr` value that should be used in case the item doesn't have known position
     pub async fn try_naming(
         &self,
+        //leaf_err_missing_position: impl Fn() -> LeafNameErr,
         fun_get_leaf_name: impl AsyncFn(&Item) -> Result<HashSet<NDItem>, LeafNameErr>,
     ) {
         // TODO: Do some locks so that it can't be launched multiple times simoultaneously

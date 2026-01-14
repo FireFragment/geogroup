@@ -7,13 +7,13 @@ pub use deep_sorter::{GroupInfo};
 
 use super::*;
 
-pub struct NodeInfo<'a, NDItem = (), NameErr = Infallible> {
+pub struct NodeInfo<NDItem = (), NameErr = Infallible> {
     /// If you join all `local_id_path`s of a node's parents, you get the unique _identification path_ of the node.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
     pub local_id_path: Vec<HorizontalIdx>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
-    pub name: Option<Result<Vec<NDItem>, &'a NameErr>>
+    pub name: Option<Result<Vec<NDItem>, NameErr>>
 }
 
 pub struct Sorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash = (), NameErr = Infallible> {
@@ -73,13 +73,13 @@ impl<Item: SortableItem + Debug, NDItem: Clone + PartialEq + Eq + Hash> Sorter<I
     }
 }
 
-impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<Item, NDItem, NameErr> {
+impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone> Sorter<Item, NDItem, NameErr> {
     pub fn hierarchy<'s>(
         &'s self,
     ) -> impl lazy_hierarchy::GroupRef<
         GroupData = GroupInfo,
         LeafData = &'s Item,
-        NodeData = NodeInfo<'s, NDItem, NameErr>,
+        NodeData = NodeInfo<NDItem, NameErr>,
         StructureErr = Infallible,
     > {
         /// Data that is passed from dissolved groups to their children
@@ -102,9 +102,8 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
                 let create_inherited_data = || InheritedData {
                     path_part: vec![group.node_data().data.id],
                     naming_data: group.node_data().data.get_naming_data()
-                        .map(|res| res.as_ref().ok())
+                        .map(|res| res.ok())
                         .flatten()
-                        .cloned()
                         .unwrap_or_else(|| Vec::new()),
                 };
 
@@ -132,7 +131,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
                     StrengthInfo::Root => None,
 
                     // These shouldn't happen, but we can somehow (albeit non-perfectly) handle them anyway
-                    StrengthInfo::LessThan2Children => {
+                    StrengthInfo::LessThan2ChildrenWithLocation => {
                         log::error!("Found a node with less than two children in `deep_sorter`. Recovery is easy, but this shouldn't happen.");
                         Some(create_inherited_data())
                     }
@@ -153,7 +152,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> Sorter<
                 let mut id_path = node_data.inherited.path_part;
                 id_path.push(node_data.original.data.id.clone());
                 let name = node_data.original.data.get_naming_data().map(|n|
-                    n.as_ref().map(|name| [name.clone(), node_data.inherited.naming_data].concat()
+                    n.map(|name| [name.clone(), node_data.inherited.naming_data].concat()
                 ));
                 NodeInfo { local_id_path: id_path, name }
             })

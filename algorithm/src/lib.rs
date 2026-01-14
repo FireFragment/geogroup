@@ -6,6 +6,13 @@ pub mod bintree;
 pub mod deep_sorter;
 pub mod geogroup;
 pub use geogroup::Sorter;
+pub mod maybe_borrowed;
+pub use maybe_borrowed::*;
+pub mod type_level_logic;
+pub use type_level_logic::True as TyTrue;
+pub use type_level_logic::False as TyFalse;
+pub use type_level_logic::TyBool;
+pub use type_level_logic::TyOption;
 
 #[cfg(test)]
 mod tests;
