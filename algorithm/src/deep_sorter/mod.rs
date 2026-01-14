@@ -4,17 +4,13 @@ mod onetime;
 //mod test;
 
 use core::fmt;
-use std::{
-    cell::OnceCell,
-    convert::Infallible,
-    ops::{Div, RangeInclusive},
-    sync::OnceLock,
-};
+use std::{convert::Infallible, ops::Div, sync::OnceLock};
 
 use crate::*;
 use itertools::Itertools;
 pub use onetime::*;
 use std::hash::Hash;
+use thiserror::Error;
 use unwrap_infallible::UnwrapInfallible as _;
 
 pub struct DeepSorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> {
@@ -72,7 +68,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                 let separation = group_ref
                     .get_children()
                     .unwrap_or_else(|e| match e {})
-                    .filter_map(|child| child.node_data().fl_pos_opt().cloned())
+                    .filter_map(|child| child.node_data()?.fl_pos_opt().cloned())
                     .tuple_windows()
                     .map(|(item1, item2)| item1.last.distance(&item2.first))
                     .max();
@@ -193,17 +189,31 @@ impl<T: Clone> FirstLast<T> {
 }
 
 pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
-    static_info: MaybeBorrowed<'hier, StaticNodeInfo<Item, NDItem, NameErr, Item::PositionErr>>,
+    static_info: Option<&'hier StaticNodeInfo<Item, NDItem, NameErr>>,
     pub id: HorizontalIdx,
+}
+
+#[derive(Clone, Hash, Error, Debug)]
+pub enum GetNamingDataErr {
+    #[error("no naming data available on the item, likely because this is a middle item of the bintree (ie. without known location)")]
+    NoNamingData,
+    #[error("naming data hasn't yet been assigned to the item")]
+    NotYetAssigned,
 }
 
 impl<'hier, Item: SortableItem, NDItem: Clone, NameErr: Clone>
     NodeInfo<'hier, Item, NDItem, NameErr>
 {
-    /// Returns [`None`] if the item has not yet been assigned a name,
-    /// returns `Some(Err)` it there was a failed attempt to assign a name
-    pub fn get_naming_data<'s: 'hier>(&'s self) -> Option<Result<Vec<NDItem>, NameErr>> {
-        self.static_info.naming_data.get().cloned()
+    /// **Outer result:** Cases in [GetNamingDataErr], when naming has not yet ran. \
+    /// **Inner result:** `Ok(Err)` it there was a failed attempt to assign a name
+    pub fn get_naming_data<'s>(
+        &'s self,
+    ) -> Result<&'s Result<Vec<NDItem>, NameErr>, GetNamingDataErr> {
+        self.static_info
+            .ok_or(GetNamingDataErr::NoNamingData)?
+            .naming_data
+            .get()
+            .ok_or(GetNamingDataErr::NotYetAssigned)
     }
 }
 

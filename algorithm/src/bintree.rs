@@ -116,7 +116,7 @@ pub struct BTInnerNode<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyB
 
 /// [`lazy_hierarchy::LeafRef`] implementation for [`BinTree`]
 #[derive(Debug)]
-pub struct BTLeafRef<'a, L, N>(&'a L, MaybeBorrowed<'a, N>);
+pub struct BTLeafRef<'a, L, N>(&'a L, Option<&'a N>);
 
 impl<'a, L, N: Clone> Clone for BTLeafRef<'a, L, N> {
     fn clone(&self) -> Self {
@@ -127,14 +127,14 @@ impl<'a, L, N: Clone> Clone for BTLeafRef<'a, L, N> {
 impl<'a, L, N: Clone> lazy_hierarchy::LeafRef for BTLeafRef<'a, L, N> {
     type LeafData = &'a L;
 
-    type NodeData = MaybeBorrowed<'a, N>;
+    type NodeData = Option<&'a N>;
 
     fn leaf_data(&self) -> Self::LeafData {
         &self.0
     }
 
     fn node_data(&self) -> Self::NodeData {
-        self.1.clone()
+        self.1
     }
 }
 
@@ -149,25 +149,15 @@ where
     ) -> Result<impl Iterator<Item = lazy_hierarchy::NodeRef<Self>>, Infallible> {
         let [child_1, child_2] = self.positioned_children.each_ref().map(|node| match node {
             BinTree::InnerNode(group) => lazy_hierarchy::NodeRef::Group(group),
-            BinTree::Leaf(l, n) => lazy_hierarchy::NodeRef::Leaf(BTLeafRef(
-                l,
-                MaybeBorrowed::Owned(n.clone().uwnrap_infallible().generalize_err()),
-            )),
+            BinTree::Leaf(l, n) => {
+                lazy_hierarchy::NodeRef::Leaf(BTLeafRef(l, Some(n.as_ref().uwnrap_infallible())))
+            }
         });
         // Also with noda data
-        let middle_leaves = self.additional_middle_leaves.iter().map(|leaf| {
-            lazy_hierarchy::NodeRef::Leaf(BTLeafRef(
-                leaf,
-                MaybeBorrowed::Owned(StaticNodeInfo {
-                    fl_time: deep_sorter::FirstLast::new_single(leaf.get_time()),
-                    fl_pos: leaf.get_position().map(|loc| {
-                        debug_assert!(false, "Middle leaf suddenly has a valid location");
-                        FirstLast::new_single(loc)
-                    }),
-                    naming_data: OnceLock::new(),
-                }),
-            ))
-        });
+        let middle_leaves = self
+            .additional_middle_leaves
+            .iter()
+            .map(|leaf| lazy_hierarchy::NodeRef::Leaf(BTLeafRef(leaf, None)));
 
         Ok(iter::once(child_1)
             .chain(middle_leaves)
@@ -177,17 +167,18 @@ where
     fn group_data(&self) -> () {}
 
     fn node_data(&self) -> Self::NodeData {
-        MaybeBorrowed::Owned((*self.node_data).clone().generalize_err())
+        Some(self.node_data.as_ref().uwnrap_infallible())
     }
 
-    type NodeData = MaybeBorrowed<'a, StaticNodeInfo<Item, NDItem, NameErr, Item::PositionErr>>; // TODO: Remove MaybeBorrowed, it's all owned anyways
+    type NodeData = Option<&'a StaticNodeInfo<Item, NDItem, NameErr, Infallible>>; // TODO: Remove MaybeBorrowed, it's all owned anyways
     type LeafData = &'a Item;
     type GroupData = ();
     type StructureErr = Infallible;
-    type LeafRef = BTLeafRef<'a, Item, StaticNodeInfo<Item, NDItem, NameErr, Item::PositionErr>>;
+    type LeafRef = BTLeafRef<'a, Item, StaticNodeInfo<Item, NDItem, NameErr, Infallible>>;
 }
 
-impl<Item: SortableItem, NDItem: Clone, NameErr: Clone> AsGroupRef for BinTree<Item, NDItem, NameErr>
+impl<Item: SortableItem, NDItem: Clone, NameErr: Clone> AsGroupRef
+    for BinTree<Item, NDItem, NameErr>
 where
     StaticNodeInfo<Item, NDItem, NameErr, Item::PositionErr>: Clone,
 {

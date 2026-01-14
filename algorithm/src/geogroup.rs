@@ -102,7 +102,8 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone> 
                 let create_inherited_data = || InheritedData {
                     path_part: vec![group.node_data().data.id],
                     naming_data: group.node_data().data.get_naming_data()
-                        .map(|res| res.ok())
+                        .map(|res| res.as_ref().ok().cloned())
+                        .ok()
                         .flatten()
                         .unwrap_or_else(|| Vec::new()),
                 };
@@ -152,8 +153,10 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone> 
                 let mut id_path = node_data.inherited.path_part;
                 id_path.push(node_data.original.data.id.clone());
                 let name = node_data.original.data.get_naming_data().map(|n|
-                    n.map(|name| [name.clone(), node_data.inherited.naming_data].concat()
-                ));
+                    n.as_ref()
+                        .map(|name| [name.clone(), node_data.inherited.naming_data].concat())
+                        .map_err(|e| e.clone())
+                ).ok();
                 NodeInfo { local_id_path: id_path, name }
             })
     }

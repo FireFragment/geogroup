@@ -65,9 +65,7 @@ pub async fn try_naming_generic<
         &lazy_hierarchy::NodeRef<G>,
         Result<HashSet<NDItem>, NamingErr<LeafNameErr>>,
     ),
-    fun_node_name: &impl AsyncFn(
-        &lazy_hierarchy::NodeRef<G>,
-    ) -> Option<Option<HashSet<NDItem>>>,
+    fun_node_name: &impl AsyncFn(&lazy_hierarchy::NodeRef<G>) -> Option<Option<HashSet<NDItem>>>,
 ) -> NamingRes<NDItem, LeafNameErr> {
     fun_node_name(&node)
         .await
@@ -149,18 +147,23 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clo
     ) {
         // TODO: Do some locks so that it can't be launched multiple times simoultaneously
         let root_name = try_naming_generic(
-            lazy_hierarchy::NodeRef::Group(self.deep_hierarchy()),
+            lazy_hierarchy::NodeRef::Group(
+                self.deep_hierarchy()
+                    .filter(|node| node.node_data().static_info.is_some()),
+            ),
             &async |leaf| fun_get_leaf_name(leaf.leaf_data()).await,
             &async |node, name| {
                 let _ = node
                     .node_data()
                     .static_info
+                    .unwrap() // We know this succeeds thanks to the `filter` call above
                     .naming_data
                     .set(name.map(|n| n.into_iter().collect()));
             },
             &async |node| {
                 node.node_data()
                     .static_info
+                    .unwrap() // We know this succeeds thanks to the `filter` call above
                     .naming_data
                     .get()
                     .map(|n| n.as_ref().ok().map(|n| n.iter().cloned().collect()))
@@ -169,16 +172,17 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clo
         .await;
 
         match root_name {
-            NamingRes::AlreadyNamed(_) => {},
+            NamingRes::AlreadyNamed(_) => {}
             NamingRes::NewlyNamed(hash_set) => {
-                let res = self.deep_hierarchy()
+                let res = self
+                    .deep_hierarchy()
                     .node_data()
                     .static_info
+                    .unwrap() // We know this succeeds thanks to the `filter` call above
                     .naming_data
                     .set(hash_set.map(|n| n.into_iter().collect()));
                 debug_assert!(res.is_ok()) // The cell should have been unitialized, because `AlreadyNamed` branch would be taken otherwise
-            },
+            }
         }
-
     }
 }
