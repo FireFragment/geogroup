@@ -7,14 +7,15 @@ use std::{
 
 use super::*;
 pub mod dissolve;
+pub mod filter;
 pub mod map;
 pub mod mark_root;
-pub mod with_parent;
 pub mod with_idx;
+pub mod with_parent;
 pub use dissolve::Dissolver;
 pub use mark_root::{MarkRootGroupRef, MarkedRootGroupData};
-pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeData};
 pub use with_idx::{WithIdxGroupRef, WithIdxLeafRef};
+pub use with_parent::{WithParentGroupRef, WithParentLeafRef, WithParentNodeData};
 
 use either::Either;
 #[cfg(feature = "colors")]
@@ -93,10 +94,7 @@ pub trait GroupRefUtils: GroupRef {
         utils::map::map_group_data(self, fun)
     }
 
-    fn map_leaf_data<
-        LeafDataNew,
-        F: Fn(&Self::LeafRef) -> LeafDataNew + std::clone::Clone,
-    >(
+    fn map_leaf_data<LeafDataNew, F: Fn(&Self::LeafRef) -> LeafDataNew + std::clone::Clone>(
         self,
         fun: F,
     ) -> impl GroupRef<
@@ -108,14 +106,18 @@ pub trait GroupRefUtils: GroupRef {
         utils::map::map_leaf_data(self, fun)
     }
 
-    fn map_node_data<
-        NodeDataNew,
-        F: Fn(NodeRef<Self>) -> NodeDataNew + Clone,
-    >(
+    fn map_node_data<NodeDataNew, F: Fn(NodeRef<Self>) -> NodeDataNew + Clone>(
         self,
         fun: F,
-    ) -> utils::map::MappedGroupRef<Self, utils::map::NodeDataMapper<F>>  {
+    ) -> utils::map::MappedGroupRef<Self, utils::map::NodeDataMapper<F>> {
         utils::map::map_node_data(self, fun)
+    }
+
+    fn filter<F: Fn(&NodeRef<Self>) -> bool + Clone>(
+        self,
+        fun: F,
+    ) -> utils::filter::FilteredGroupRef<Self, F> {
+        utils::filter::new(self, fun)
     }
 
     fn map_structure_error<
@@ -147,14 +149,15 @@ pub trait GroupRefUtils: GroupRef {
         LeafData = Self::LeafData,
         NodeData = Self::NodeData,
         StructureErr = Self::StructureErr,
-    >
-    {
-        utils::dissolve::new(self, fun_should_dissolve)
-            .map_node_data(|node| {
-                // There are no inherited data
-                let dissolve::NodeData { original, inherited: () } = node.node_data();
-                original
-            })
+    > {
+        utils::dissolve::new(self, fun_should_dissolve).map_node_data(|node| {
+            // There are no inherited data
+            let dissolve::NodeData {
+                original,
+                inherited: (),
+            } = node.node_data();
+            original
+        })
     }
 
     /// Move all children from a group to its parent group if `fun_should_dissolve` returns [Some] for it.
@@ -167,9 +170,7 @@ pub trait GroupRefUtils: GroupRef {
     /// # Parameters
     /// - `fun_dissolve`: Function which determines which groups should be dissolved and generates `InheritedData`
     /// - `fun_fold`: Function which merges multiple `InheritedData`
-    fn dissolve_by_key_and_fold<
-        InheritedData: Clone + Default,
-    >(
+    fn dissolve_by_key_and_fold<InheritedData: Clone + Default>(
         self,
         fun_dissolve: impl Fn(&Self) -> Option<InheritedData> + Clone,
         fun_fold: impl Fn(InheritedData, InheritedData) -> InheritedData + Clone,
@@ -184,7 +185,6 @@ pub trait GroupRefUtils: GroupRef {
     {
         utils::dissolve::new_folding(self, fun_dissolve, fun_fold)
     }
-
 
     /// Utility for marking the root group in a hierarchy
     ///
