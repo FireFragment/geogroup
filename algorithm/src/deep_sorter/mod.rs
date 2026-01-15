@@ -124,15 +124,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                 let node_data = node_ref.node_data();
                 NodeInfo {
                     static_info: node_data.data.data,
-                    id: match node_data.index {
-                        0 => HorizontalIdx::Left,
-                        1 => HorizontalIdx::Right,
-                        idx => {
-                            // TODO: This CAN happen when there're items in the middle
-                            debug_assert!(false, "Index bigger than 1 in binary tree: {idx}");
-                            HorizontalIdx::Right
-                        }
-                    },
+                    id: node_data.index
                 }
             })
         //
@@ -190,7 +182,7 @@ impl<T: Clone> FirstLast<T> {
 
 pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
     static_info: Option<&'hier StaticNodeInfo<Item, NDItem, NameErr>>,
-    pub id: HorizontalIdx,
+    pub id: usize,
 }
 
 #[derive(Clone, Hash, Error, Debug)]

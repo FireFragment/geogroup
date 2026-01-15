@@ -11,7 +11,7 @@ pub struct NodeInfo<NDItem = (), NameErr = Infallible> {
     /// If you join all `local_id_path`s of a node's parents, you get the unique _identification path_ of the node.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
-    pub local_id_path: Vec<HorizontalIdx>,
+    pub local_id_path: Vec<usize>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
     pub name: Option<Result<Vec<NDItem>, NameErr>>
 }
@@ -85,7 +85,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone> 
         /// Data that is passed from dissolved groups to their children
         #[derive(Clone, Debug)]
         struct InheritedData<NDItem> {
-            path_part: Vec<HorizontalIdx>,
+            path_part: Vec<usize>,
             naming_data: Vec<NDItem>
         }
 
