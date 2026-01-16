@@ -7,7 +7,6 @@ use std::{
 use rayon::prelude::ParallelIterator;
 use std::iter;
 
-pub mod gui_support;
 pub mod caching_file_item;
 pub use caching_file_item::CachedFileSortableItem;
 //pub mod loading_file_item;

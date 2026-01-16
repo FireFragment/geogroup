@@ -125,7 +125,7 @@ impl<FromTimeError, FromLocationError> LocData<FromTimeError, FromLocationError>
 pub type LoaderSpecificLocData<Loader> =
     LocData<<Loader as MutDataLoader>::TimeError, <Loader as MutDataLoader>::LocationError>;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum LocationError {
     #[cfg(feature = "exif")]
     #[error(transparent)]

@@ -165,11 +165,6 @@ impl<Item: SortableItem, NDItem, NameErr, PosErr> StaticNodeInfo<Item, NDItem, N
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub struct FirstLast<T> {
-    pub first: T,
-    pub last: T,
-}
 
 impl<T: Clone> FirstLast<T> {
     pub fn new_single(t: T) -> Self {
@@ -206,6 +201,14 @@ impl<'hier, Item: SortableItem, NDItem: Clone, NameErr: Clone>
             .naming_data
             .get()
             .ok_or(GetNamingDataErr::NotYetAssigned)
+    }
+
+    /// Get first and last time of all the contained subitems if group or of myself if leaf
+    ///
+    /// Returns [`None`] if this is a "middle" leaf (ie. leaf where it wasn't possible to obtain location).
+    /// All groups should have this be [`Some`]
+    pub fn get_first_last_time(&self) -> Option<&FirstLast<Item::Time>> {
+        self.static_info.map(|static_info| &static_info.fl_time)
     }
 }
 

@@ -232,6 +232,7 @@ pub fn apply(ctx: &Context, accent_color: Color32) {
 
         // MISCELLANEOUS
         style.interaction.selectable_labels = false;
+        style.interaction.tooltip_delay = 0.0;
         style.animation_time = 0.2;
         style.visuals.slider_trailing_fill = true;
     });

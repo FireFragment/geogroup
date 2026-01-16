@@ -141,7 +141,7 @@ impl App {
         }
 
         egui::TopBottomPanel::top("ribbon tab bar")
-            .frame(Frame::none())
+            .frame(Frame::new())
             .show_separator_line(false)
             .show(ctx, |ui| {
                 use tabbar::Item::*;
@@ -423,10 +423,7 @@ pub fn show_hiearchy(
             ui.horizontal_centered(|ui| {
                 show_hiearchy_inner(
                     ui,
-                    &hiearchy
-                        .root_final()
-                        .map_node_data(|n| n.node_data().name)
-                        .map_leaf_data(|l| l.leaf_data()),
+                    &hiearchy.root_final(),
                     &mut selecion_indices,
                     0,
                     flatten_mode,
@@ -448,12 +445,7 @@ fn show_hiearchy_list(
     current_depth: usize,
     group_row_size: f32,
     image_scale: u16,
-    items: &Vec<NodeRef<impl lazy_hierarchy::GroupRef<
-        GroupData = backend::main_hierarchy::GroupData,
-        NodeData = Option<impl AsRef<str>>,
-        LeafData = backend::main_hierarchy::LeafData,
-        StructureErr = impl Debug
-    >>>,
+    items: &Vec<NodeRef<impl main_hierarchy::ImplGroupRef>>,
     id: egui::Id
 ) -> bool {
     let mut selection_modified = false;
@@ -481,10 +473,16 @@ fn show_hiearchy_list(
                 let idx = row.index();
                 let child = &items[idx];
                 let child_data = child.node_data();
-                let child_name = child_data.as_ref();
 
-                let selected = selected_indices.get(current_depth) == Some(&row.index());
+                let mut selected = selected_indices.get(current_depth) == Some(&row.index());
+                // Don't highlight "initializing" cells
+                if let lazy_hierarchy::NodeRef::Leaf(leaf) = child {
+                    if let backend::main_hierarchy::LeafData::LazyGroupInitializing { .. } = leaf.leaf_data() {
+                        selected = false;
+                    }
+                }
                 row.set_selected(selected);
+
                 if let lazy_hierarchy::NodeRef::Group(g) = child {
                     if let main_hierarchy::GroupData::LazySubgroupRoot = g.group_data() {
                         /*row.set_selected(false);
@@ -556,7 +554,7 @@ fn show_hiearchy_list(
                                 });
                             } else {*/
                                 // TODO: Group names
-                                name_label(ui, child_name, true, id.with(idx));
+                                name_label(ui, child_data, true, id.with(idx));
                             //}
 
                         }
@@ -578,7 +576,7 @@ fn show_hiearchy_list(
                                                .ui(ui);
                                            },
                                         }
-                                        name_label(ui, child_name, false, id.with(idx));
+                                        name_label(ui, child_data, false, id.with(idx));
                                     });
                                 }
                                 LeafData::LazyGroupInitializing { message, progress } => {
@@ -614,32 +612,41 @@ fn show_hiearchy_list(
     selection_modified
 }
 
-fn name_label(ui: &mut egui::Ui, label: Option<impl AsRef<str>>, is_group: bool, id: impl Into<egui::Id>) {
-    if is_group {
-        ui.label("🗁");
-    };
-    let label = label.map(|s| s.as_ref().to_string());
-    if label.is_none() {
-        ui.spinner();
-    }
-    ui.add(egui::Label::new(
-        if let Some(label) = label {
-            label.into()
-        } else {
-            RichText::new(format!("Naming...")).italics()
-        }
-    ).selectable(false));
+fn name_label(ui: &mut egui::Ui, node_data: main_hierarchy::NodeData, is_group: bool, id: impl Into<egui::Id>) {
+
+        ui.horizontal(|ui| {
+            match node_data.name {
+                main_hierarchy::NameStatus::Named(_) => {},
+                main_hierarchy::NameStatus::InProgress(_) => {
+                    ui.spinner();
+                    //ui.small(RichText::new("Naming...").italics());
+                },
+                main_hierarchy::NameStatus::Error { ref err, name: _ } => {
+                    ui.label(RichText::new("🏷 ").color(Color32::RED))
+                        .on_hover_text(
+                            RichText::new(format!("Naming failed: {err}")).color(Color32::RED));
+                    //ui.small(RichText::new("Naming failed").color(Color32::RED));
+                },
+            }
+
+            if is_group {
+                ui.label("🗁");
+            };
+
+            ui.add(egui::Label::new(
+                if let Some(label) = node_data.name.get_name() {
+                    label.into()
+                } else {
+                    RichText::new(format!("Name missing")).italics()
+                }
+            ).selectable(false));
+        });
 }
 
 /// Returns whether the selection was modified.
 fn show_hiearchy_inner(
     ui: &mut egui::Ui,
-    hiearchy: &impl lazy_hierarchy::GroupRef<
-        GroupData = backend::main_hierarchy::GroupData,
-        NodeData = Option<impl AsRef<str>>,
-        LeafData = backend::main_hierarchy::LeafData,
-        StructureErr = impl Debug,
-    >,
+    hiearchy: &impl main_hierarchy::ImplGroupRef,
     selected_indices: &mut Vec<usize>,
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
@@ -938,7 +945,7 @@ pub enum AppContent {
 struct MainPage {
     pane: Option<PaneContent>,
     hiearchy: backend::main_hierarchy::TemplateHiearchy,
-    flatten_mode: Option<FlattenMode>,
+    flatten_mode: Option<FlattenMode>, // TODO: Remove
     selection: Vec<backend::selection::PathComponent>,
     image_scale: u16,
     progress: Option<Progress>,
