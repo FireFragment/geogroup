@@ -28,13 +28,9 @@ pub fn new(path: PathBuf) -> Result<NodeRef<FolderRef>, ErrFileNorDir> {
 
 impl lazy_hierarchy::GroupRef for FolderRef {
     type NodeData = PathBuf;
-
     type LeafData = ();
-
     type GroupData = ();
-
     type StructureErr = std::io::Error;
-
     type LeafRef = FileRef;
 
     fn get_children(
@@ -43,8 +39,6 @@ impl lazy_hierarchy::GroupRef for FolderRef {
     where
         Self: Sized,
     {
-        use lazy_hierarchy::NodeRef;
-
         Ok(self
             .0
             .read_dir()?
@@ -52,7 +46,8 @@ impl lazy_hierarchy::GroupRef for FolderRef {
             .filter_map(|child: Result<_, Either<std::io::Error, _>>| match child {
                 Ok(child) => Some(child),
                 Err(err) => {
-                    // TODO: Handle better
+                    // TODO: Handle fs errors better / show them to user
+                    // TODO: Check if this isn't spammy
                     log::error!(
                         "Failed to read child of {}, ignoring it:\n{err}",
                         self.0.display()

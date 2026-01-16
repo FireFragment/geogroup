@@ -1,5 +1,3 @@
-use crate::deep_sorter::FirstLast;
-
 use super::*;
 use std::borrow::Cow;
 use std::cell::OnceCell;

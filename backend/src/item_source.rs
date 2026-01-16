@@ -140,7 +140,7 @@ impl CachingItemSource {
     /// Clears the cache, making it empty until initialized with eg. [`Self::prepare_cache`]
     pub fn clear_cache(&mut self) {
         match &mut self.0 {
-            ItemSourceInner::Complex { ref mut cache, .. } => {
+            ItemSourceInner::Complex { cache, .. } => {
                 cache.take();
             }
             ItemSourceInner::Enumerated(_) => {}

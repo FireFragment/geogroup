@@ -7,7 +7,7 @@ pub mod dynamic;
 #[derive(Debug, From)]
 pub enum Final {
     Fs(fs_hierarchy::FolderRef),
-    Sorted (LGSorted),
+    Sorted(LGSorted),
 }
 
 #[derive(Debug, Clone)]
@@ -16,8 +16,8 @@ pub enum Template {
     Fs(fs_hierarchy::FolderRef),
     Sorted {
         item_source: ItemSource,
-        params: algorithm::Params
-    }
+        params: algorithm::Params,
+    },
 }
 
 impl Final {
@@ -37,36 +37,61 @@ impl Final {
                         path: FileRef::new(leaf.node_data()),
                     })
                     .map_node_data(|node| NodeData {
-                        name: node
-                            .node_data()
-                            .file_name()
-                            .map(|name| (*name.to_string_lossy()).to_owned()),
-                        local_id_path: None
-                        /*.unwrap_or_else(|| {
-                                log::error!("Path ending in `..`: {:?}", node.node_data());
-                                String::new()
-                            }),*/
+                        name: NameStatus::named_or_unexpected(
+                            node.node_data()
+                                .file_name()
+                                .map(|name| (*name.to_string_lossy()).to_owned()),
+                        ),
+                        local_id_path: None,
+                        additional_problems: Vec::new(), /*.unwrap_or_else(|| {
+                                                             log::error!("Path ending in `..`: {:?}", node.node_data());
+                                                             String::new()
+                                                         }),*/
                     }),
             ),
             lazy_group::Final::Sorted(sorted, ..) => Either::Right(
-                sorted.sorter
+                sorted
+                    .sorter
                     .hierarchy()
                     .map_structure_error(|err, _| match err {})
-                    .map_node_data(|node| NodeData {
-                        name: node.node_data().name.map(|name_res| match name_res {
-                            Ok(name_vec) => name_vec.join(", "),
-                            Err(err) => format!("Naming failed: {err}"),
-                        }),
+                    .map_node_data(|node| {
+                        let time = node.node_data().fl_time.first.format("%Y-%m-%d %H-%M-%S");
+                        NodeData {
+                            name: match node.node_data().name {
+                                // TODO: Add date as name
+                                algorithm::NameStatus::Named(items) => {
+                                    NameStatus::Named(format!("{time} {}", items.join(",")))
+                                }
+                                algorithm::NameStatus::InProgress => NameStatus::InProgress(Some(time.to_string())),
+                                algorithm::NameStatus::LocationMissing => {
+                                    NameStatus::new_location_missing(Some(time.to_string()))
+                                }
+                                algorithm::NameStatus::OtherError(err) => NameStatus::Error {
+                                    err: NameError::Other(err),
+                                    name: Some(time.to_string()),
+                                },
+                            },
                             /*match node {
                                 lazy_hierarchy::NodeRef::Group(gr) =>
                                     gr.group_data().separation.map(|s| format!("Separation: {}m", s/ONE_METER_DISTANCE)),
                                 lazy_hierarchy::NodeRef::Leaf(_) => None,
                             } */
-
                             //Some(format!("{}", node.node_data().local_id_path.into_iter().map(|id| id as u8).join("/"))),
-
-
-                        local_id_path: Some(node.node_data().local_id_path.into_iter().map(|id| id as u8).collect())
+                            local_id_path: Some(
+                                node.node_data()
+                                    .local_id_path
+                                    .into_iter()
+                                    .map(|id| id as u8)
+                                    .collect(),
+                            ),
+                            additional_problems: if let lazy_hierarchy::NodeRef::Leaf(leaf) = node
+                                && let Err(e) = &leaf.leaf_data().position
+                            {
+                                vec![e.clone().into()]
+                            } else {
+                                Vec::new()
+                            }, // TODO: Report problems with location
+                        }
                     })
                     .map_leaf_data(|leaf| leaf.leaf_data().data.to_owned()) // OPT: Possibly needless clone
                     .map_group_data(|_| ()),
@@ -75,14 +100,15 @@ impl Final {
     }
 }
 
-
 impl Template {
     /// Potentially long-running. Returns [None] on termination
     pub fn into_final(self, progress_callback: &mut ProgressCallback) -> Option<lazy_group::Final> {
         match self {
             Template::Fs(it) => Some(Final::Fs(it)),
-            Template::Sorted { item_source, params } =>
-                Some(LGSorted::new(item_source, params, progress_callback)?.into()),
+            Template::Sorted {
+                item_source,
+                params,
+            } => Some(LGSorted::new(item_source, params, progress_callback)?.into()),
         }
     }
 }

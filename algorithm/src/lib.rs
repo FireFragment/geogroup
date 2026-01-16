@@ -13,6 +13,7 @@ pub use type_level_logic::True as TyTrue;
 pub use type_level_logic::False as TyFalse;
 pub use type_level_logic::TyBool;
 pub use type_level_logic::TyOption;
+pub use geogroup::NameStatus;
 
 #[cfg(test)]
 mod tests;
@@ -56,4 +57,10 @@ impl Default for Params {
     fn default() -> Self {
         Params { depth: MAX_DEPTH / 2, minimum_distance: 100 * ONE_METER_DISTANCE }
     }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct FirstLast<T> {
+    pub first: T,
+    pub last: T,
 }

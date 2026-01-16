@@ -2,6 +2,7 @@ use derive_more::From;
 use geogroup_loaders::MutDataLoader as _;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
+use core::fmt;
 use std::{collections::HashSet, convert::Infallible, hash::Hash, thread};
 
 use super::*;
@@ -42,15 +43,17 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                     lazy_hierarchy::concrete::Leaf::new(
                         InnerLeafData::LazySubgroup(value),
                         NodeData {
-                            name: Some(String::from("Root")), // TODO: Translate
+                            name: NameStatus::Named(String::from("Root")), // TODO: Translate
                             local_id_path: None,
+                            additional_problems: Vec::new()
                         },
                     ),
                 )],
                 (),
                 NodeData {
-                    name: Some(String::from("Root")), // TODO: Translate
+                    name: NameStatus::Named(String::from("Root")), // TODO: Translate
                     local_id_path: None,
+                    additional_problems: Vec::new()
                 },
             ),
         ))
@@ -220,6 +223,26 @@ pub enum StructureErr<E: std::error::Error> {
     Error(E),
 }
 
+
+/// "Trait alias" to the return value of [`TemplateHiearchy::root_final`] - implements [`lazy_hierarchy::GroupRef`]
+pub trait ImplGroupRef: lazy_hierarchy::GroupRef<
+    GroupData = GroupData,
+    NodeData = NodeData,
+    LeafData = LeafData,
+    StructureErr = StructureErr<Self::E>,
+> {
+    type E: std::error::Error;
+}
+
+impl<E: std::error::Error, T: lazy_hierarchy::GroupRef<
+    GroupData = GroupData,
+    NodeData = NodeData,
+    LeafData = LeafData,
+    StructureErr = StructureErr<E>,
+>> ImplGroupRef for T {
+    type E = E;
+}
+
 impl TemplateHiearchy {
     /// Converts to [lazy_hierarchy::GroupRef] representing the "final" hierarchy,
     /// ie. the form of the hierarchy to be displayed to the user. This is in contrast with [`self.0`](TemplateHiearchy::0)
@@ -229,12 +252,7 @@ impl TemplateHiearchy {
     /// to be applied, see [GroupData::LazySubgroupRoot] which does not correspond to a folder.
     pub fn root_final<'a>(
         &'a self,
-    ) -> impl lazy_hierarchy::GroupRef<
-        GroupData = GroupData,
-        LeafData = LeafData,
-        NodeData = NodeData,
-        StructureErr = StructureErr<impl std::error::Error>,
-    > + 'a {
+    ) -> impl ImplGroupRef + 'a {
         use lazy_hierarchy::fused;
 
         self.0
@@ -291,9 +309,73 @@ pub enum GroupData {
     LazySubgroupMember,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum NodeProblem {
+    #[error("failed to get location: {0}")]
+    NoLocation(#[from] loaders::general_loader::LocationError) // TODO: Make this a reference
+}
+
+#[derive(Clone, Debug)]
+pub enum NameStatus {
+    Named(String),
+    /// Naming is in progress. Possibly contains partial name (eg. containing only date)
+    InProgress(Option<String>),
+    /// Naming has been attempted, but failed. Possibly contains partial name (eg. containing only date)
+    Error {err: NameError, name: Option<String>},
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum NameError {
+    #[error("location is missing")]
+    LocationMissing,
+    #[error(transparent)]
+    Other(algorithm::deep_sorter::naming::NamingErr<NamingLeafErr>), // TODO: NamingLeafErr::LocationErr is duplicate??
+    /// This should never happen, but here we go...
+    #[error("unexpected error - this is a bug")]
+    UnexpectedError
+}
+
+impl NameStatus {
+    pub fn new_location_missing(alt_name: Option<String>) -> Self {
+        NameStatus::Error{ err: NameError::LocationMissing, name: alt_name }
+    }
+    pub fn new_unexpected_err() -> Self {
+        NameStatus::Error{ err: NameError::UnexpectedError, name: None }
+    }
+
+    /// Returns `true` if the name status is [`InProgress`].
+    ///
+    /// [`InProgress`]: NameStatus::InProgress
+    #[must_use]
+    pub fn is_in_progress(&self) -> bool {
+        matches!(self, Self::InProgress(..))
+    }
+}
+
+impl NameStatus {
+    /// Gets name on best-effort basis - if `self` isn't [`NameStatus::Named`], the returned name may be incomplete or missing
+    pub fn get_name(&self) -> Option<&str> {
+        match self {
+            NameStatus::Named(name) => Some(name),
+            NameStatus::InProgress(name) => name.as_ref().map(|s| s.as_str()),
+            NameStatus::Error { err: _, name } => name.as_ref().map(|s| s.as_str()),
+        }
+    }
+
+    /// If [None], returns [`NameStatus::UnexpectedError`]
+    pub fn named_or_unexpected(input: Option<String>) -> Self {
+        match input {
+            Some(n) => NameStatus::Named(n),
+            None => NameStatus::new_unexpected_err(),
+        }
+    }
+}
+
+// TODO: Allow holding references to the original hierarchy
 #[derive(Clone, Debug)]
 pub struct NodeData {
-    pub name: Option<String>,
+    pub name: NameStatus,
+    pub additional_problems: Vec<NodeProblem>,
     /// If you join all `local_id_path`s of a node's parents up to the first [None],
     /// you get an _identification path_ of the node. It's unique in the subtree of the first node whose `local_id_path` is None.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
