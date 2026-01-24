@@ -21,17 +21,18 @@ pub enum HorizontalIdx {
     Right = 1,
 }
 
-pub enum BinTree<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool = TyTrue> {
+/// `AddGD` = additional group data
+pub enum BinTree<Item: SortableItem, NDItem, NameErr, AddGD = (), NodeInfoPresent: TyBool = TyTrue> {
     // IMPORTANT: When changing fields, make sure to update Debug impl
-    InnerNode(BTInnerNode<Item, NDItem, NameErr, NodeInfoPresent>),
+    InnerNode(BTInnerNode<Item, NDItem, NameErr, AddGD, NodeInfoPresent>),
     Leaf(
         Item,
         TyOption<StaticNodeInfo<Item, NDItem, NameErr, Infallible>, NodeInfoPresent>,
     ),
 }
 
-impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool> IndexMut<HorizontalIdx>
-    for BTInnerNode<Item, NDItem, NameErr, NodeInfoPresent>
+impl<Item: SortableItem, NDItem, NameErr, AddGD, NodeInfoPresent: TyBool> IndexMut<HorizontalIdx>
+    for BTInnerNode<Item, NDItem, NameErr, AddGD, NodeInfoPresent>
 {
     fn index_mut(&mut self, index: HorizontalIdx) -> &mut Self::Output {
         match index {
@@ -41,8 +42,8 @@ impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool> IndexMut<Hori
     }
 }
 
-impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool> Index<HorizontalIdx>
-    for BTInnerNode<Item, NDItem, NameErr, NodeInfoPresent>
+impl<Item: SortableItem, NDItem, NameErr, AddGD, NodeInfoPresent: TyBool> Index<HorizontalIdx>
+    for BTInnerNode<Item, NDItem, NameErr, AddGD, NodeInfoPresent>
 {
     type Output = BinTree<Item, NDItem, NameErr, NodeInfoPresent>;
     fn index(&self, index: HorizontalIdx) -> &Self::Output {
@@ -104,12 +105,14 @@ impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool>
     }
 }
 
-pub struct BTInnerNode<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool = TyTrue> {
+/// `AddGD` = additional group data
+pub struct BTInnerNode<Item: SortableItem, NDItem, NameErr, AddGD = (), NodeInfoPresent: TyBool = TyTrue> {
     // IMPORTANT: When changing fields, make sure to update Debug impl
     pub positioned_children: Box<[BinTree<Item, NDItem, NameErr, NodeInfoPresent>; 2]>,
     pub node_data: TyOption<StaticNodeInfo<Item, NDItem, NameErr, Infallible>, NodeInfoPresent>,
     /// For those items, [`StaticNodeInfo`] is generated lazily on-demand if needed
     pub additional_middle_leaves: Vec<Item>,
+    pub additional_data: AddGD
 }
 
 /// [`lazy_hierarchy::LeafRef`] implementation for [`BinTree`]
@@ -215,7 +218,8 @@ pub mod bloat {
             Item: SortableItem<Position = impl fmt::Debug, Time = impl fmt::Debug> + fmt::Debug,
             NDItem: fmt::Debug,
             NameErr: fmt::Debug,
-        > fmt::Debug for BTInnerNode<Item, NDItem, NameErr>
+            AddGD: fmt::Debug,
+        > fmt::Debug for BTInnerNode<Item, NDItem, NameErr, AddGD>
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.debug_struct("BTInnerNode")
