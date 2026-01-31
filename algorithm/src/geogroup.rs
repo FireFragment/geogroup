@@ -1,3 +1,5 @@
+//! The main struct here is [`Sorter`]
+
 use core::fmt;
 use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
@@ -29,12 +31,14 @@ pub struct NodeInfo<Time, NDItem = (), NameErr = Infallible> {
     pub fl_time: FirstLast<Time>,
 }
 
+/// `AddGD` = additional group data
 pub struct Sorter<
     Item: SortableItem,
     NDItem: Clone + PartialEq + Eq + Hash = (),
     NameErr = Infallible,
+    AddGD = ()
 > {
-    deep_sorter: Arc<DeepSorter<Item, NDItem, NameErr>>,
+    deep_sorter: Arc<DeepSorter<Item, NDItem, NameErr, AddGD>>,
     params: Params,
 }
 
@@ -48,9 +52,10 @@ where
     Item::Position: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { deep_sorter, params } = self;
         f.debug_struct("Sorter")
-            .field("deep_sorter", &self.deep_sorter)
-            .field("params", &self.params)
+            .field("deep_sorter", deep_sorter)
+            .field("params", params)
             .finish()
     }
 }

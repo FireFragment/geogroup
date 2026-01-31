@@ -13,18 +13,18 @@ use std::hash::Hash;
 use thiserror::Error;
 use unwrap_infallible::UnwrapInfallible as _;
 
-pub struct DeepSorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr> {
-    bintree: BinTree<Item, NDItem, NameErr, TyTrue>,
+pub struct DeepSorter<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr, AddGD = ()> {
+    bintree: BinTree<Item, NDItem, NameErr, AddGD, TyTrue>,
 }
 
 impl<
-        Item: SortableItem + fmt::Debug,
-        NDItem: fmt::Debug + Clone + PartialEq + Eq + Hash,
-        NameErr: fmt::Debug,
-    > fmt::Debug for DeepSorter<Item, NDItem, NameErr>
+        Item: SortableItem,
+        NDItem: Clone + PartialEq + Eq + Hash,
+        NameErr,
+        AddGD,
+    > fmt::Debug for DeepSorter<Item, NDItem, NameErr, AddGD>
 where
-    Item::Time: fmt::Debug,
-    Item::Position: fmt::Debug,
+    bintree::BinTree<Item, NDItem, NameErr, AddGD>: std::fmt::Debug
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeepSorter")
@@ -250,13 +250,14 @@ pub struct GroupInfo {
 ///
 /// Expects that all leaves in the binary tree
 /// (but not in [`additional_middle_leaves`](BTInnerNode::additional_middle_leaves) contain location - otherwise panics.
-fn provide_info<Item: SortableItem, NDItem, NameErr>(
-    tree: BinTree<Item, NDItem, NameErr, TyFalse>,
-) -> BinTree<Item, NDItem, NameErr, TyTrue> {
+fn provide_info<Item: SortableItem, NDItem, NameErr, AddGD>(
+    tree: BinTree<Item, NDItem, NameErr, AddGD, TyFalse>,
+) -> BinTree<Item, NDItem, NameErr, AddGD, TyTrue> {
     match tree {
         BinTree::InnerNode(node) => {
             let children = Box::new(node.positioned_children.map(|c| provide_info(c)));
             BinTree::InnerNode(BTInnerNode {
+                additional_data: node.additional_data,
                 node_data: StaticNodeInfo {
                     naming_data: OnceLock::new(),
                     fl_time: FirstLast {

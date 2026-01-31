@@ -5,8 +5,8 @@ use super::*;
 /// Same as [`sort_to_binary_tree`], but assumes that the points are ordered.
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut items: impl Iterator<Item=Item>)
--> BinTree<Item, NDItem, NameErr, TyFalse> {
+pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr, AddGD: Default>(mut items: impl Iterator<Item=Item>)
+-> BinTree<Item, NDItem, NameErr, AddGD, TyFalse> {
     #[derive(Clone, Debug)]
     struct CameraPathComponent {
         pub child_index: HorizontalIdx,
@@ -104,7 +104,8 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut item
         take_mut::take(node_to_replace, |prev_val| BinTree::InnerNode(BTInnerNode {
             positioned_children: Box::new([prev_val, BinTree::Leaf(item_to_append, TyOption::new_empty())]),
             node_data: TyOption::new_empty(),
-            additional_middle_leaves: items_before_without_pos
+            additional_middle_leaves: items_before_without_pos,
+            additional_data: Default::default()
         }));
 
         cameras_paths.insert(item_to_append_cam, CameraInfo {
@@ -138,6 +139,7 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut item
 /// and then it recurses again on theese two groups
 ///
 /// Panics on `input.is_empty()`
-pub fn sort_to_binary_tree<Item: SortableItem, NDItem, NameErr,>(points: impl IntoIterator<Item=Item>) -> BinTree<Item, NDItem, NameErr, TyFalse> {
+pub fn sort_to_binary_tree<Item: SortableItem, NDItem, NameErr, AddGD: Default>(points: impl IntoIterator<Item=Item>)
+-> BinTree<Item, NDItem, NameErr, AddGD, TyFalse> {
     sort_ordered_to_binary_tree(points.into_iter().sorted_by_key(|p| p.get_time()))
 }

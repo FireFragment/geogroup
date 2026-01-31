@@ -45,7 +45,7 @@ impl<Item: SortableItem, NDItem, NameErr, AddGD, NodeInfoPresent: TyBool> IndexM
 impl<Item: SortableItem, NDItem, NameErr, AddGD, NodeInfoPresent: TyBool> Index<HorizontalIdx>
     for BTInnerNode<Item, NDItem, NameErr, AddGD, NodeInfoPresent>
 {
-    type Output = BinTree<Item, NDItem, NameErr, NodeInfoPresent>;
+    type Output = BinTree<Item, NDItem, NameErr, AddGD, NodeInfoPresent>;
     fn index(&self, index: HorizontalIdx) -> &Self::Output {
         match index {
             HorizontalIdx::Left => &self.positioned_children[0],
@@ -85,7 +85,7 @@ impl<Leaf, InnerNode, Node> IndexMut<HorizontalIdx> for BTInnerNode<Leaf, InnerN
 //     }
 // }
 
-impl<Item: SortableItem, NDItem, NameErr> BinTree<Item, NDItem, NameErr> {
+impl<Item: SortableItem, NDItem, AddGD, NameErr> BinTree<Item, NDItem, NameErr, AddGD> {
     pub fn get_node_info(&self) -> &StaticNodeInfo<Item, NDItem, NameErr> {
         match self {
             BinTree::InnerNode(node) => &node.node_data,
@@ -94,8 +94,8 @@ impl<Item: SortableItem, NDItem, NameErr> BinTree<Item, NDItem, NameErr> {
     }
 }
 
-impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool>
-    BinTree<Item, NDItem, NameErr, NodeInfoPresent>
+impl<Item: SortableItem, NDItem, AddGD, NameErr, NodeInfoPresent: TyBool>
+    BinTree<Item, NDItem, NameErr, AddGD, NodeInfoPresent>
 {
     pub fn get_leftmost_item(&self) -> &Item {
         match self {
@@ -108,7 +108,7 @@ impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool>
 /// `AddGD` = additional group data
 pub struct BTInnerNode<Item: SortableItem, NDItem, NameErr, AddGD = (), NodeInfoPresent: TyBool = TyTrue> {
     // IMPORTANT: When changing fields, make sure to update Debug impl
-    pub positioned_children: Box<[BinTree<Item, NDItem, NameErr, NodeInfoPresent>; 2]>,
+    pub positioned_children: Box<[BinTree<Item, NDItem, NameErr, AddGD, NodeInfoPresent>; 2]>,
     pub node_data: TyOption<StaticNodeInfo<Item, NDItem, NameErr, Infallible>, NodeInfoPresent>,
     /// For those items, [`StaticNodeInfo`] is generated lazily on-demand if needed
     pub additional_middle_leaves: Vec<Item>,
@@ -220,12 +220,15 @@ pub mod bloat {
             NameErr: fmt::Debug,
             AddGD: fmt::Debug,
         > fmt::Debug for BTInnerNode<Item, NDItem, NameErr, AddGD>
+        where bintree::BinTree<Item, NDItem, NameErr, AddGD>: std::fmt::Debug
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let Self { positioned_children, node_data, additional_middle_leaves, additional_data } = self;
             f.debug_struct("BTInnerNode")
-                .field("positioned_children", &self.positioned_children)
-                .field("node_data", &self.node_data)
-                .field("additional_middle_leaves", &self.additional_middle_leaves)
+                .field("positioned_children", positioned_children)
+                .field("node_data", node_data)
+                .field("additional_middle_leaves", additional_middle_leaves)
+                .field("additional_data", additional_data)
                 .finish()
         }
     }
