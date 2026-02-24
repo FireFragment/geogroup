@@ -2,7 +2,12 @@ use clap::Parser as _;
 use flatgeobuf::geozero::GeomProcessor;
 use flatgeobuf::geozero::PropertyProcessor;
 use flatgeobuf::geozero::FeatureProcessor;
+use geo::Area;
+use geo::GeodesicArea;
 use geo::LineString;
+use geo::Polygon;
+use std::cmp::max;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::thread;
 use std::{collections::{HashMap, HashSet}, env, fs::File, io::Read, sync::{atomic::AtomicU32, mpsc}, time::{Duration, Instant}};
@@ -12,6 +17,51 @@ use geo::{Coord, Winding};
 use kv::Key;
 use osmpbfreader::{osmformat::relation, OsmId, OsmPbfReader};
 use rayon::iter::{ParallelBridge, ParallelIterator};
+
+
+/// Copied from osmpbfreader
+pub fn get_objs_and_deps_store<R: std::io::Read, F, T>(osm_pbf_reader: &mut OsmPbfReader<R>, mut pred: F, objects: &mut T) -> osmpbfreader::Result<()>
+where
+    R: std::io::Seek,
+    F: FnMut(&osmpbfreader::OsmObj) -> bool,
+    T: osmpbfreader::StoreObjs,
+{
+    use osmpbfreader::*;
+
+    let mut finished = false;
+    let mut deps = BTreeSet::new();
+    let mut first_pass = true;
+    let mut idx =  0;
+    while !finished {
+        log::debug!(target: "nametiles_generator::get_objs_and_deps", "Pass {idx}, first_pass={first_pass}, deps.len()={}", deps.len());
+        osm_pbf_reader.rewind()?;
+        finished = true;
+        for obj in osm_pbf_reader.par_iter() {
+            let obj = obj?;
+            if (!first_pass || !pred(&obj)) && !deps.contains(&obj.id()) {
+                continue;
+            }
+            finished = match obj {
+                OsmObj::Relation(ref rel) => rel
+                    .refs
+                    .iter()
+                    .filter(|r| !objects.contains_key(&r.member))
+                    .fold(finished, |accu, r| !deps.insert(r.member) && accu),
+                OsmObj::Way(ref way) => way
+                    .nodes
+                    .iter()
+                    .filter(|n| !objects.contains_key(&(**n).into()))
+                    .fold(finished, |accu, n| !deps.insert((*n).into()) && accu),
+                OsmObj::Node(_) => finished,
+            };
+            deps.remove(&obj.id());
+            objects.insert(obj.id(), obj);
+        }
+        first_pass = false;
+        idx += 1;
+    }
+    Ok(())
+}
 
 
 struct KvStoreOSM(pub kv::Store);
@@ -35,11 +85,18 @@ pub fn osm_id_to_kv_key(id: &OsmId) -> Vec<u8> {
 
 impl osmpbfreader::StoreObjs for KvStoreOSM {
     fn insert(&mut self, key: OsmId, value: osmpbfreader::OsmObj) {
-        //println!("Wrote something");
-        self.osm_elems_bucket().set(&osm_id_to_kv_key(&key), &kv::Bincode(value)).unwrap();
+        let t = Instant::now();
+        let osm_elems_bucket = self.osm_elems_bucket();
+        osm_elems_bucket.set(&osm_id_to_kv_key(&key), &kv::Bincode(value)).unwrap();
+        log::trace!(
+            target: "nametiles_generator::storeobjs_impl",
+            "Wrote element {key:?} to the database (it now has {} elements), took {:?}",
+            osm_elems_bucket.len(), t.elapsed()
+        );
     }
 
     fn contains_key(&self, key: &OsmId) -> bool {
+        //log::trace!(target: "osmpbfreader_StoreObjs", "Query asked for {key:?}");
         self.osm_elems_bucket().contains(&osm_id_to_kv_key(&key)).unwrap()
     }
 }
@@ -58,16 +115,18 @@ fn cmp_tag<'a>(tags: &osmpbfreader::Tags, key: &str, vals: impl IntoIterator<Ite
 }
 
 fn include_in_tiles(obj: &osmpbfreader::OsmObj) -> bool {
-    // TODO: Also condsider single ways=
-    (obj.is_relation() && cmp_tag(obj.tags(), "type", ["boundary"])) // Accept all boundary relations
-        || (
-            // Accept ways and multipolygons with "tags of interest"
-            // Important! Update also `include_way_in_tiles` when updating this
-            has_tags_of_interest(obj.tags()) && (
-                obj.way().is_some_and(|way| way.is_closed()) ||
-                (obj.is_relation() && cmp_tag(obj.tags(), "type", ["multipolygon"]))
+    get_name(obj.tags()).is_some() // Only accept objects with a name
+    && (
+        (obj.is_relation() && cmp_tag(obj.tags(), "type", ["boundary"])) // Accept all boundary relations
+            || (
+                // Accept ways and multipolygons with "tags of interest"
+                // Important! Update also `include_way_in_tiles` when updating this
+                has_tags_of_interest(obj.tags()) && (
+                    obj.way().is_some_and(|way| way.is_closed()) ||
+                        (obj.is_relation() && cmp_tag(obj.tags(), "type", ["multipolygon"]))
+                )
             )
-        )
+    )
 }
 
 // Important! Update also `include_in_tiles` when updating this
@@ -117,10 +176,26 @@ struct Args {
 }
 
 fn main() {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info,nametiles_generator=debug"));
+
+    /*
+     *
+     *
+     let logger =
+         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("info,nametiles_generator=debug"))
+             .build();
+
+     let indicatif_progress = indicatif::MultiProgress::new();
+
+     indicatif_log_bridge::LogWrapper::new(indicatif_progress.clone(), logger)
+         .try_init()
+         .unwrap();
+     */
+
     let args = Args::parse();
 
     log::info!("Started");
+    log::trace!("Trace-level logging works :)");
 
     log::info!("Opening the database...");
 
@@ -131,11 +206,14 @@ fn main() {
     //let mut last_logged = Instant::now();
     //
     //
-    let mut tmp_db = KvStoreOSM(kv::Store::new(kv::Config::new("/nix/temporary/nametilesgen/db")).unwrap());
+    let mut tmp_db = KvStoreOSM(kv::Store::new(kv::Config::new(
+        env::var("NAMETILES_GEN_TEMP_DB").expect("Please specify NAMETILES_GEN_TEMP_DB where I can save temporary data")
+    )).unwrap());
 
 
     log::info!("Database opened");
 
+    let have_pbf_path = args.input.is_some();
     if let Some(pbf_path) = args.input {
 
         log::info!("Creating OsmPbfReader...");
@@ -143,16 +221,26 @@ fn main() {
         log::info!("OsmPbfReader created");
 
         log::info!("Finding all boundary relations and their members...");
-        pbf_reader
-            .get_objs_and_deps_store(include_in_tiles, &mut tmp_db)
+        log::info!("Note: this may take a while without any feedback.
+If you want to make sure it actually progresses, you can set the environment variable RUST_LOG=info,nametiles_generator=trace
+(but even then, it takes some time before the first logs appear)");
+        get_objs_and_deps_store(&mut pbf_reader, include_in_tiles, &mut tmp_db)
             .unwrap();
 
         log::info!("...done");
     } else {
-        log::info!("PBF path not provided - using already cached element database")
+        log::warn!("PBF path not provided - using already cached element database
+If you intended to provide it, please specify the PBF file as a command line argument.
+You can get it for your region from https://download.geofabrik.de/");
     }
 
     let objs_of_interest_bucket = tmp_db.osm_elems_bucket();
+
+    if !have_pbf_path && objs_of_interest_bucket.is_empty() {
+        log::error!("No PBF path provided, and no elements were found in the cache.
+This is likely not what you want, the resulting FGB file will likely be empty.
+Please provide the PBF file as a command line argument.");
+    }
 
     //log::info!("Total of {} elements were extracted from the PBF file.", objs_of_interest_bucket.len());
     log::info!("Constructing polygons from the relations");
@@ -166,7 +254,7 @@ fn main() {
         .filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.way().cloned());
 
     struct ProcessedBoundary {
-        pub boundary: LineString,
+        pub polygon: Polygon,
         pub name: String
     }
 
@@ -188,7 +276,7 @@ fn main() {
             .map(|way| objs_of_interest_bucket.get(&osm_id_to_kv_key(&way.member)).unwrap().map(|w| w.0.way().unwrap().to_owned()))
             .collect::<Option<Vec<_>>>();
         let Some(mut unused_member_ways) = opt_unused_member_ways else {
-            log::debug!("Relation {} ({}) is incomplete, skipping it",
+            log::trace!("Relation {} ({}) is incomplete, skipping it",
                 relation.id.0, relation_name // We filtered the relations to all contain names
             );
             return Result::Err(());//continue 'relation_loop;
@@ -200,14 +288,14 @@ fn main() {
 
         while !unused_member_ways.is_empty() { // This loop iterates over all outer rings of the polygon
             let Some(first_way) = unused_member_ways.pop() else {
-                log::debug!("Relation {} ({}) contains no ways, skipping it",
+                log::trace!("Relation {} ({}) contains no ways, skipping it",
                     relation.id.0, relation_name // We filtered the relations to all contain names
                 );
                 return Result::Err(());//continue 'relation_loop;
             };
 
             let Some((mut first_node, mut current_node)) = first_and_last_node(&objs_of_interest_bucket, &first_way) else {
-                log::debug!("Relation {} ({}) contains an incomplete way ({}), skipping it",
+                log::trace!("Relation {} ({}) contains an incomplete way ({}), skipping it",
                     relation.id.0,
                     relation_name, // We filtered the relations to all contain names
                     first_way.id.0
@@ -266,7 +354,12 @@ fn main() {
 
                 polygon_nodes.extend(nodes);
             }
-            polygons.push(geo::LineString::new(polygon_nodes));
+            let mut nodes_ls = LineString::from(polygon_nodes);
+            nodes_ls.make_ccw_winding();  // For correct area calculations later
+            polygons.push(geo::Polygon::new(
+                nodes_ls,
+                Vec::new()
+            ));
         };
 
         /*let Some(winding_order) = geo::LineString::from(polygon_nodes).winding_order() else {
@@ -285,9 +378,9 @@ fn main() {
         println!("{poly}");*/
 
         // Warning: We rely below on the fact that there are NO more than 1 exterior and no interior rings
-        Result::Ok(polygons.into_iter().map(move |boundary| ProcessedBoundary {
-            boundary,
-            name: relation_name.clone()
+        Result::Ok(polygons.into_iter().map(move |polygon| ProcessedBoundary {
+            polygon,
+            name: relation_name.clone(),
         }).par_bridge())
     });
 
@@ -295,27 +388,46 @@ fn main() {
         let Some(name) = get_name(&way.tags) else {
             return None;
         };
-        Some(ProcessedBoundary { boundary: osm_way_to_coords(&objs_of_interest_bucket, way).collect(), name })
+        let mut nodes_ls: LineString = osm_way_to_coords(&objs_of_interest_bucket, way).collect();
+        nodes_ls.make_ccw_winding(); // For correct area calculations later
+        Some(ProcessedBoundary {
+            polygon:
+                geo::Polygon::new(nodes_ls, Vec::new()),
+            name
+        })
     });
 
     let (polygons_tx, polygons_rx) = mpsc::channel::<ProcessedBoundary>();
 
     let mut fgb_writer = FgbWriter::create("nametiles_base", flatgeobuf::GeometryType::MultiPolygon).unwrap();
-    fgb_writer.dataset_begin(None).unwrap();
+    fgb_writer.dataset_begin(Some("nametiles_iter2")).unwrap();
 
     log::info!("Initialized the FGB dataset");
 
-    thread::spawn(move || {
-        for (idx, ProcessedBoundary { boundary, name }) in polygons_rx.iter().enumerate() {
+    //let prog_fgb_writing = indicatif_progress.add(indicatif::ProgressBar::new(0).with_message("Writing FGB..."));
+    //let fgb_writing_ref = prog_fgb_writing.clone();
+    let writign_thread_handle = thread::spawn(move || {
+        let mut max_area = 0;
+
+        log::info!("Collecting FGB dataset...");
+        for (idx, ProcessedBoundary { polygon, name }) in polygons_rx.iter().enumerate() {
+            //fgb_writing_ref.inc(idx as u64);
+            //
             fgb_writer.feature_begin(idx as u64).unwrap();
             fgb_writer.properties_begin().unwrap();
             fgb_writer.property(0, "name", &geozero::ColumnValue::String(&name)).unwrap();
+
+            // TODO: Would be more performant to calculate this on the sending threads
+            // (multithreaded)
+            let area = polygon.geodesic_area_unsigned() as u64;
+            max_area = max(max_area, area);
+            fgb_writer.property(1, "area", &geozero::ColumnValue::ULong(area)).unwrap();
             //fgb_writer.property();
             fgb_writer.properties_end().unwrap();
             fgb_writer.geometry_begin().unwrap();
             fgb_writer.polygon_begin(true, 1, 0).unwrap();
-            fgb_writer.linestring_begin(false, boundary.0.len(), 0).unwrap();
-            for (idx, coord) in boundary.0.iter().enumerate() {
+            fgb_writer.linestring_begin(false, polygon.exterior().0.len(), 0).unwrap();
+            for (idx, coord) in polygon.exterior().0.iter().enumerate() {
                 fgb_writer.xy(coord.x, coord.y, idx).unwrap();
             }
             fgb_writer.linestring_end(false, 0).unwrap();
@@ -325,9 +437,17 @@ fn main() {
 
             fgb_writer.feature_end(idx as u64).unwrap();
         }
+
+
+        log::info!("All FGB items added, finishing dataset...");
         fgb_writer.dataset_end().unwrap();
 
+        log::info!("FGB dataset finished, writing it to file...");
+
         fgb_writer.write(File::create("dataset.fgb").unwrap()).unwrap();
+        log::info!("FGB dataset written");
+
+        max_area
     });
 
     relation_processing_results
@@ -335,9 +455,15 @@ fn main() {
         .flatten()
         .chain(ways_processing_results)
         .for_each(|boundary| {
+            //prog_fgb_writing.inc_length(1);
             polygons_tx.send(boundary).unwrap();
                 //println!("Sending..");
         });
+
+    drop(polygons_tx); // Stop the polygon writing thread
+
+    let max_area = writign_thread_handle.join().unwrap();
+    log::debug!("The biggest area is {max_area}m2 (this is a quick sanity check for area calculations)");
 
         /*let (success, failed) = relation_processing_results.map(|res| {
         match res {
@@ -407,10 +533,11 @@ fn main() {
 fn osm_way_to_coords(objs_of_interest_bucket: &kv::Bucket<'_, Vec<u8>, kv::Bincode<osmpbfreader::OsmObj>>, found_way: osmpbfreader::Way) -> impl Iterator<Item = Coord> {
     let nodes = found_way.nodes.into_iter().map(|node|
         {
+            //println!(");
             let bc = objs_of_interest_bucket
                 .get(&osm_id_to_kv_key(&OsmId::Node(node)))
                 .unwrap()
-                .unwrap();
+                .expect(&format!("Node {node:?} not found in db"));
             let node = bc.0.node().unwrap();
             Coord {
                 x: node.lon(),

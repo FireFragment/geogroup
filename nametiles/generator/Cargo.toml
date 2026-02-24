@@ -9,6 +9,8 @@ env_logger = "0.11.8"
 flatgeobuf = "5.0.0"
 geo = "0.29.1"
 geozero = { version = "0.14.0", default-features = false, features = ["with-geo", "with-wkb"] }
+indicatif = "0.18.4"
+indicatif-log-bridge = "0.2.3"
 kv = { version = "0.24.0", features = ["bincode", "bincode-value"] }
 log = "0.4.28"
 osmpbfreader = { version = "0.19.1", features = ["serde"] }
