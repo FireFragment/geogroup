@@ -26,6 +26,8 @@ pub enum BinTree<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool = 
     InnerNode(BTInnerNode<Item, NDItem, NameErr, NodeInfoPresent>),
     Leaf(
         Item,
+        /// Id unique in the entire tree.
+        u64,
         TyOption<StaticNodeInfo<Item, NDItem, NameErr, Infallible>, NodeInfoPresent>,
     ),
 }
@@ -88,7 +90,7 @@ impl<Item: SortableItem, NDItem, NameErr> BinTree<Item, NDItem, NameErr> {
     pub fn get_node_info(&self) -> &StaticNodeInfo<Item, NDItem, NameErr> {
         match self {
             BinTree::InnerNode(node) => &node.node_data,
-            BinTree::Leaf(_, node) => node,
+            BinTree::Leaf(_, _, node) => node,
         }
     }
 }
@@ -99,7 +101,7 @@ impl<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyBool>
     pub fn get_leftmost_item(&self) -> &Item {
         match self {
             BinTree::InnerNode(node) => node.positioned_children[0].get_leftmost_item(),
-            BinTree::Leaf(leaf, node) => leaf,
+            BinTree::Leaf(leaf, _, node) => leaf,
         }
     }
 }
@@ -108,31 +110,47 @@ pub struct BTInnerNode<Item: SortableItem, NDItem, NameErr, NodeInfoPresent: TyB
     // IMPORTANT: When changing fields, make sure to update Debug impl
     pub positioned_children: Box<[BinTree<Item, NDItem, NameErr, NodeInfoPresent>; 2]>,
     pub node_data: TyOption<StaticNodeInfo<Item, NDItem, NameErr, Infallible>, NodeInfoPresent>,
-    /// For those items, [`StaticNodeInfo`] is generated lazily on-demand if needed
-    pub additional_middle_leaves: Vec<Item>,
+    /// For those items, [`StaticNodeInfo`] is generated lazily on-demand if needed.
+    /// The second element is the ID of the item.
+    pub additional_middle_leaves: Vec<(Item, u64)>,
+    /// Static group ID unique in the entire tree.
+    pub node_id: u64,
 }
 
 /// [`lazy_hierarchy::LeafRef`] implementation for [`BinTree`]
-#[derive(Debug)]
-pub struct BTLeafRef<'a, L, N>(&'a L, Option<&'a N>);
+pub struct BTLeafRef<'a, Item: SortableItem, NDItem, NameErr>(
+    &'a Item,
+    deep_sorter::NodeInfo<'a, Item, NDItem, NameErr>
+);
 
-impl<'a, L, N: Clone> Clone for BTLeafRef<'a, L, N> {
+impl<'a, Item: SortableItem + fmt::Debug, NDItem: fmt::Debug, NameErr: fmt::Debug> fmt::Debug for BTLeafRef<'a, Item, NDItem, NameErr>
+where
+    <Item as geogroup_common::SortableItem>::Time: std::fmt::Debug,
+    <Item as geogroup_common::SortableItem>::Position: std::fmt::Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        f.debug_tuple("BTLeafRef").field(&self.0).field(&self.1).finish()
+    }
+}
+
+impl<'a, Item: SortableItem, NDItem, NameErr> Clone for BTLeafRef<'a, Item, NDItem, NameErr> {
     fn clone(&self) -> Self {
         BTLeafRef(self.0, self.1.clone())
     }
 }
 
-impl<'a, L, N: Clone> lazy_hierarchy::LeafRef for BTLeafRef<'a, L, N> {
-    type LeafData = &'a L;
+impl<'a, Item: SortableItem, NDItem, NameErr> lazy_hierarchy::LeafRef for BTLeafRef<'a, Item, NDItem, NameErr> {
+    type LeafData = &'a Item;
 
-    type NodeData = Option<&'a N>;
+    type NodeData = deep_sorter::NodeInfo<'a, Item, NDItem, NameErr>;
 
     fn leaf_data(&self) -> Self::LeafData {
         &self.0
     }
 
     fn node_data(&self) -> Self::NodeData {
-        self.1
+        self.1.clone()
     }
 }
 
@@ -147,15 +165,23 @@ where
     ) -> Result<impl Iterator<Item = lazy_hierarchy::NodeRef<Self>>, Infallible> {
         let [child_1, child_2] = self.positioned_children.each_ref().map(|node| match node {
             BinTree::InnerNode(group) => lazy_hierarchy::NodeRef::Group(group),
-            BinTree::Leaf(l, n) => {
-                lazy_hierarchy::NodeRef::Leaf(BTLeafRef(l, Some(n.as_ref().uwnrap_infallible())))
+            BinTree::Leaf(l, id, n) => {
+                lazy_hierarchy::NodeRef::Leaf(
+                    BTLeafRef(
+                        l,
+                        deep_sorter::NodeInfo::new(
+                            Some(n.as_ref().uwnrap_infallible()),
+                            *id
+                        )
+                    ))
             }
         });
         // Also with noda data
         let middle_leaves = self
             .additional_middle_leaves
             .iter()
-            .map(|leaf| lazy_hierarchy::NodeRef::Leaf(BTLeafRef(leaf, None)));
+            .map(|leaf| lazy_hierarchy::NodeRef::Leaf(BTLeafRef(&leaf.0,
+                deep_sorter::NodeInfo::new(None, leaf.1))));
 
         Ok(iter::once(child_1)
             .chain(middle_leaves)
@@ -165,14 +191,17 @@ where
     fn group_data(&self) -> () {}
 
     fn node_data(&self) -> Self::NodeData {
-        Some(self.node_data.as_ref().uwnrap_infallible())
+        deep_sorter::NodeInfo::new(
+            Some(self.node_data.as_ref().uwnrap_infallible()),
+            self.node_id
+        )
     }
 
-    type NodeData = Option<&'a StaticNodeInfo<Item, NDItem, NameErr, Infallible>>; // TODO: Remove MaybeBorrowed, it's all owned anyways
+    type NodeData = deep_sorter::NodeInfo<'a, Item, NDItem, NameErr>; // TODO: Remove MaybeBorrowed, it's all owned anyways
     type LeafData = &'a Item;
     type GroupData = ();
     type StructureErr = Infallible;
-    type LeafRef = BTLeafRef<'a, Item, StaticNodeInfo<Item, NDItem, NameErr, Infallible>>;
+    type LeafRef = BTLeafRef<'a, Item, NDItem, NameErr>;
 }
 
 impl<Item: SortableItem, NDItem: Clone, NameErr: Clone> AsGroupRef
@@ -187,7 +216,7 @@ where
 
     fn root(&self) -> Self::GroupRef<'_> {
         match self {
-            BinTree::Leaf(_, _) => todo!(),
+            BinTree::Leaf(_, _, _) => todo!(),
             BinTree::InnerNode(group) => group,
         }
     }
@@ -206,7 +235,7 @@ pub mod bloat {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::InnerNode(arg0) => f.debug_tuple("InnerNode").field(arg0).finish(),
-                Self::Leaf(arg0, arg1) => f.debug_tuple("Leaf").field(arg0).field(arg1).finish(),
+                Self::Leaf(arg0, arg1, arg2) => f.debug_tuple("Leaf").field(arg0).field(arg1).field(arg2).finish(),
             }
         }
     }

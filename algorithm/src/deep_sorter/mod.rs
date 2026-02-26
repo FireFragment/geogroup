@@ -60,6 +60,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
         StructureErr = Infallible,
         //LeafRef = impl Send,
     > + 's {
+
         self.bintree
             .root()
             // TODO: Consider isolating these computations somewhere else, eg. to `geogroup.rs` or `strength.rs`
@@ -68,7 +69,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                 let separation = group_ref
                     .get_children()
                     .unwrap_or_else(|e| match e {})
-                    .filter_map(|child| child.node_data()?.fl_pos_opt().cloned())
+                    .filter_map(|child| child.node_data().static_info?.fl_pos_opt().cloned())
                     .tuple_windows()
                     .map(|(item1, item2)| item1.last.distance(&item2.first))
                     .max();
@@ -118,14 +119,10 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                     },
                 }
             })
-            .with_idx()
             // "Revert" with_parent and add index to
             .map_node_data(|node_ref| {
                 let node_data = node_ref.node_data();
-                NodeInfo {
-                    static_info: node_data.data.data,
-                    id: node_data.index
-                }
+                node_data.data
             })
         //
     }
@@ -177,7 +174,14 @@ impl<T: Clone> FirstLast<T> {
 
 pub struct NodeInfo<'hier, Item: SortableItem, NDItem, NameErr> {
     static_info: Option<&'hier StaticNodeInfo<Item, NDItem, NameErr>>,
-    pub id: usize,
+    /// Identifier for the node, unique within the entire tree
+    pub id: u64,
+}
+
+impl<'hier, Item: SortableItem, NDItem, NameErr> Clone for NodeInfo<'hier, Item, NDItem, NameErr> {
+    fn clone(&self) -> Self {
+        Self { static_info: self.static_info, id: self.id }
+    }
 }
 
 #[derive(Clone, Hash, Error, Debug)]
@@ -188,9 +192,23 @@ pub enum GetNamingDataErr {
     NotYetAssigned,
 }
 
+
+
+impl<'hier, Item: SortableItem, NDItem, NameErr> NodeInfo<'hier, Item, NDItem, NameErr> {
+
+    pub fn new(static_info: Option<&'hier StaticNodeInfo<Item, NDItem, NameErr>>, id: u64) -> Self {
+        Self { static_info, id }
+    }
+}
+
 impl<'hier, Item: SortableItem, NDItem: Clone, NameErr: Clone>
     NodeInfo<'hier, Item, NDItem, NameErr>
 {
+
+    pub fn get_id(&self) -> u64 {
+        self.id
+    }
+
     /// **Outer result:** Cases in [GetNamingDataErr], when naming has not yet ran. \
     /// **Inner result:** `Ok(Err)` it there was a failed attempt to assign a name
     pub fn get_naming_data<'s>(
@@ -246,17 +264,25 @@ pub struct GroupInfo {
     pub separation: Option<Distance>,
 }
 
+
+/// Increments a number and returns the original
+fn get_and_inc(n: &mut u64) -> u64 {
+    *n += 1;
+    *n - 1
+}
 /// Provides [NodeInfo] for every node in the binary tree
 ///
 /// Expects that all leaves in the binary tree
 /// (but not in [`additional_middle_leaves`](BTInnerNode::additional_middle_leaves) contain location - otherwise panics.
 fn provide_info<Item: SortableItem, NDItem, NameErr>(
     tree: BinTree<Item, NDItem, NameErr, TyFalse>,
+    //id_counter: &mut u64,
 ) -> BinTree<Item, NDItem, NameErr, TyTrue> {
     match tree {
         BinTree::InnerNode(node) => {
             let children = Box::new(node.positioned_children.map(|c| provide_info(c)));
             BinTree::InnerNode(BTInnerNode {
+                node_id: node.node_id,
                 node_data: StaticNodeInfo {
                     naming_data: OnceLock::new(),
                     fl_time: FirstLast {
@@ -297,13 +323,13 @@ fn provide_info<Item: SortableItem, NDItem, NameErr>(
                 additional_middle_leaves: node.additional_middle_leaves,
             })
         }
-        BinTree::Leaf(l, TyOption::Empty(())) => {
+        BinTree::Leaf(l, id, TyOption::Empty(())) => {
             let tree_group_info = StaticNodeInfo {
                 fl_time: FirstLast::new_single(l.get_time()),
                 fl_pos: Ok(FirstLast::new_single(l.get_position().expect("provide_info called with a tree which has item in the binary tree that hasn't position "))),
                 naming_data: OnceLock::new(),
             };
-            BinTree::Leaf(l, tree_group_info.into())
+            BinTree::Leaf(l, id, tree_group_info.into())
         }
     }
 }
@@ -343,7 +369,7 @@ fn tree_contains_time<Item: SortableItem, NDItem, NameErr>(
     time: &Item::Time,
 ) -> bool {
     match tree {
-        BinTree::Leaf(_, _) => false,
+        BinTree::Leaf(_, _, _) => false,
         BinTree::InnerNode(node) => {
             !(node.node_data.fl_time.first > *time || node.node_data.fl_time.last < *time)
         }
@@ -366,7 +392,7 @@ fn get_time_group_mut<'a, Item: SortableItem, NDItem, NameErr>(
     time: &Item::Time,
 ) -> Option<&'a mut BTInnerNode<Item, (), StaticNodeInfo<Item, NDItem, NameErr>>> {
     match tree {
-        BinTree::Leaf(_, _) => None,
+        BinTree::Leaf(_, _, _) => None,
         BinTree::InnerNode(node) => {
             if node.node_data.fl_time.first > *time || node.node_data.fl_time.last < *time {
                 return None;
@@ -405,9 +431,10 @@ impl<
     > fmt::Debug for NodeInfo<'hier, Item, NDItem, NameErr>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {static_info, id} = self;
         f.debug_struct("NodeInfo")
-            .field("static_info", &self.static_info)
-            .field("id", &self.id)
+            .field("static_info", &static_info)
+            .field("id", &id)
             .finish()
     }
 }

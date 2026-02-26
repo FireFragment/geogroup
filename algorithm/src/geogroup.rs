@@ -23,11 +23,14 @@ pub struct NodeInfo<Time, NDItem = (), NameErr = Infallible> {
     /// If you join all `local_id_path`s of a node's parents, you get the unique _identification path_ of the node.
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
-    pub local_id_path: Vec<usize>,
+    pub local_id_path: Vec<u64>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
     pub name: NameStatus<NDItem, NameErr>,
 
     pub fl_time: FirstLast<Time>,
+
+    /// Static ID of the node
+    pub id: u64
 }
 
 pub struct Sorter<
@@ -109,7 +112,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
         /// Data that is passed from dissolved groups to their children
         #[derive(Clone, Debug)]
         struct InheritedData<NDItem> {
-            path_part: Vec<usize>,
+            path_part: Vec<u64>,
             naming_data: Vec<NDItem>,
         }
 
@@ -185,6 +188,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                         .map_err(|e| e.clone())
                 );
                 NodeInfo {
+                    id: node_data.original.data.id,
                     local_id_path: id_path,
                     fl_time: node_data.original.data.get_first_last_time().cloned().unwrap_or_else(|| {
                         let lazy_hierarchy::NodeRef::Leaf(leaf) = node else {

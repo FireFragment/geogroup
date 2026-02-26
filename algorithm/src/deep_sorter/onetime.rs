@@ -18,9 +18,11 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut item
         pub path_to_last_point: Vec<CameraPathComponent>
     }
 
+    let mut current_idx = 0;
+
     let first_point = items.next().expect("to_binary_tree called with empty vector");
-    let mut the_bintree = BinTree::Leaf(first_point, TyOption::new_empty());
-    let BinTree::Leaf(ref first_point, _) = the_bintree else {panic!()};
+    let mut the_bintree = BinTree::Leaf(first_point, get_and_inc(&mut current_idx), TyOption::new_empty());
+    let BinTree::Leaf(ref first_point, _, _) = the_bintree else {panic!()};
     let mut cameras_paths: HashMap<CameraId, CameraInfo<Item>> = HashMap::new();
     cameras_paths.insert(first_point.get_camera(), CameraInfo {
         last_point: first_point.get_position().expect("POSERR"),
@@ -102,9 +104,13 @@ pub fn sort_ordered_to_binary_tree<Item: SortableItem, NDItem, NameErr>(mut item
 
         // TODO: Make sure that all camera paths are updated according to the move of `node_to_replace`
         take_mut::take(node_to_replace, |prev_val| BinTree::InnerNode(BTInnerNode {
-            positioned_children: Box::new([prev_val, BinTree::Leaf(item_to_append, TyOption::new_empty())]),
+            node_id: get_and_inc(&mut current_idx),
+            positioned_children: Box::new([prev_val, BinTree::Leaf(item_to_append, get_and_inc(&mut current_idx), TyOption::new_empty())]),
             node_data: TyOption::new_empty(),
             additional_middle_leaves: items_before_without_pos
+                .into_iter()
+                .map(|item| (item, get_and_inc(&mut current_idx)))
+                .collect(),
         }));
 
         cameras_paths.insert(item_to_append_cam, CameraInfo {
