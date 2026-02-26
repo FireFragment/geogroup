@@ -3,7 +3,7 @@ use geogroup_loaders::MutDataLoader as _;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
 use core::fmt;
-use std::{collections::HashSet, convert::Infallible, hash::Hash, thread};
+use std::{collections::HashSet, convert::Infallible, hash::Hash, ops::Deref, sync::{atomic::{self, AtomicBool}, Mutex, MutexGuard, OnceLock}, thread};
 
 use super::*;
 
@@ -79,24 +79,76 @@ pub struct LGSorted {
             FileData,
             geogroup_loaders::general_loader::LocationError,
         >,
-        String,
+        nametiles_reader::NamePart,
         geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>,
     >,
+    naming_thread_interface: Arc<NamingInterface>
+}
+
+/// Interface with the naming thread
+#[derive(Debug)]
+struct NamingInterface {
+    /// Set by the
+    naming_error: Mutex<Option<GlobalNamingError>>,
+    /// If naming is currently running
+    naming_running: AtomicBool
+}
+
+impl NamingInterface {
+    /// Should be called before starting the naming process.
+    /// Checks whether naming is already running. If not, sets the [`naming_running`](Self::naming_running) flag to true and resets the error.
+    ///
+    /// Returns whether the naming should be started.
+    /// (It shouldn't if naming is already running)
+    fn pre_start_naming(&self) -> bool {
+        // We can reset the error even when naming is already running - it should be reset anyway in that case.
+        *self.naming_error.lock().unwrap() = None;
+
+        let already_running = self.naming_running.swap(true, atomic::Ordering::SeqCst);
+        !already_running
+    }
+
+    /// Should be called after the naming process failed globally by the naming thread.
+    /// Resets the [`naming_running`](Self::naming_running) flag to false.
+    fn finish_naming_with_error(&self, error: GlobalNamingError) {
+        /*let res = self.naming_error.set(error);
+        debug_assert_eq!(res.is_err(), false);*/
+        *self.naming_error.lock().unwrap() = Some(error);
+        self.naming_running.store(false, atomic::Ordering::SeqCst);
+    }
+
+    fn get_naming_error(&self) -> impl Deref<Target = Option<GlobalNamingError>> {
+        self.naming_error.lock().unwrap()
+    }
+
+    fn is_naming_running(&self) -> bool {
+        self.naming_running.load(atomic::Ordering::SeqCst)
+    }
+}
+
+/// Ways the naming can fail _globally_ - that is, no items could be named at all.
+/// This is eg. when there's an error with connection to an S3 bucket.
+#[derive(Debug, Error)]
+pub enum GlobalNamingError {
+    #[error("failed to connect to online nametiles database: {0}")]
+    BucketError(#[from] nametiles_reader::NewFromBuckerError),
+    #[error("unknown tokio error: {0}")]
+    TokioError(#[from] tokio::io::Error),
 }
 
 #[derive(Error, Debug, Clone)]
 pub enum NamingLeafErr {
-    #[error("Nametiles-related error: {0}")]
+    #[error("nametiles-related error: {0}")]
     NametilesErr(#[from] nametiles_reader::SimpleError),
 
-    #[error("Failed to get photo's location: {0}")]
+    #[error("failed to get photo's location: {0}")]
     LocationErr(#[from] geogroup_loaders::general_loader::LocationError),
 }
 
 impl LGSorted {
     /// Potentially long-running. Returns [None] if terminated by progress_callback
     ///
-    /// For naming, requires to be run inside of tokio runtime
+    /// For naming, requires to be run inside of tokio runtime. Naming starts on background.
     pub fn new(
         item_source: ItemSource,
         params: algorithm::Params,
@@ -160,41 +212,89 @@ impl LGSorted {
         // Useful for debugging until added to the main application
         // sorter.debug_with_fmt_leafs(|l| l.data.path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
 
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .expect("TODO");
+        let mut res = Self {
+            // TODO: Add progress callback
+            sorter, // TODO: Don't ignore errors
+            item_source,
+            naming_thread_interface: Arc::new(NamingInterface {
+                naming_error: Mutex::new(None),
+                naming_running: AtomicBool::new(false)
+            })
+        };
+
+        res.start_naming();
+        Some(res)
+    }
+
+    pub fn params_mut(&mut self) -> &mut algorithm::Params {
+        self.sorter.params_mut()
+    }
+
+    /// Finishes immediately, starts naming process.
+    ///
+    /// Returns boolean whether the naming process was actually started, false if it was already running.
+    pub fn start_naming(&mut self) {
+
+        let naming_thread_interface = self.naming_thread_interface.clone();
+        if !naming_thread_interface.pre_start_naming() {
+            return;
+        }
+
+        let rt_res = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .enable_io()
+            .build();
+
+        let rt = match rt_res {
+            Ok(rt) => rt,
+            Err(err) => {
+                naming_thread_interface.finish_naming_with_error(err.into());
+                return;
+            }
+        };
+
         {
-            let ds = sorter.deep_sorter_rc();
+            let ds = self.sorter.deep_sorter_rc();
             //thread::spawn(|| {
             //let rt_guard = rt.enter();
 
             thread::spawn(move || {
                 let join_handle = rt.block_on(async move {
-                    // TODO: Don't block
+                    // TODO: Don't block an entire thread
                     // Construct a local task set that can run `!Send` futures.
                     let local = tokio::task::LocalSet::new();
 
                     // Run the local task set.
                     local.spawn_local(async move {
                         // TODO: Why can't I just spawn it normally?
-                        let reader = nametiles_reader::NametilesConnection::new_from_file(
-                            &PathBuf::from("/nix/temporary/nametilesgen/out.pmtiles"), // TODO: Remove
-                        )
-                        .await
-                        .expect("TODO");
+                        let reader_res = nametiles_reader::NametilesConnection::new_from_env()
+                            .await;
+
+                        let reader = match reader_res {
+                            Ok(reader) => reader,
+                            Err(err) => {
+                                naming_thread_interface.finish_naming_with_error(err.into());
+                                return;
+                            }
+                        };
 
                         log::debug!("LGSorted: Starting naming");
 
                         //ds.try_naming(async move |_| todo!()).await;
-                        ds.try_naming(async move |item| {
-                            reader
-                                .get_name(geo::Coord::from(
-                                    *item.position.as_ref().map_err(|p| p.clone())?,
-                                ))
-                                .await
-                                .map(|it| HashSet::from_iter(it.into_iter()))
-                                .map_err(|e| NamingLeafErr::from(nametiles_reader::SimpleError::from(e)))
-                        })
+                        ds.try_naming(
+                            async move |item| {
+                                reader
+                                    .get_name(geo::Coord::from(
+                                        *item.position.as_ref().map_err(|p| p.clone())?,
+                                    ))
+                                    .await
+                                    .map(|it| HashSet::from_iter(it.into_iter()))
+                                    .map_err(|e| {
+                                        NamingLeafErr::from(nametiles_reader::SimpleError::from(e))
+                                    })
+                            },
+                            |a, b| a.area.cmp(&b.area),
+                        )
                         .await;
                     });
 
@@ -204,18 +304,9 @@ impl LGSorted {
 
             //});
         }
-
-        Some(Self {
-            // TODO: Add progress callback
-            sorter, // TODO: Don't ignore errors
-            item_source,
-        })
-    }
-
-    pub fn params_mut(&mut self) -> &mut algorithm::Params {
-        self.sorter.params_mut()
     }
 }
+
 
 #[derive(Debug, Clone)]
 pub enum StructureErr<E: std::error::Error> {
@@ -312,7 +403,11 @@ pub enum GroupData {
 #[derive(Clone, Debug, Error)]
 pub enum NodeProblem {
     #[error("failed to get location: {0}")]
-    NoLocation(#[from] loaders::general_loader::LocationError) // TODO: Make this a reference
+    NoLocation(#[from] loaders::general_loader::LocationError), // TODO: Make this a reference
+
+    /// String created by formatting [`GlobalNamingError`]
+    #[error("cannot set up naming: {0}")]
+    GlobalNamingError(String)
 }
 
 #[derive(Clone, Debug)]
@@ -330,9 +425,13 @@ pub enum NameError {
     LocationMissing,
     #[error(transparent)]
     Other(algorithm::deep_sorter::naming::NamingErr<NamingLeafErr>), // TODO: NamingLeafErr::LocationErr is duplicate??
+
+    /// String created by formatting [`GlobalNamingError`]
+    #[error("cannot set up naming: {0}")]
+    GlobalNamingError(String),
     /// This should never happen, but here we go...
-    #[error("unexpected error - this is a bug")]
-    UnexpectedError
+    #[error("unexpected error - this is a bug ({0})")]
+    UnexpectedError(String)
 }
 
 impl NameStatus {
@@ -340,7 +439,7 @@ impl NameStatus {
         NameStatus::Error{ err: NameError::LocationMissing, name: alt_name }
     }
     pub fn new_unexpected_err() -> Self {
-        NameStatus::Error{ err: NameError::UnexpectedError, name: None }
+        NameStatus::Error{ err: NameError::UnexpectedError("unknown".into()), name: None }
     }
 
     /// Returns `true` if the name status is [`InProgress`].

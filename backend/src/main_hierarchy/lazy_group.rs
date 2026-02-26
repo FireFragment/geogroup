@@ -49,20 +49,38 @@ impl Final {
                                                          }),*/
                     }),
             ),
-            lazy_group::Final::Sorted(sorted, ..) => Either::Right(
-                sorted
+            lazy_group::Final::Sorted(sorted, ..) => {
+                Either::Right({
+                    let global_naming_running = sorted.naming_thread_interface.is_naming_running();
+                    sorted
                     .sorter
                     .hierarchy()
                     .map_structure_error(|err, _| match err {})
-                    .map_node_data(|node| {
+                    .mark_root()
+                    .map_node_data(move |node| {
+                        let is_root = if let lazy_hierarchy::NodeRef::Group(ref group) = node {
+                            group.group_data().is_root
+                        } else { false };
+
                         let time = node.node_data().fl_time.first.format("%Y-%m-%d %H-%M-%S");
                         NodeData {
                             name: match node.node_data().name {
                                 // TODO: Add date as name
                                 algorithm::NameStatus::Named(items) => {
-                                    NameStatus::Named(format!("{time} {}", items.join(",")))
+                                    NameStatus::Named(format!("{time} {}", items.into_iter().map(|item| item.name).join(",")))
                                 }
-                                algorithm::NameStatus::InProgress => NameStatus::InProgress(Some(time.to_string())),
+                                algorithm::NameStatus::InProgress if global_naming_running => NameStatus::InProgress(Some(time.to_string())),
+                                algorithm::NameStatus::InProgress => {
+                                    NameStatus::Error {
+                                        err: if let Some(ref global_naming_err) = *sorted.naming_thread_interface.get_naming_error() {
+                                                NameError::GlobalNamingError(global_naming_err.to_string())
+                                            } else {
+                                                NameError::UnexpectedError("naming not running but also no global error reported".into())
+                                            },
+                                        name: Some(time.to_string())
+
+                                    }
+                                }
                                 algorithm::NameStatus::LocationMissing => {
                                     NameStatus::new_location_missing(Some(time.to_string()))
                                 }
@@ -84,18 +102,26 @@ impl Final {
                                     .map(|id| id as u8)
                                     .collect(),
                             ),
-                            additional_problems: if let lazy_hierarchy::NodeRef::Leaf(leaf) = node
-                                && let Err(e) = &leaf.leaf_data().position
-                            {
-                                vec![e.clone().into()]
-                            } else {
-                                Vec::new()
-                            }, // TODO: Report problems with location
+                            additional_problems:
+                                if let lazy_hierarchy::NodeRef::Leaf(leaf) = node
+                                    && let Err(e) = &leaf.leaf_data().position
+                                {
+                                    vec![e.clone().into()]
+                                } /*else if // In case of global naming error...
+                                    is_root
+                                        && !global_naming_running
+                                        && let Some(global_naming_error) = *sorted.naming_thread_interface.get_naming_error()
+                                {
+                                    vec![NodeProblem::GlobalNamingError(global_naming_error.to_string())]
+                                }*/ else {
+                                    Vec::new()
+                                }, // TODO: Report problems with location
                         }
                     })
                     .map_leaf_data(|leaf| leaf.leaf_data().data.to_owned()) // OPT: Possibly needless clone
-                    .map_group_data(|_| ()),
-            ),
+                    .map_group_data(|_| ())
+                })
+            }
         }
     }
 }

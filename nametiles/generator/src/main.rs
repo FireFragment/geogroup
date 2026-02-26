@@ -8,6 +8,8 @@ use geo::LineString;
 use geo::Polygon;
 use std::cmp::max;
 use std::collections::BTreeSet;
+use std::error::Error;
+use std::panic;
 use std::path::PathBuf;
 use std::thread;
 use std::{collections::{HashMap, HashSet}, env, fs::File, io::Read, sync::{atomic::AtomicU32, mpsc}, time::{Duration, Instant}};
@@ -20,7 +22,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 
 
 /// Copied from osmpbfreader
-pub fn get_objs_and_deps_store<R: std::io::Read, F, T>(osm_pbf_reader: &mut OsmPbfReader<R>, mut pred: F, objects: &mut T) -> osmpbfreader::Result<()>
+pub fn get_objs_and_deps_store<R: std::io::Read, F, T>(osm_pbf_reader: &mut OsmPbfReader<R>, mut pred: F, objects: &mut T)
 where
     R: std::io::Seek,
     F: FnMut(&osmpbfreader::OsmObj) -> bool,
@@ -34,10 +36,12 @@ where
     let mut idx =  0;
     while !finished {
         log::debug!(target: "nametiles_generator::get_objs_and_deps", "Pass {idx}, first_pass={first_pass}, deps.len()={}", deps.len());
-        osm_pbf_reader.rewind()?;
+        osm_pbf_reader.rewind().expect("Rewind failed");
         finished = true;
         for obj in osm_pbf_reader.par_iter() {
-            let obj = obj?;
+            let obj = obj.unwrap_or_else(|err|
+                panic!("Failed to read object: {err}\n{err:?}\n{:?}", err.source())
+            );
             if (!first_pass || !pred(&obj)) && !deps.contains(&obj.id()) {
                 continue;
             }
@@ -60,7 +64,6 @@ where
         first_pass = false;
         idx += 1;
     }
-    Ok(())
 }
 
 
@@ -224,8 +227,7 @@ fn main() {
         log::info!("Note: this may take a while without any feedback.
 If you want to make sure it actually progresses, you can set the environment variable RUST_LOG=info,nametiles_generator=trace
 (but even then, it takes some time before the first logs appear)");
-        get_objs_and_deps_store(&mut pbf_reader, include_in_tiles, &mut tmp_db)
-            .unwrap();
+        get_objs_and_deps_store(&mut pbf_reader, include_in_tiles, &mut tmp_db);
 
         log::info!("...done");
     } else {
@@ -401,6 +403,13 @@ Please provide the PBF file as a command line argument.");
 
     let mut fgb_writer = FgbWriter::create("nametiles_base", flatgeobuf::GeometryType::MultiPolygon).unwrap();
     fgb_writer.dataset_begin(Some("nametiles_iter2")).unwrap();
+
+    fgb_writer.add_column("name", flatgeobuf::ColumnType::String, |_fbb, col| {
+        col.nullable = false;
+    });
+    fgb_writer.add_column("area", flatgeobuf::ColumnType::ULong, |_fbb, col| {
+        col.nullable = false;
+    });
 
     log::info!("Initialized the FGB dataset");
 

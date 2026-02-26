@@ -1,5 +1,6 @@
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools as _;
+use std::cmp;
 use std::hash::Hash;
 use std::{collections::HashSet, iter};
 
@@ -144,6 +145,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clo
         &self,
         //leaf_err_missing_position: impl Fn() -> LeafNameErr,
         fun_get_leaf_name: impl AsyncFn(&Item) -> Result<HashSet<NDItem>, LeafNameErr>,
+        fun_cmp_order: impl Fn(&NDItem, &NDItem) -> cmp::Ordering
     ) {
         // TODO: Do some locks so that it can't be launched multiple times simoultaneously
         let root_name = try_naming_generic(
@@ -158,7 +160,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clo
                     .static_info
                     .unwrap() // We know this succeeds thanks to the `filter` call above
                     .naming_data
-                    .set(name.map(|n| n.into_iter().collect()));
+                    .set(name.map(|n| n.into_iter().sorted_by(&fun_cmp_order).collect()));
             },
             &async |node| {
                 node.node_data()

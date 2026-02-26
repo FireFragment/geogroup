@@ -10,7 +10,8 @@ use super::*;
 #[derive(Clone, Debug)]
 pub enum NameStatus<NDItem, NameErr> {
     Named(Vec<NDItem>),
-    /// Naming is in progress
+    /// Naming started and is not yet finished. This means that its naming is either in progress or
+    /// there has been "global" naming error - eg. the naming never started in the first place.
     InProgress,
     /// The item doesn't have an associated location, therefore it can't be named
     LocationMissing,

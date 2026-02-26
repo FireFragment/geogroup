@@ -1,1 +1,3 @@
  - Implement support for fuzzy matching of single lines, such as `natural=mountain_range` which is very useful for naming, but only mapped as a way and NOT as an area :(
+ - Fix area being a string instead of a integer in the final pmtiles
+    - Not sure where this error originates

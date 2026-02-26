@@ -34,5 +34,5 @@ pub async fn main() {
     .unwrap();
 
 
-    println!("{}", nametiles.get_name(coord).await.unwrap().join(", "));
+    println!("{}", nametiles.get_name(coord).await.unwrap().into_iter().map(|n| n.name).join(", "));
 }

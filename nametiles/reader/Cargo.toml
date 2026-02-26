@@ -4,14 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bytes = "1.10.1"
 geo = "0.29.1"
-pmtiles = { version = "0.17.1", features = ["mmap-async-tokio", "reqwest-native-tls", "s3-async-native"], default-features = false }
+pmtiles = { version = "0.20.0", features = ["mmap-async-tokio", "reqwest-native-tls", "s3-async-native"], default-features = false }
 tokio = { version = "1.48.0", features = ["macros", "rt"] }
 
 env_logger = "0.11.8"
 mvt-reader = "2.1.0"
 thiserror = "2.0.17"
 itertools = "0.14.0"
+log = "0.4.29"
+dirs = "6.0.0"
 
 
 [dev-dependencies]
