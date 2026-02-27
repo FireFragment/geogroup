@@ -1,4 +1,5 @@
 use derive_more::From;
+use geogroup_algo::geogroup::ManualRename;
 use geogroup_loaders::MutDataLoader as _;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
@@ -43,19 +44,21 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                     lazy_hierarchy::concrete::Leaf::new(
                         InnerLeafData::LazySubgroup(value),
                         NodeData {
-                            name: NameStatus::Named(String::from("Root")), // TODO: Translate
+                            auto_name: AutoNameStatus::Named(String::from("Root")), // TODO: Translate
                             local_id_path: None,
                             additional_problems: Vec::new(),
-                            static_id: None
+                            static_id: None,
+                            manual_name: None
                         },
                     ),
                 )],
                 (),
                 NodeData {
-                    name: NameStatus::Named(String::from("Root")), // TODO: Translate
+                    auto_name: AutoNameStatus::Named(String::from("Root")), // TODO: Translate
                     local_id_path: None,
                     additional_problems: Vec::new(),
-                    static_id: None
+                    static_id: None,
+                    manual_name: None
                 },
             ),
         ))
@@ -418,16 +421,9 @@ impl TemplateHiearchy {
                 }
             })
             .map_node_data(|node|
-                match node.node_data().name {
-                    NameStatus::Named(name) | NameStatus::InProgress(Some(name)) | NameStatus::Error { err: _, name: Some(name) }
-                    => Ok(apply::NodeData {
-                        target_name: name,
-                    }),
-                    NameStatus::InProgress(None) => Err(RootForRsError::NamingInProgress),
-                    NameStatus::Error { err, name: None } => Ok(apply::NodeData {
-                        target_name: "Unnamed".into(),
-                    }),
-                }
+                Ok(apply::NodeData {
+                    target_name: node.node_data().get_name().unwrap_or("Unnamed".into()).to_owned(),
+                }),
             )
             .map_structure_error(|err, _| RootForRsError::StructureError(err))
     }
@@ -476,8 +472,9 @@ pub enum NodeProblem {
     GlobalNamingError(String)
 }
 
+/// State of automatic naming of the item.
 #[derive(Clone, Debug)]
-pub enum NameStatus {
+pub enum AutoNameStatus {
     Named(String),
     /// Naming is in progress. Possibly contains partial name (eg. containing only date)
     InProgress(Option<String>),
@@ -500,12 +497,12 @@ pub enum NameError {
     UnexpectedError(String)
 }
 
-impl NameStatus {
+impl AutoNameStatus {
     pub fn new_location_missing(alt_name: Option<String>) -> Self {
-        NameStatus::Error{ err: NameError::LocationMissing, name: alt_name }
+        AutoNameStatus::Error{ err: NameError::LocationMissing, name: alt_name }
     }
     pub fn new_unexpected_err() -> Self {
-        NameStatus::Error{ err: NameError::UnexpectedError("unknown".into()), name: None }
+        AutoNameStatus::Error{ err: NameError::UnexpectedError("unknown".into()), name: None }
     }
 
     /// Returns `true` if the name status is [`InProgress`].
@@ -517,21 +514,21 @@ impl NameStatus {
     }
 }
 
-impl NameStatus {
+impl AutoNameStatus {
     /// Gets name on best-effort basis - if `self` isn't [`NameStatus::Named`], the returned name may be incomplete or missing
     pub fn get_name(&self) -> Option<&str> {
         match self {
-            NameStatus::Named(name) => Some(name),
-            NameStatus::InProgress(name) => name.as_ref().map(|s| s.as_str()),
-            NameStatus::Error { err: _, name } => name.as_ref().map(|s| s.as_str()),
+            AutoNameStatus::Named(name) => Some(name),
+            AutoNameStatus::InProgress(name) => name.as_ref().map(|s| s.as_str()),
+            AutoNameStatus::Error { err: _, name } => name.as_ref().map(|s| s.as_str()),
         }
     }
 
     /// If [None], returns [`NameStatus::UnexpectedError`]
     pub fn named_or_unexpected(input: Option<String>) -> Self {
         match input {
-            Some(n) => NameStatus::Named(n),
-            None => NameStatus::new_unexpected_err(),
+            Some(n) => AutoNameStatus::Named(n),
+            None => AutoNameStatus::new_unexpected_err(),
         }
     }
 }
@@ -539,7 +536,8 @@ impl NameStatus {
 // TODO: Allow holding references to the original hierarchy
 #[derive(Clone, Debug)]
 pub struct NodeData {
-    pub name: NameStatus,
+    pub auto_name: AutoNameStatus,
+    pub manual_name: Option<ManualRename>,
     pub additional_problems: Vec<NodeProblem>,
     /// If you join all `local_id_path`s of a node's parents up to the first [None],
     /// you get an _identification path_ of the node. It's unique in the subtree of the first node whose `local_id_path` is None.
@@ -551,6 +549,19 @@ pub struct NodeData {
     /// ID of the node unique in the lazy subtree.
     pub static_id: Option<u64>,
 }
+
+impl NodeData {
+    /// Gets name on best-effort basis - the returned name may be incomplete or missing in case of errors
+    /// or incomplete naming
+    pub fn get_name(&self) -> Option<&str> {
+        match self.manual_name {
+            Some(ref name) => Some(&name.name),
+            None => self.auto_name.get_name(),
+        }
+    }
+}
+
+
 #[derive(Clone, Debug)]
 pub struct FileData {
     pub path: FileRef,

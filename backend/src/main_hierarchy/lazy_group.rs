@@ -37,7 +37,8 @@ impl Final {
                         path: FileRef::new(leaf.node_data()),
                     })
                     .map_node_data(|node| NodeData {
-                        name: NameStatus::named_or_unexpected(
+                        manual_name: None,
+                        auto_name: AutoNameStatus::named_or_unexpected(
                             node.node_data()
                                 .file_name()
                                 .map(|name| (*name.to_string_lossy()).to_owned()),
@@ -66,14 +67,15 @@ impl Final {
                         let time = node.node_data().fl_time.first.format("%Y-%m-%d %H-%M-%S");
                         NodeData {
                             static_id: Some(node.node_data().id),
-                            name: match node.node_data().name {
+                            manual_name: node.node_data().manual_name,
+                            auto_name: match node.node_data().name {
                                 // TODO: Add date as name
                                 algorithm::NameStatus::Named(items) => {
-                                    NameStatus::Named(format!("{time} {}", items.into_iter().map(|item| item.name).join(",")))
+                                    AutoNameStatus::Named(format!("{time} {}", items.into_iter().map(|item| item.name).join(",")))
                                 }
-                                algorithm::NameStatus::InProgress if global_naming_running => NameStatus::InProgress(Some(time.to_string())),
+                                algorithm::NameStatus::InProgress if global_naming_running => AutoNameStatus::InProgress(Some(time.to_string())),
                                 algorithm::NameStatus::InProgress => {
-                                    NameStatus::Error {
+                                    AutoNameStatus::Error {
                                         err: if let Some(ref global_naming_err) = *sorted.naming_thread_interface.get_naming_error() {
                                                 NameError::GlobalNamingError(global_naming_err.to_string())
                                             } else {
@@ -84,9 +86,9 @@ impl Final {
                                     }
                                 }
                                 algorithm::NameStatus::LocationMissing => {
-                                    NameStatus::new_location_missing(Some(time.to_string()))
+                                    AutoNameStatus::new_location_missing(Some(time.to_string()))
                                 }
-                                algorithm::NameStatus::OtherError(err) => NameStatus::Error {
+                                algorithm::NameStatus::OtherError(err) => AutoNameStatus::Error {
                                     err: NameError::Other(err),
                                     name: Some(time.to_string()),
                                 },

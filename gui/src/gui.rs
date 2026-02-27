@@ -10,6 +10,7 @@ use egui::{
 use egui_extras::TableBuilder;
 use egui_transition_animation::animated_pager;
 use egui_transition_animation::TransitionStyle;
+use geogroup_backend::algorithm::geogroup::ManualRename;
 use geogroup_backend::lazy_hierarchy::concrete::Group;
 use geogroup_backend::lazy_hierarchy::NodeRef;
 use geogroup_backend::main_hierarchy;
@@ -92,6 +93,25 @@ impl eframe::App for App {
             AppContent::MainPage(MainPage { hiearchy: None, ..}) => self.draw_apply_page(ctx),
         }
     }
+}
+
+/// Ugly tempoary hack
+fn get_lgsorted(hiearchy: &mut main_hierarchy::TemplateHiearchy) -> Option<&mut main_hierarchy::LGSorted> {
+    let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = hiearchy.0.root_group_mut().children_mut()[0]
+        else { todo!() } ;
+
+    let main_hierarchy::InnerLeafData::LazySubgroup(subgroup) = leaf.leaf_data_mut() else { todo!() };
+
+    if let Some(main_hierarchy::lazy_group::dynamic::Finalized::Success(subgroup_final)) =
+        subgroup.get_final_mut()
+    {
+        match subgroup_final {
+            main_hierarchy::lazy_group::Final::Sorted(subgroup_sorted) => {
+                Some(subgroup_sorted)
+            }
+            _ => {None}
+        }
+    } else { None }
 }
 
 impl App {
@@ -191,99 +211,124 @@ impl App {
                         PaneContent::Grouping => {
                             let selected_static_id_opt = hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
 
-                            let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = hiearchy.0.root_group_mut().children_mut()[0]
-                                else { todo!() } ;
+                            if let Some(subgroup_sorted) = get_lgsorted(hiearchy) {
+                                ui.vertical(|ui| {
 
-                            let main_hierarchy::InnerLeafData::LazySubgroup(subgroup) = leaf.leaf_data_mut() else { todo!() };
+                                    ribbon_slider(
+                                        ui,
+                                        egui::Slider::new(
+                                            &mut subgroup_sorted.params_mut().depth,
+                                            0..=backend::algorithm::MAX_DEPTH
+                                        ).custom_formatter(|num, range| {
+                                            format!(".{:0>2}", ((num*100.0)/(backend::algorithm::MAX_DEPTH as f64)) as u8)
+                                        }), // TODO: Add also custom parser
+                                        backend::algorithm::Params::default().depth,
+                                        "Depth",
+                                        "High values yield deeply nested folder structure. Low values lead to shallow structures",
+                                        None,
+                                    );
+                                    ui.horizontal(|ui| {
+                                        let label = ui
+                                            .label("Minimum distance of separated items")
+                                            .on_hover_cursor(CursorIcon::Help)
+                                            .on_hover_text("The minimum distance of consecutive items that are not in the same group. No two items going right after each other that are closer than this distance will be separated into different groups.");
 
-                            if let Some(main_hierarchy::lazy_group::dynamic::Finalized::Success(subgroup_final)) =
-                                subgroup.get_final_mut()
-                            {
-                                match subgroup_final {
-                                    main_hierarchy::lazy_group::Final::Sorted(subgroup_sorted) => {
+                                        let meters = subgroup_sorted.params_mut().minimum_distance / ONE_METER_DISTANCE;
+                                        // TODO: Add custom parser
+                                        egui::DragValue::new(&mut subgroup_sorted.params_mut().minimum_distance)
+                                            .speed({
+                                                ONE_METER_DISTANCE as f32 * match meters {
+                                                    ..1000 => 1.0,
+                                                    1000..5000 => 100.0,
+                                                    5000.. => 1000.0
+                                                }
+                                            })
+                                            .custom_formatter(|dist, _| {
+                                                let meters = dist as u64 / ONE_METER_DISTANCE;
+                                                match meters {
+                                                    ..1000 => {format!("{meters}m")},
+                                                    1000..5000 => {format!("{:.1}km", meters as f32 / 1000.0)}
+                                                    5000.. => {format!("{}km", (meters as f32 / 1000.0).round())}
+                                                }
+                                            })
+                                            .ui(ui);
+                                    });
+                                });
+
+                                ui.separator();
+                                if let Some(static_id) = selected_static_id_opt {
                                         ui.vertical(|ui| {
+                                            ui.strong("Selected item:");
+                                            let is_retained = subgroup_sorted.sorter_mut().get_manual_modification(static_id) ==
+                                                Some(
+                                                    algorithm::geogroup::ManualModification::Retain
+                                                );
 
-                                            ribbon_slider(
-                                                ui,
-                                                egui::Slider::new(
-                                                    &mut subgroup_sorted.params_mut().depth,
-                                                    0..=backend::algorithm::MAX_DEPTH
-                                                ).custom_formatter(|num, range| {
-                                                    format!(".{:0>2}", ((num*100.0)/(backend::algorithm::MAX_DEPTH as f64)) as u8)
-                                                }), // TODO: Add also custom parser
-                                                backend::algorithm::Params::default().depth,
-                                                "Depth",
-                                                "High values yield deeply nested folder structure. Low values lead to shallow structures",
-                                                None,
-                                            );
-                                            ui.horizontal(|ui| {
-                                                let label = ui
-                                                    .label("Minimum distance of separated items")
-                                                    .on_hover_cursor(CursorIcon::Help)
-                                                    .on_hover_text("The minimum distance of consecutive items that are not in the same group. No two items going right after each other that are closer than this distance will be separated into different groups.");
+                                            if ui.add_enabled(!is_retained, egui::Button::new("Dissolve")).clicked() {
+                                                subgroup_sorted.sorter_mut().set_manual_modification(
+                                                    static_id,
+                                                    algorithm::geogroup::ManualModification::Dissolve
+                                                );
+                                            };
 
-                                                let meters = subgroup_sorted.params_mut().minimum_distance / ONE_METER_DISTANCE;
-                                                // TODO: Add custom parser
-                                                egui::DragValue::new(&mut subgroup_sorted.params_mut().minimum_distance)
-                                                    .speed({
-                                                        ONE_METER_DISTANCE as f32 * match meters {
-                                                            ..1000 => 1.0,
-                                                            1000..5000 => 100.0,
-                                                            5000.. => 1000.0
-                                                        }
-                                                    })
-                                                    .custom_formatter(|dist, _| {
-                                                        let meters = dist as u64 / ONE_METER_DISTANCE;
-                                                        match meters {
-                                                            ..1000 => {format!("{meters}m")},
-                                                            1000..5000 => {format!("{:.1}km", meters as f32 / 1000.0)}
-                                                            5000.. => {format!("{}km", (meters as f32 / 1000.0).round())}
-                                                        }
-                                                    })
-                                                    .ui(ui);
-                                            });
+                                            let clicked = egui::Button::new("Forcibly retain").selected(is_retained).ui(ui).clicked();
+                                            if clicked {
+                                                if is_retained {
+                                                    subgroup_sorted.sorter_mut().remove_manual_modification(
+                                                        static_id
+                                                    );
+                                                } else {
+                                                    subgroup_sorted.sorter_mut().set_manual_modification(
+                                                        static_id,
+                                                        algorithm::geogroup::ManualModification::Retain
+                                                    );
+                                                }
+                                            }
                                         });
-
-                                        ui.separator();
-                                        if let Some(static_id) = selected_static_id_opt {
-                                                ui.vertical(|ui| {
-                                                    ui.strong("Selected item:");
-                                                    let is_retained = subgroup_sorted.sorter_mut().get_manual_modification(static_id) ==
-                                                        Some(
-                                                            algorithm::geogroup::ManualModification::Retain
-                                                        );
-
-                                                    if ui.add_enabled(!is_retained, egui::Button::new("Dissolve")).clicked() {
-                                                        subgroup_sorted.sorter_mut().set_manual_modification(
-                                                            static_id,
-                                                            algorithm::geogroup::ManualModification::Dissolve
-                                                        );
-                                                    };
-
-                                                    let clicked = egui::Button::new("Forcibly retain").selected(is_retained).ui(ui).clicked();
-                                                    if clicked {
-                                                        if is_retained {
-                                                            subgroup_sorted.sorter_mut().remove_manual_modification(
-                                                                static_id
-                                                            );
-                                                        } else {
-                                                            subgroup_sorted.sorter_mut().set_manual_modification(
-                                                                static_id,
-                                                                algorithm::geogroup::ManualModification::Retain
-                                                            );
-                                                        }
-                                                    }
-                                                });
-                                        }
-                                    },
-                                    _ => {} // TODO
                                 }
-
-
                             }
 
                         }
-                        PaneContent::Naming => {}
+                        PaneContent::Naming => {
+                            let selected_static_id_opt = hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
+                            if let Some(subgroup_sorted) = get_lgsorted(hiearchy) && let Some(selected_id) = selected_static_id_opt {
+                                ui.vertical(|ui| {
+                                    let mut manual_rename = subgroup_sorted.sorter_mut()
+                                        .get_manual_rename(selected_id);
+
+                                    if let Some(mut manual_rename) = manual_rename {
+                                        let mut auto_naming = false;
+                                        egui::Checkbox::new(&mut auto_naming, "Name automatically").ui(ui);
+                                        ui.text_edit_singleline(&mut manual_rename.name);
+
+                                        if !auto_naming {
+                                            subgroup_sorted.sorter_mut().set_manual_rename(selected_id, manual_rename);
+                                        } else {
+                                            subgroup_sorted.sorter_mut().set_automatic_naming(selected_id);
+                                        }
+                                    } else {
+                                        let mut auto_naming = true;
+                                        egui::Checkbox::new(&mut auto_naming, "Name automatically").ui(ui);
+
+                                        if !auto_naming {
+                                            subgroup_sorted.sorter_mut().set_manual_rename(
+                                                selected_id,
+                                                ManualRename {
+                                                    kind: algorithm::geogroup::ManRenameKind::Full,
+                                                    name: String::new(),
+                                                }
+                                            );
+                                        }
+                                    }
+                                });
+
+                                //ui.line
+
+                            }
+
+                            //let mut auto_naming = subgroup_sorted.sor
+                            //egui::Checkbox::
+                        }
                         PaneContent::ManualEdit => {
                             /*if main_page.auto_sort {
                                 ui.vertical(|ui| {
@@ -702,13 +747,13 @@ fn show_hiearchy_list(
 fn name_label(ui: &mut egui::Ui, node_data: main_hierarchy::NodeData, is_group: bool, id: impl Into<egui::Id>) {
 
         ui.horizontal(|ui| {
-            match node_data.name {
-                main_hierarchy::NameStatus::Named(_) => {},
-                main_hierarchy::NameStatus::InProgress(_) => {
+            match node_data.auto_name {
+                main_hierarchy::AutoNameStatus::Named(_) => {},
+                main_hierarchy::AutoNameStatus::InProgress(_) => {
                     ui.spinner();
                     //ui.small(RichText::new("Naming...").italics());
                 },
-                main_hierarchy::NameStatus::Error { ref err, name: _ } => {
+                main_hierarchy::AutoNameStatus::Error { ref err, name: _ } => {
                     ui.label(RichText::new("🏷 ").color(Color32::RED))
                         .on_hover_text(
                             RichText::new(format!("Naming failed: {err}")).color(Color32::RED));
@@ -721,7 +766,7 @@ fn name_label(ui: &mut egui::Ui, node_data: main_hierarchy::NodeData, is_group: 
             };
 
             ui.add(egui::Label::new(
-                if let Some(label) = node_data.name.get_name() {
+                if let Some(label) = node_data.get_name() {
                     label.into()
                 } else {
                     RichText::new(format!("Name missing")).italics()
@@ -973,91 +1018,94 @@ impl App {
         egui::CentralPanel::default()
             .frame(Frame::default().inner_margin(Margin::same(32)))
             .show(ctx, |ui| {
-                ui.style_mut().spacing.button_padding = Vec2::new(32.0, 16.0);
+                ui.vertical_centered(|ui| {
+                    ui.style_mut().spacing.button_padding = Vec2::new(32.0, 16.0);
 
-                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
-                ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
-                    ui.style_mut().visuals.widgets.inactive.bg_fill;
-                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
-                    color: ui.style().visuals.selection.bg_fill,
-                    width: 2.0,
-                };*/
+                    /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                        ui.style_mut().visuals.widgets.inactive.bg_fill;
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                        color: ui.style().visuals.selection.bg_fill,
+                        width: 2.0,
+                    };*/
 
-                //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
-                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
-                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
-                    color: ui.style().visuals.selection.bg_fill,
-                    width: 1.0,
-                };*/
+                    //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+                    /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                        color: ui.style().visuals.selection.bg_fill,
+                        width: 1.0,
+                    };*/
 
-                //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
-                ui.style_mut().visuals.widgets.inactive.bg_fill = ui
-                    .style_mut()
-                    .visuals
-                    .widgets
-                    .inactive
-                    .bg_fill
-                    .gamma_multiply(0.7);
+                    //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
+                    ui.style_mut().visuals.widgets.inactive.bg_fill = ui
+                        .style_mut()
+                        .visuals
+                        .widgets
+                        .inactive
+                        .bg_fill
+                        .gamma_multiply(0.7);
 
-                ui.style_mut().visuals.widgets.hovered.bg_fill =
-                    ui.style_mut().visuals.widgets.inactive.bg_fill;
-                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
-                    color: ui.style().visuals.selection.bg_fill,
-                    width: 1.0,
-                };
+                    ui.style_mut().visuals.widgets.hovered.bg_fill =
+                        ui.style_mut().visuals.widgets.inactive.bg_fill;
+                    ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
+                        color: ui.style().visuals.selection.bg_fill,
+                        width: 1.0,
+                    };
 
-                /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
-                ui.style().visuals.selection.bg_fill;*/
+                    /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
+                    ui.style().visuals.selection.bg_fill;*/
 
-                /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
-                ui.style_mut().visuals.widgets.hovered.bg_fill = ui
-                    .style_mut()
-                    .visuals
-                    .widgets
-                    .hovered
-                    .bg_fill
-                    .lerp_to_gamma(Color32::WHITE, 0.3);*/
+                    /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
+                    ui.style_mut().visuals.widgets.hovered.bg_fill = ui
+                        .style_mut()
+                        .visuals
+                        .widgets
+                        .hovered
+                        .bg_fill
+                        .lerp_to_gamma(Color32::WHITE, 0.3);*/
 
-                /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
-                ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
-                    ui.style_mut().visuals.widgets.hovered.bg_fill;
-                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
-                ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
+                    /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                        ui.style_mut().visuals.widgets.hovered.bg_fill;
+                    ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+                    ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
 
-                ui.label(RichText::new("Welcome to Geogroup").font(FontId {
-                    size: 48.0,
-                    family: FontFamily::Name("Light".into()),
-                }));
-                ui.add_space(32.0);
+                    ui.label(RichText::new("Welcome to Geogroup").font(FontId {
+                        size: 48.0,
+                        family: FontFamily::Name("Light".into()),
+                    }));
+                    ui.add_space(32.0);
 
-                if !matches!(welcome_page, WelcomePage::Loading(_)) {
-                    //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
+                    if !matches!(welcome_page, WelcomePage::Loading(_)) {
+                        //ui.add_space(ctx.style().text_styles[&TextStyle::Heading].size);
 
-                    self.pick_file_btn(ui);
-                    let clicked = big_btn(
-                        ui,
-                        "🗋",
-                        "Open GEGR file",
-                        "Continue working on your saved project",
-                    )
-                    .clicked();
+                        self.pick_file_btn(ui);
+                        /*let clicked = big_btn(
+                            ui,
+                            "🗋",
+                            "Open GEGR file",
+                            "Continue working on your saved project",
+                        )
+                        .clicked();
 
-                    if clicked {
-                        todo!()
+                        if clicked {
+                            todo!()
+                        }*/
+                    };
+
+                    ui.horizontal(|ui| ui.link(" GitHub"));
+
+                    match welcome_page {
+                        WelcomePage::Normal => {}
+                        WelcomePage::Loading(msg) => { // TODO: Remove
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(&*msg);
+                            });
+                        }
                     }
-                };
+                });
 
-                ui.horizontal(|ui| ui.link(" GitHub"));
-
-                match welcome_page {
-                    WelcomePage::Normal => {}
-                    WelcomePage::Loading(msg) => { // TODO: Remove
-                        ui.horizontal(|ui| {
-                            ui.spinner();
-                            ui.label(&*msg);
-                        });
-                    }
-                }
             });
     }
     fn pick_file_btn(&mut self, ui: &mut egui::Ui) {

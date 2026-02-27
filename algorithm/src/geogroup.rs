@@ -10,6 +10,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub enum NameStatus<NDItem, NameErr> {
+    /// Named automatically
     Named(Vec<NDItem>),
     /// Naming started and is not yet finished. This means that its naming is either in progress or
     /// there has been "global" naming error - eg. the naming never started in the first place.
@@ -27,6 +28,8 @@ pub struct NodeInfo<Time, NDItem = (), NameErr = Infallible> {
     pub local_id_path: Vec<u64>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
     pub name: NameStatus<NDItem, NameErr>,
+    /// [`Some`] if the item has been manually renamed.
+    pub manual_name: Option<ManualRename>,
 
     pub fl_time: FirstLast<Time>,
 
@@ -43,6 +46,20 @@ pub struct Sorter<
     params: Params,
     /// Maps global ids to manual modifications
     manual_modification: HashMap<u64, ManualModification>,
+    /// Maps global ids to manually assigned names
+    manual_renames: HashMap<u64, ManualRename>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct ManualRename {
+    pub kind: ManRenameKind,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum ManRenameKind {
+    Full,
+    //KeepDate // TODO
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -210,6 +227,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                         .map_err(|e| e.clone())
                 );
                 NodeInfo {
+                    manual_name: self.get_manual_rename(node.node_data().original.data.get_id()),
                     id: node_data.original.data.id,
                     local_id_path: id_path,
                     fl_time: node_data.original.data.get_first_last_time().cloned().unwrap_or_else(|| {
@@ -223,7 +241,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                         Ok(Err(err)) => NameStatus::OtherError(err),
                         Err(deep_sorter::GetNamingDataErr::NoNamingData) => NameStatus::LocationMissing,
                         Err(deep_sorter::GetNamingDataErr::NotYetAssigned) => NameStatus::InProgress,
-                    }
+                    },
                 }
             })
     }
@@ -239,7 +257,18 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
             deep_sorter: Arc::new(DeepSorter::new(items)),
             params,
             manual_modification: HashMap::new(),
+            manual_renames: HashMap::new()
         }
+    }
+
+    pub fn set_manual_rename(&mut self, id: u64, name: ManualRename) {
+        self.manual_renames.insert(id, name);
+    }
+    pub fn set_automatic_naming(&mut self, id: u64) {
+        self.manual_renames.remove(&id);
+    }
+    pub fn get_manual_rename(&self, id: u64) -> Option<ManualRename> {
+        self.manual_renames.get(&id).cloned()
     }
 
     pub fn remove_manual_modification(&mut self, id: u64) {
@@ -248,7 +277,6 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
     pub fn set_manual_modification(&mut self, id: u64, modification: ManualModification) {
         self.manual_modification.insert(id, modification);
     }
-
     pub fn get_manual_modification(&self, id: u64) -> Option<ManualModification> {
         self.manual_modification.get(&id).cloned()
     }
