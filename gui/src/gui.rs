@@ -17,6 +17,7 @@ use geogroup_backend::progress;
 use geogroup_backend::ONE_METER_DISTANCE;
 use std::fmt::Debug;
 use std::ops::RangeInclusive;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -87,7 +88,8 @@ impl eframe::App for App {
 
         match &mut self.content {
             AppContent::WelcomePage(_) => self.draw_welcome_page(ctx),
-            AppContent::MainPage(_) => self.draw_main_page(ctx),
+            AppContent::MainPage(MainPage { hiearchy: Some(_), ..}) => self.draw_main_page(ctx),
+            AppContent::MainPage(MainPage { hiearchy: None, ..}) => self.draw_apply_page(ctx),
         }
     }
 }
@@ -126,13 +128,25 @@ impl App {
         todo!()
     }*/
 
-    /// Panics if `content` is not [`AppContent::MainPage`]
+    /// Panics if `content` is not [`AppContent::MainPage`] or if `hiearchy` is not `Some`
     pub(crate) fn draw_main_page(&mut self, ctx: &egui::Context) {
         let AppContent::MainPage(ref mut main_page) = self.content else {
             panic!(
                 "AppContent is not `MainPage` when `App::main_page` was called.
                 It's the following instead: {:#?}",
                 self.content
+            )
+        };
+
+        enum ApplyWay {
+            Copy, Symlink
+        }
+        let mut apply_dir = None;
+        let mut apply_way = ApplyWay::Copy;
+
+        let Some(ref mut hiearchy) = main_page.hiearchy else {
+            panic!(
+                "`MainPage` doesn't have a `hiearchy` field when `App::main_page` was called.",
             )
         };
 
@@ -175,9 +189,9 @@ impl App {
                 animated_pager(ui, pane, &TransitionStyle::horizontal(ui).with_fade(), egui::Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
-                            let selected_static_id_opt = main_page.hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
+                            let selected_static_id_opt = hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
 
-                            let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = main_page.hiearchy.0.root_group_mut().children_mut()[0]
+                            let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = hiearchy.0.root_group_mut().children_mut()[0]
                                 else { todo!() } ;
 
                             let main_hierarchy::InnerLeafData::LazySubgroup(subgroup) = leaf.leaf_data_mut() else { todo!() };
@@ -297,38 +311,35 @@ impl App {
                             }*/
                         }
                         PaneContent::Apply => {
-                            /*if ui.button("Apply by copying files").clicked() {
+                            if ui.button("📋 Apply by copying files").clicked() {
                                 let target_dir = rfd::FileDialog::new().pick_folder();
 
                                 if let Some(target_dir) = target_dir {
-                                    // This is here, because if there already was some progress, it would be erased by this
-                                    // TODO: Prevent this
-                                    debug_assert!(main_page.progress.is_none(), "There is some progress already, but we are trying to overwrite it by applying");
-
-                                    self.inbox.sender().send(
-                                        Message::SetProgress(Some(Progress {
-                                            action: ProgressAction::Applying,
-                                            progress: None,
-                                        }))
-                                    ).unwrap();
-
-                                    let hiearchy = backend::HiearchyItem::Group(main_page.hiearchy.clone(), hiearchy::GroupData::new()).map_leafs(&|file| backend::apply::ApplyLeaf {
-                                        target_name: file.name,
-                                        original_path: file.path
-                                    });
-
-                                    let inbox_sender = self.inbox.sender();
-
-                                    thread::spawn(move || {
-                                        backend::apply::apply_by_copy(hiearchy, target_dir).unwrap();
-
-                                        inbox_sender.send(
-                                            Message::SetProgress(None)
-                                        ).unwrap();
-                                    });
-
+                                    apply_way = ApplyWay::Copy;
+                                    apply_dir = Some(target_dir);
                                 }
-                            };*/
+                            };
+
+                            if ui.button("🔗 Apply by creating symbolic links").clicked() {
+                                let target_dir = rfd::FileDialog::new().pick_folder();
+
+                                if let Some(target_dir) = target_dir {
+                                    apply_way = ApplyWay::Symlink;
+                                    apply_dir = Some(target_dir);
+                                }
+                            };
+
+                            if let Some(err) = &main_page.apply_final_error {
+                                ui.with_layout(Layout::top_down(Align::Min).with_cross_justify(false),
+                                    |ui| {
+                                        error_ui(ui, &format!("Failed to apply hierarchy"));
+                                        ui.menu_button("See details", |ui| {
+                                            egui::Label::new(&format!("{err}"))
+                                                .selectable(true)
+                                                .ui(ui);
+                                        });
+                                });
+                            }
                         }
                         PaneContent::Home => {
                             #[cfg(target_os = "linux")]
@@ -436,12 +447,51 @@ impl App {
 
             show_hiearchy(
                 ui,
-                &main_page.hiearchy,
+                &hiearchy,
                 &mut main_page.selection,
                 &main_page.flatten_mode,
                 main_page.image_scale,
             )
         });
+
+        if let Some(apply_dir) = apply_dir {
+            let taken_hiearchy =
+                main_page.hiearchy.take().expect("Hiearchy suspiciously missing");
+            let sender = main_page.apply_sender.clone();
+
+            thread::spawn(move || {
+                let mut files_done = 0;
+
+                let res = match apply_way {
+                    ApplyWay::Copy => backend::apply::apply_by_copy(
+                        taken_hiearchy.root_for_fs(),
+                        &apply_dir,
+                        |src, target| {
+                            sender.send(ApplyMsg::Progress(format!(
+                                "Copying file {} to {}",
+                                src.to_string_lossy(),
+                                target.to_string_lossy()
+                            )));
+                        }
+                    ),
+                    ApplyWay::Symlink => backend::apply::apply_by_symlink(
+                        taken_hiearchy.root_for_fs(),
+                        &apply_dir,
+                        |src, target| {
+                            sender.send(ApplyMsg::Progress(format!(
+                                "Symlinking file {} to {}",
+                                src.to_string_lossy(),
+                                target.to_string_lossy()
+                            )));
+                        }
+                    ),
+                };
+                match res {
+                    Ok(()) => sender.send(ApplyMsg::Success(taken_hiearchy)),
+                    Err(err) => sender.send(ApplyMsg::Error(err.to_string(), taken_hiearchy)),
+                }
+            });
+        }
     }
 }
 
@@ -793,7 +843,125 @@ pub fn big_btn(ui: &mut egui::Ui, icon: &str, heading: &str, description: &str) 
 
 impl WelcomePage {}
 
+#[derive(Debug)]
+pub enum ApplyMsg {
+    /// Returns ownership of the hierarchy
+    Success(backend::main_hierarchy::TemplateHiearchy),
+    /// Returns ownership of the hierarchy
+    Error(String, backend::main_hierarchy::TemplateHiearchy),
+    Progress(String)
+}
+
+impl MainPage {
+    /// Get the last message from the apply process.
+    /// Also updates itself in case of failure or applying being finished
+    pub fn last_apply_msg(&mut self) -> Option<&str> {
+        let mut received_msg = None;
+        // Get to the end of the channel
+        while let Ok(msg) = self.apply_receiver.try_recv() {
+            received_msg = Some(msg);
+        }
+
+        match received_msg {
+            Some(ApplyMsg::Success(returned_hierarchy)) => {
+                self.last_apply_msg = None;
+                self.apply_final_error = None;
+                self.hiearchy = Some(returned_hierarchy);
+            },
+            Some(ApplyMsg::Error(error, returned_hierarchy)) => {
+                self.apply_final_error = Some(error);
+                self.hiearchy = Some(returned_hierarchy);
+            },
+            Some(ApplyMsg::Progress(msg)) => {
+                self.last_apply_msg = Some(msg);
+            },
+            None => {},
+        }
+
+        self.last_apply_msg.as_deref()
+    }
+}
+
 impl App {
+
+    fn draw_apply_page(&mut self, ctx: &egui::Context) {
+        let AppContent::MainPage(ref mut main_page) = self.content else {
+            panic!(
+                "AppContent is not `MainPage` when `App::draw_apply_page` was called.
+                It's the following instead: {:#?}",
+                self.content
+            )
+        };
+
+        egui::CentralPanel::default()
+            .frame(Frame::default().inner_margin(Margin::same(32)))
+            .show(ctx, |ui| {
+                ui.style_mut().spacing.button_padding = Vec2::new(32.0, 16.0);
+
+                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                    ui.style_mut().visuals.widgets.inactive.bg_fill;
+                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 2.0,
+                };*/
+
+                //ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+                /*ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 1.0,
+                };*/
+
+                //ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::BLACK;
+                ui.style_mut().visuals.widgets.inactive.bg_fill = ui
+                    .style_mut()
+                    .visuals
+                    .widgets
+                    .inactive
+                    .bg_fill
+                    .gamma_multiply(0.7);
+
+                ui.style_mut().visuals.widgets.hovered.bg_fill =
+                    ui.style_mut().visuals.widgets.inactive.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke {
+                    color: ui.style().visuals.selection.bg_fill,
+                    width: 1.0,
+                };
+
+                /*ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
+                ui.style().visuals.selection.bg_fill;*/
+
+                /*ui.style_mut().visuals.widgets.hovered = ui.style_mut().visuals.widgets.inactive;
+                ui.style_mut().visuals.widgets.hovered.bg_fill = ui
+                    .style_mut()
+                    .visuals
+                    .widgets
+                    .hovered
+                    .bg_fill
+                    .lerp_to_gamma(Color32::WHITE, 0.3);*/
+
+                /*ui.style_mut().visuals.widgets.hovered.bg_fill = ui.style().visuals.selection.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                    ui.style_mut().visuals.widgets.hovered.bg_fill;
+                ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+                ui.style_mut().visuals.widgets.hovered.expansion = 1.0;*/
+
+                ui.label(RichText::new("Applying...").font(FontId {
+                    size: 48.0,
+                    family: FontFamily::Name("Light".into()),
+                }));
+                ui.add_space(16.0);
+
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    if let Some(msg) = main_page.last_apply_msg() {
+                        egui::Label::new(msg).wrap().selectable(true).ui(ui);
+                    }
+                });
+            });
+    }
+
     /// Panics if `self.app_content` is not WelcomePage
     fn draw_welcome_page(&mut self, ctx: &egui::Context) {
         let AppContent::WelcomePage(ref welcome_page) = self.content else {
@@ -802,7 +970,7 @@ impl App {
 
         let welcome_page = welcome_page.to_owned();
 
-        egui::SidePanel::left("recents")
+        egui::CentralPanel::default()
             .frame(Frame::default().inner_margin(Margin::same(32)))
             .show(ctx, |ui| {
                 ui.style_mut().spacing.button_padding = Vec2::new(32.0, 16.0);
@@ -891,19 +1059,6 @@ impl App {
                     }
                 }
             });
-
-        egui::CentralPanel::default()
-            .frame(
-                Frame::default()
-                    .fill(ctx.style().visuals.panel_fill)
-                    .inner_margin(Margin::same(32)),
-            )
-            .show(ctx, |ui| {
-                // TODO: Actually implement
-                ui.heading("Recent projects");
-
-                ui.label("No recently opened projects\nUse the left panel to open a folder with your photos")
-            });
     }
     fn pick_file_btn(&mut self, ui: &mut egui::Ui) {
         let clicked = big_btn(
@@ -981,7 +1136,8 @@ pub enum AppContent {
 #[derive(Debug)]
 struct MainPage {
     pane: Option<PaneContent>,
-    hiearchy: backend::main_hierarchy::TemplateHiearchy,
+    /// Is [`None`] if we are currently applying
+    hiearchy: Option<backend::main_hierarchy::TemplateHiearchy>,
     flatten_mode: Option<FlattenMode>, // TODO: Remove
     selection: Vec<backend::selection::PathComponent>,
     image_scale: u16,
@@ -993,6 +1149,14 @@ struct MainPage {
     /// This may happen when user changes configuration during sorting. In that case, the already running `sort_process` uses outdated configuration.
     sort_pending: bool,
     sort_process: Option<thread::JoinHandle<()>>,
+
+    /// Use the [`MainPage::last_apply_msg`] method instead
+    last_apply_msg: Option<String>,
+    /// None if the final apply was successful
+    apply_final_error: Option<String>,
+    apply_receiver: mpsc::Receiver<ApplyMsg>,
+    /// Used by the applying thread
+    apply_sender: mpsc::Sender<ApplyMsg>,
 }
 
 #[derive(Debug)]
@@ -1040,7 +1204,7 @@ impl Message {
             Message::Sorted { new_hiearchy } => {
                 if let AppContent::MainPage(ref mut main_page) = app.content {
                     main_page.selection = Vec::new();
-                    main_page.hiearchy = new_hiearchy;
+                    main_page.hiearchy = Some(new_hiearchy);
                 } else { /* TODO: Warning */
                 }
             }
@@ -1076,9 +1240,10 @@ impl MainPage {
         let root_group = main_hierarchy::lazy_group::Dynamic::new(hierarchy_template);
 
         log::debug!("Created root group");
+        let (apply_sender, apply_receiver) = mpsc::channel();
 
         MainPage {
-            hiearchy: root_group.into(),
+            hiearchy: Some(root_group.into()),
             /*hiearchy
             .into_iter()
             .map(|h| {
@@ -1113,6 +1278,10 @@ impl MainPage {
             sort_process: None,
             // True to perform an initial sort
             sort_pending: true,
+            last_apply_msg: None,
+            apply_final_error: None,
+            apply_receiver,
+            apply_sender,
         }
     }
 

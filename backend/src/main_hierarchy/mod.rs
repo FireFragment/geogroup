@@ -358,7 +358,7 @@ impl TemplateHiearchy {
     /// to be applied, see [GroupData::LazySubgroupRoot] which does not correspond to a folder.
     pub fn root_final<'a>(
         &'a self,
-    ) -> impl ImplGroupRef + 'a {
+    ) -> impl ImplGroupRef<E = std::io::Error> + 'a {
         use lazy_hierarchy::fused;
 
         self.0
@@ -403,6 +403,57 @@ impl TemplateHiearchy {
             })
             .fuse()
             .map_structure_error(|err, _| StructureErr::Error(err))
+    }
+
+    pub fn root_for_fs(&self) -> impl apply::LZForApply<Err = RootForRsError<std::io::Error>> {
+        self.root_final()
+            .map_leaf_data(|leaf| match leaf.leaf_data() {
+                LeafData::File(file_data) => {
+                    Ok(apply::LeafData {
+                        original_path: file_data.path.deref().clone(),
+                    })
+                }
+                LeafData::LazyGroupInitializing { message, progress:_ } => {
+                    Err(RootForRsError::LoadingTemplate(message))
+                }
+            })
+            .map_node_data(|node|
+                match node.node_data().name {
+                    NameStatus::Named(name) | NameStatus::InProgress(Some(name)) | NameStatus::Error { err: _, name: Some(name) }
+                    => Ok(apply::NodeData {
+                        target_name: name,
+                    }),
+                    NameStatus::InProgress(None) => Err(RootForRsError::NamingInProgress),
+                    NameStatus::Error { err, name: None } => Ok(apply::NodeData {
+                        target_name: "Unnamed".into(),
+                    }),
+                }
+            )
+            .map_structure_error(|err, _| RootForRsError::StructureError(err))
+    }
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum RootForRsError<SE: std::error::Error> {
+    LoadingTemplate(Option<String>),
+    NamingInProgress,
+    StructureError(StructureErr<SE>),
+}
+
+impl<SE: std::error::Error> std::fmt::Display for RootForRsError<SE> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RootForRsError::LoadingTemplate(Some(message)) =>
+                write!(f, "sorting is in progress (currently, the following happens: {})", message),
+            RootForRsError::LoadingTemplate(None) =>
+                write!(f, "sorting is in progress"),
+            RootForRsError::NamingInProgress =>
+                write!(f, "naming is in progress"),
+            RootForRsError::StructureError(StructureErr::Pending) =>
+                write!(f, "unknown error"), // TODO: Find out what even is StructureErr::Pending
+            RootForRsError::StructureError(StructureErr::Error(err)) =>
+                write!(f, "{}", err),
+        }
     }
 }
 

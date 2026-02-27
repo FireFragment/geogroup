@@ -684,7 +684,7 @@ dependencies = [
  "quick-xml 0.38.3",
  "rust-ini",
  "serde",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "time",
  "url",
 ]
@@ -695,7 +695,7 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5532f65342f789f9c1b7078ea9c9cd9293cd62dcc284fa99adc4a1c9ba43469c"
 dependencies = [
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2394,7 +2394,18 @@ dependencies = [
  "lazy_hierarchy",
  "log",
  "take_mut",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
+ "unwrap-infallible",
+]
+
+[[package]]
+name = "geogroup_apply"
+version = "0.1.0"
+dependencies = [
+ "lazy_hierarchy",
+ "log",
+ "sanitise-file-name",
+ "thiserror 2.0.18",
  "unwrap-infallible",
 ]
 
@@ -2408,6 +2419,7 @@ dependencies = [
  "either",
  "geo 0.29.3",
  "geogroup_algo",
+ "geogroup_apply",
  "geogroup_common",
  "geogroup_loaders",
  "geogroup_naming",
@@ -2451,7 +2463,7 @@ dependencies = [
  "log",
  "mundy",
  "rfd",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3820,7 +3832,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "spirv",
  "strum 0.26.3",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "unicode-ident",
 ]
 
@@ -3856,7 +3868,7 @@ dependencies = [
  "log",
  "mvt-reader",
  "pmtiles",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -3973,7 +3985,7 @@ dependencies = [
  "iso6709parse",
  "nom 7.1.3",
  "regex",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "tracing",
 ]
 
@@ -4699,7 +4711,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1db05f56d34358a8b1066f67cbb203ee3e7ed2ba674a6263a1d5ec6db2204323"
 dependencies = [
  "memchr",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "ucd-trie",
 ]
 
@@ -4857,7 +4869,7 @@ dependencies = [
  "fmmap",
  "reqwest 0.13.2",
  "rust-s3",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "tokio",
  "varint-rs",
 ]
@@ -5360,7 +5372,7 @@ checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -5631,7 +5643,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sysinfo",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "time",
  "tokio",
  "tokio-stream",
@@ -5749,6 +5761,12 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "sanitise-file-name"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d36299972b96b8ae7e8f04ecbf75fb41a27bf3781af00abcf57609774cb911"
 
 [[package]]
 name = "schannel"
@@ -6369,11 +6387,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.17"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
 dependencies = [
- "thiserror-impl 2.0.17",
+ "thiserror-impl 2.0.18",
 ]
 
 [[package]]
@@ -6389,9 +6407,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.17"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7197,7 +7215,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-windows-linux-android",
@@ -7271,7 +7289,7 @@ dependencies = [
  "raw-window-handle",
  "renderdoc-sys",
  "smallvec",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "wasm-bindgen",
  "web-sys",
  "wgpu-types",
@@ -7289,7 +7307,7 @@ dependencies = [
  "bytemuck",
  "js-sys",
  "log",
- "thiserror 2.0.17",
+ "thiserror 2.0.18",
  "web-sys",
 ]
 

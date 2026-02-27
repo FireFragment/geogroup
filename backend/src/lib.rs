@@ -28,6 +28,7 @@ pub mod gg_prelude {
     pub use geogroup_algo as algorithm;
     pub use geogroup_loaders as loaders;
     pub use geogroup_naming as naming;
+    pub use geogroup_apply as apply;
     //pub use geogroup_apply as apply;
 
     pub use lazy_hierarchy;

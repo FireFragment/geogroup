@@ -11,6 +11,7 @@ geogroup_algo = { path = "../algorithm" }
 geogroup_loaders = { path = "../loaders" }
 geogroup_naming = { path = "../naming" }
 geogroup_common = { path = "../common" }
+geogroup_apply = { path = "../apply" }
 nametiles_reader = { path = "../nametiles/reader" }
 thiserror = "1.0.63"
 log = "0.4.27"

@@ -7,3 +7,5 @@ edition = "2021"
 lazy_hierarchy = { path = "../lazy_hierarchy" }
 log = "0.4.25"
 sanitise-file-name = "1.0.0"
+thiserror = "2.0.18"
+unwrap-infallible = "1.0.0"
