@@ -126,6 +126,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
             })
         //
     }
+
 }
 
 /// Information about nodes which is generated once and then used instead of being generated on the fly

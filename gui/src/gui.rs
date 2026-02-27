@@ -175,6 +175,8 @@ impl App {
                 animated_pager(ui, pane, &TransitionStyle::horizontal(ui).with_fade(), egui::Id::from("ribbon"), |ui, pane| {
                     match pane {
                         PaneContent::Grouping => {
+                            let selected_static_id_opt = main_page.hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
+
                             let lazy_hierarchy::concrete::Node::Leaf(ref mut leaf) = main_page.hiearchy.0.root_group_mut().children_mut()[0]
                                 else { todo!() } ;
 
@@ -227,10 +229,45 @@ impl App {
                                                     .ui(ui);
                                             });
                                         });
+
+                                        ui.separator();
+                                        if let Some(static_id) = selected_static_id_opt {
+                                                ui.vertical(|ui| {
+                                                    ui.strong("Selected item:");
+                                                    let is_retained = subgroup_sorted.sorter_mut().get_manual_modification(static_id) ==
+                                                        Some(
+                                                            algorithm::geogroup::ManualModification::Retain
+                                                        );
+
+                                                    if ui.add_enabled(!is_retained, egui::Button::new("Dissolve")).clicked() {
+                                                        subgroup_sorted.sorter_mut().set_manual_modification(
+                                                            static_id,
+                                                            algorithm::geogroup::ManualModification::Dissolve
+                                                        );
+                                                    };
+
+                                                    let clicked = egui::Button::new("Forcibly retain").selected(is_retained).ui(ui).clicked();
+                                                    if clicked {
+                                                        if is_retained {
+                                                            subgroup_sorted.sorter_mut().remove_manual_modification(
+                                                                static_id
+                                                            );
+                                                        } else {
+                                                            subgroup_sorted.sorter_mut().set_manual_modification(
+                                                                static_id,
+                                                                algorithm::geogroup::ManualModification::Retain
+                                                            );
+                                                        }
+                                                    }
+                                                });
+                                        }
                                     },
                                     _ => {} // TODO
                                 }
+
+
                             }
+
                         }
                         PaneContent::Naming => {}
                         PaneContent::ManualEdit => {

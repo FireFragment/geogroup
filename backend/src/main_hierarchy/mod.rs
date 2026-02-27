@@ -45,7 +45,8 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                         NodeData {
                             name: NameStatus::Named(String::from("Root")), // TODO: Translate
                             local_id_path: None,
-                            additional_problems: Vec::new()
+                            additional_problems: Vec::new(),
+                            static_id: None
                         },
                     ),
                 )],
@@ -53,7 +54,8 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                 NodeData {
                     name: NameStatus::Named(String::from("Root")), // TODO: Translate
                     local_id_path: None,
-                    additional_problems: Vec::new()
+                    additional_problems: Vec::new(),
+                    static_id: None
                 },
             ),
         ))
@@ -305,6 +307,19 @@ impl LGSorted {
             //});
         }
     }
+
+    pub fn sorter_mut(&mut self) -> &mut algorithm::Sorter<
+            ConcreteSortableItem<
+                geo_lib::Point,
+                DateTime<chrono::FixedOffset>,
+                FileData,
+                geogroup_loaders::general_loader::LocationError,
+            >,
+            nametiles_reader::NamePart,
+            geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>,
+        > {
+        &mut self.sorter
+    }
 }
 
 
@@ -480,6 +495,10 @@ pub struct NodeData {
     /// This _identification path_ is preserved during algorithm parameter changes, so it can be used to track selection,
     /// animating the nodes etc.
     pub local_id_path: Option<Vec<u8>>,
+
+
+    /// ID of the node unique in the lazy subtree.
+    pub static_id: Option<u64>,
 }
 #[derive(Clone, Debug)]
 pub struct FileData {

@@ -47,6 +47,7 @@ impl Final {
                                                              log::error!("Path ending in `..`: {:?}", node.node_data());
                                                              String::new()
                                                          }),*/
+                        static_id: None,
                     }),
             ),
             lazy_group::Final::Sorted(sorted, ..) => {
@@ -64,6 +65,7 @@ impl Final {
 
                         let time = node.node_data().fl_time.first.format("%Y-%m-%d %H-%M-%S");
                         NodeData {
+                            static_id: Some(node.node_data().id),
                             name: match node.node_data().name {
                                 // TODO: Add date as name
                                 algorithm::NameStatus::Named(items) => {

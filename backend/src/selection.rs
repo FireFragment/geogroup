@@ -139,6 +139,22 @@ impl main_hierarchy::TemplateHiearchy {
         )
     }
 
+    pub fn selection_to_static_id(&self, selection_iter: impl Iterator<Item = PathComponent> + Clone)
+        -> Option<u64> {
+        let indices = self.selection_to_indices(selection_iter);
+        let mut current_group = self.root_final();
+
+        for idx in indices {
+            let child = current_group.get_children().ok()?.nth(idx)?;
+            match child {
+                lazy_hierarchy::NodeRef::Group(g) => current_group = g,
+                lazy_hierarchy::NodeRef::Leaf(l) => return l.node_data().static_id,
+            }
+        }
+
+        current_group.node_data().static_id
+    }
+
     /// Convert simple indices to selection in form of [`PathComponent`]s
     pub fn indices_to_selection<I: Iterator<Item = usize>>(
         &self,

@@ -1,4 +1,5 @@
 use core::fmt;
+use std::collections::HashMap;
 use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 use std::{hash::Hash, rc::Rc, sync::Arc};
@@ -29,7 +30,7 @@ pub struct NodeInfo<Time, NDItem = (), NameErr = Infallible> {
 
     pub fl_time: FirstLast<Time>,
 
-    /// Static ID of the node
+    /// Static ID of the node, unique in the entire tree
     pub id: u64
 }
 
@@ -40,6 +41,15 @@ pub struct Sorter<
 > {
     deep_sorter: Arc<DeepSorter<Item, NDItem, NameErr>>,
     params: Params,
+    /// Maps global ids to manual modifications
+    manual_modification: HashMap<u64, ManualModification>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ManualModification {
+    Dissolve,
+    /// Prevent the node from being dissolved, eg. by too low force.
+    Retain
 }
 
 impl<
@@ -138,6 +148,18 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                         .unwrap_or_else(|| Vec::new()),
                 };
 
+                // First consider manual overrides
+                if let Some(modification) = self.get_manual_modification(group.node_data().data.id) {
+                    return match modification {
+                        ManualModification::Dissolve => {
+                            Some(create_inherited_data())
+                        }
+                        ManualModification::Retain => {
+                            None
+                        }
+                    }
+                }
+
                 match group.group_data().strength {
                     StrengthInfo::Ok{
                         strength,
@@ -216,7 +238,19 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
         Self {
             deep_sorter: Arc::new(DeepSorter::new(items)),
             params,
+            manual_modification: HashMap::new(),
         }
+    }
+
+    pub fn remove_manual_modification(&mut self, id: u64) {
+        self.manual_modification.remove(&id);
+    }
+    pub fn set_manual_modification(&mut self, id: u64, modification: ManualModification) {
+        self.manual_modification.insert(id, modification);
+    }
+
+    pub fn get_manual_modification(&self, id: u64) -> Option<ManualModification> {
+        self.manual_modification.get(&id).cloned()
     }
 
     pub fn deep_sorter(&self) -> &DeepSorter<Item, NDItem, NameErr> {
