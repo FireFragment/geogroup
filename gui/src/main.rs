@@ -10,6 +10,7 @@ mod style;
 mod tabbar;
 mod thumbnails;
 use backend::gg_prelude::*;
+use eframe::egui::Vec2;
 use gui::Message;
 use tabbar::tabbar;
 
@@ -73,7 +74,7 @@ fn main() -> eframe::Result {
     }
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_maximized(true),
+        viewport: egui::ViewportBuilder::default().with_inner_size(Vec2::new(700.0, 400.0)),
         ..Default::default()
     };
 

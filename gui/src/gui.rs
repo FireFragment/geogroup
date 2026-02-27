@@ -186,9 +186,8 @@ impl App {
                     [
                         (Tab(PaneContent::Grouping), "🗁 Grouping"),
                         (Tab(PaneContent::Naming), "🏷 Naming"),
-                        (Tab(PaneContent::ManualEdit), "✏ Manual edits"),
                         (Tab(PaneContent::Apply), "☑ Apply"),
-                        (Tab(PaneContent::Home), "🏠 Home"),
+                        (Tab(PaneContent::Window), "🗖 Window"),
                         (Tab(PaneContent::View), "👁 View"),
                         //(Action(Action::Deselect), "Deselect all"),
                     ],
@@ -257,34 +256,35 @@ impl App {
 
                                 ui.separator();
                                 if let Some(static_id) = selected_static_id_opt {
-                                        ui.vertical(|ui| {
-                                            ui.strong("Selected item:");
-                                            let is_retained = subgroup_sorted.sorter_mut().get_manual_modification(static_id) ==
-                                                Some(
-                                                    algorithm::geogroup::ManualModification::Retain
-                                                );
 
-                                            if ui.add_enabled(!is_retained, egui::Button::new("Dissolve")).clicked() {
+                                    ui.vertical(|ui| {
+                                        ui.strong("Selected item:");
+                                        let is_retained = subgroup_sorted.sorter_mut().get_manual_modification(static_id) ==
+                                            Some(
+                                                algorithm::geogroup::ManualModification::Retain
+                                            );
+
+                                        if ui.add_enabled(!is_retained, egui::Button::new("Dissolve")).clicked() {
+                                            subgroup_sorted.sorter_mut().set_manual_modification(
+                                                static_id,
+                                                algorithm::geogroup::ManualModification::Dissolve
+                                            );
+                                        };
+
+                                        let clicked = egui::Button::new("Forcibly retain").selected(is_retained).ui(ui).clicked();
+                                        if clicked {
+                                            if is_retained {
+                                                subgroup_sorted.sorter_mut().remove_manual_modification(
+                                                    static_id
+                                                );
+                                            } else {
                                                 subgroup_sorted.sorter_mut().set_manual_modification(
                                                     static_id,
-                                                    algorithm::geogroup::ManualModification::Dissolve
+                                                    algorithm::geogroup::ManualModification::Retain
                                                 );
-                                            };
-
-                                            let clicked = egui::Button::new("Forcibly retain").selected(is_retained).ui(ui).clicked();
-                                            if clicked {
-                                                if is_retained {
-                                                    subgroup_sorted.sorter_mut().remove_manual_modification(
-                                                        static_id
-                                                    );
-                                                } else {
-                                                    subgroup_sorted.sorter_mut().set_manual_modification(
-                                                        static_id,
-                                                        algorithm::geogroup::ManualModification::Retain
-                                                    );
-                                                }
                                             }
-                                        });
+                                        }
+                                    });
                                 }
                             }
 
@@ -329,32 +329,6 @@ impl App {
                             //let mut auto_naming = subgroup_sorted.sor
                             //egui::Checkbox::
                         }
-                        PaneContent::ManualEdit => {
-                            /*if main_page.auto_sort {
-                                ui.vertical(|ui| {
-                                    ui.strong("Automatic sorting is enabled");
-                                    ui.label("To make manual changes to the hiearchy, please disable automatic sorting.");
-                                    if ui.button("Disable automatic sorting").clicked() {
-                                        main_page.auto_sort = false;
-                                    }
-                                });
-                            } else if let Some(selected_item) = main_page.selected_item_mut() {
-                                /*match selected_item {
-                                    HiearchyItem::Group(_, name) => {
-                                        ui.text_edit_singleline(name);
-                                        if ui.button("Dissolve").clicked() {
-                                            // TODO: Report failure
-                                            main_page.dissolve_selected();
-                                        }
-                                    }
-                                    HiearchyItem::Item(it) => {
-                                        ui.horizontal(|ui| {
-                                            ui.text_edit_singleline(&mut it.name);
-                                        });
-                                    }
-                                }*/
-                            }*/
-                        }
                         PaneContent::Apply => {
                             if ui.button("📋 Apply by copying files").clicked() {
                                 let target_dir = rfd::FileDialog::new().pick_folder();
@@ -386,7 +360,7 @@ impl App {
                                 });
                             }
                         }
-                        PaneContent::Home => {
+                        PaneContent::Window => {
                             #[cfg(target_os = "linux")]
                             if ui.button("🗖 New window").clicked() {
                                 std::process::Command::new("/proc/self/exe").spawn().expect("failed to start myself");
@@ -400,15 +374,27 @@ impl App {
                             };
                         }
                         PaneContent::View => {
-                            ribbon_slider(
-                                ui,
-                                egui::Slider::new(&mut main_page.image_scale,
-                                32..=128,),
-                                48,
-                                "Image size",
-                                "Height of image previews",
-                                None,
-                            );
+                            ui.vertical(|ui| {
+                                ribbon_slider(
+                                    ui,
+                                    egui::Slider::new(&mut main_page.image_scale,
+                                    32..=128,),
+                                    48,
+                                    "Image size",
+                                    "Height of image previews",
+                                    None,
+                                );
+
+                                ribbon_slider(
+                                    ui,
+                                    egui::Slider::new(&mut main_page.column_width,
+                                    64..=1024,),
+                                    48,
+                                    "Column width",
+                                    "Width of the columns in hierarchy preview",
+                                    None,
+                                );
+                            });
 
                             ui.separator();
 
@@ -496,6 +482,7 @@ impl App {
                 &mut main_page.selection,
                 &main_page.flatten_mode,
                 main_page.image_scale,
+                main_page.column_width
             )
         });
 
@@ -546,6 +533,7 @@ pub fn show_hiearchy(
     selection: &mut Vec<backend::selection::PathComponent>,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
+    col_width: u16
 ) {
     let mut selecion_indices = hiearchy.selection_to_indices(selection.iter().cloned()).collect_vec();
 
@@ -560,6 +548,7 @@ pub fn show_hiearchy(
                     0,
                     flatten_mode,
                     image_scale,
+                    col_width,
                     "show_hierarchy".into()
                 )
             }).inner
@@ -783,6 +772,7 @@ fn show_hiearchy_inner(
     current_depth: usize,
     flatten_mode: &Option<FlattenMode>,
     image_scale: u16,
+    col_width: u16,
     mut id: egui::Id
 ) -> bool {
     // TODO: Preseve selection through depth (and other algorithm parameters) changes
@@ -814,9 +804,9 @@ fn show_hiearchy_inner(
         show_hiearchy_list(
             TableBuilder::new(ui)
                 .column(if selected_group.is_some() {
-                    Column::exact(256.0)
+                    Column::exact(col_width as f32)
                 } else {
-                    Column::remainder().at_least(256.0)
+                    Column::remainder().at_least(col_width as f32)
                 })
                 .sense(Sense::click()),
             selected_indices,
@@ -836,6 +826,7 @@ fn show_hiearchy_inner(
             current_depth + 1,
             flatten_mode,
             image_scale,
+            col_width,
             id.with("next")
         )
     } else { false };
@@ -1189,6 +1180,7 @@ struct MainPage {
     flatten_mode: Option<FlattenMode>, // TODO: Remove
     selection: Vec<backend::selection::PathComponent>,
     image_scale: u16,
+    column_width: u16,
     progress: Option<Progress>,
     /// Config controlling the entire operation, including sorting, naming, etc.
     operation_config: backend::algorithm::Params,
@@ -1226,9 +1218,8 @@ pub enum ProgressAction {
 enum PaneContent {
     Grouping,
     Naming,
-    ManualEdit,
     Apply,
-    Home,
+    Window,
     View,
 }
 
@@ -1320,6 +1311,7 @@ impl MainPage {
             flatten_mode: None,
             selection: Vec::new(),
             image_scale: 48,
+            column_width: 256,
             progress: None,
             operation_config: Default::default(),
             auto_sort: true,
