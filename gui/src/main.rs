@@ -9,7 +9,6 @@ mod hiearchy;
 mod style;
 mod tabbar;
 mod thumbnails;
-use allmytoes::AMTConfiguration;
 use backend::gg_prelude::*;
 use gui::Message;
 use tabbar::tabbar;
@@ -32,7 +31,6 @@ use eframe::{egui, emath, glow};
 use egui::Frame;
 use geogroup_backend::{self as backend, loaders::ImmutDataLoader as _, naming::RevGeocoder};
 use glow::{FALSE, RED};
-
 
 #[derive(clap::Parser)]
 #[command(name = "geogroup", version, about)]

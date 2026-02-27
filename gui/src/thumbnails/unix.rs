@@ -1,11 +1,11 @@
 use std::{
-    cmp::min, collections::{HashMap, HashSet}, num::NonZero, sync::{
+    cmp::min, collections::{HashMap, HashSet}, num::NonZero, path::{Path, PathBuf}, sync::{
         atomic::{self, AtomicU16, AtomicU8, AtomicUsize},
         LazyLock, Mutex, RwLock,
     }, thread
 };
 
-use allmytoes::ToeErrorType;
+use allmytoes::{AMTConfiguration, ToeErrorType};
 
 use super::*;
 
@@ -35,8 +35,7 @@ pub fn get(path: &Path) -> TResult {
             thread::available_parallelism()
                 .unwrap_or(NonZero::new(8).unwrap()),
             NonZero::new(20).unwrap()
-        )
-    );
+        ));
 
     let mut thumbnails = THUMBNAILS.lock().unwrap();
 
@@ -44,7 +43,9 @@ pub fn get(path: &Path) -> TResult {
         return res.to_owned();
     } else {
         // Make sure there aren't too many thumbnailing jobs already running...
-        if CURRENTLY_RUNNING_THUMNAILING_JOBS.load(atomic::Ordering::Relaxed) >= usize::from(*MAX_THUMBNAILING_JOBS) {
+        if CURRENTLY_RUNNING_THUMNAILING_JOBS.load(atomic::Ordering::Relaxed)
+            >= usize::from(*MAX_THUMBNAILING_JOBS)
+        {
             return TResult::CreationInProgress; // TODO: We can return something to indicate
                                                 // that thumbnail is not being created
         }
@@ -59,13 +60,15 @@ pub fn get(path: &Path) -> TResult {
         thread::spawn(move || {
             let thumb = THUMBNAILER.get(&path, allmytoes::ThumbSize::Normal);
 
-            THUMBNAILS.lock().expect("Already held by this thread??")
+            THUMBNAILS
+                .lock()
+                .expect("Already held by this thread??")
                 .insert(
                     path.clone(),
                     match thumb {
                         Ok(t) => TResult::Thumbnail(t.path.into()),
                         Err(err) => TResult::Error(err),
-                    }
+                    },
                 );
 
             log::trace!("Thumbnail has been retrieved");

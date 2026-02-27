@@ -25,6 +25,8 @@ dotenv = "0.15.0"
 thiserror = "2.0.12"
 derive_more = { version = "2.0.1", features = ["from"] }
 mundy = { version = "0.2.0", default-features = false, features = ["accent-color", "async-io", "callback"]}
-allmytoes = { path = "../deps/allmytoes" }
 futures = "0.3.31"
+
+[target.'cfg(unix)'.dependencies]
+allmytoes = { path = "../deps/allmytoes" }
 # futures-lite = "2.6.1"
