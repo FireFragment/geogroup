@@ -68,7 +68,7 @@ impl Final {
                         NodeData {
                             static_id: Some(node.node_data().id),
                             manual_name: node.node_data().manual_name,
-                            auto_name: match node.node_data().name {
+                            auto_name: match node.node_data().auto_name {
                                 // TODO: Add date as name
                                 algorithm::NameStatus::Named(items) => {
                                     AutoNameStatus::Named(format!("{time} {}", items.into_iter().map(|item| item.name).join(",")))

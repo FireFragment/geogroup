@@ -1,5 +1,6 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::iter;
 use lazy_hierarchy::{GroupRef, GroupRefUtils};
 use std::fmt::Debug;
 use std::{hash::Hash, rc::Rc, sync::Arc};
@@ -27,7 +28,7 @@ pub struct NodeInfo<Time, NDItem = (), NameErr = Infallible> {
     /// animating the nodes etc.
     pub local_id_path: Vec<u64>,
     /// [`None`] if it wan't named yet, [`Err`] if naming resulted in an error
-    pub name: NameStatus<NDItem, NameErr>,
+    pub auto_name: NameStatus<NDItem, NameErr>,
     /// [`Some`] if the item has been manually renamed.
     pub manual_name: Option<ManualRename>,
 
@@ -48,6 +49,8 @@ pub struct Sorter<
     manual_modification: HashMap<u64, ManualModification>,
     /// Maps global ids to manually assigned names
     manual_renames: HashMap<u64, ManualRename>,
+    /// Items which are blocked from appearing in names
+    nditem_bans: HashSet<NDItem>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -223,7 +226,15 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                 id_path.push(node_data.original.data.id.clone());
                 let name = node_data.original.data.get_naming_data().map(|n|
                     n.as_ref()
-                        .map(|name| [name.clone(), node_data.inherited.naming_data].concat())
+                        .map(|name|
+
+                            iter::chain(name.iter(), node_data.inherited.naming_data.iter())
+                                .filter(|nditem| !self.is_nditem_banned(nditem))
+                                .cloned()
+                                .collect()
+                            /*[name.clone(), node_data.inherited.naming_data]
+                                .concat()*/
+                        )
                         .map_err(|e| e.clone())
                 );
                 NodeInfo {
@@ -236,7 +247,7 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                         };
                         FirstLast::new_single(leaf.leaf_data().get_time())
                     }),
-                    name: match name {
+                    auto_name: match name {
                         Ok(Ok(n)) => NameStatus::Named(n),
                         Ok(Err(err)) => NameStatus::OtherError(err),
                         Err(deep_sorter::GetNamingDataErr::NoNamingData) => NameStatus::LocationMissing,
@@ -257,9 +268,21 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
             deep_sorter: Arc::new(DeepSorter::new(items)),
             params,
             manual_modification: HashMap::new(),
-            manual_renames: HashMap::new()
+            manual_renames: HashMap::new(),
+            nditem_bans: HashSet::new()
         }
     }
+
+    pub fn ban_nditem(&mut self, item: NDItem) {
+        self.nditem_bans.insert(item);
+    }
+    pub fn unban_nditem(&mut self, item: &NDItem) {
+        self.nditem_bans.remove(item);
+    }
+    pub fn is_nditem_banned(&self, item: &NDItem) -> bool {
+        self.nditem_bans.contains(item)
+    }
+
 
     pub fn set_manual_rename(&mut self, id: u64, name: ManualRename) {
         self.manual_renames.insert(id, name);
