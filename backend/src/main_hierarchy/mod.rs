@@ -4,7 +4,7 @@ use geogroup_loaders::MutDataLoader as _;
 use lazy_hierarchy::{concrete::Leaf, GroupRef};
 use rayon::iter::ParallelBridge as _;
 use core::fmt;
-use std::{collections::HashSet, convert::Infallible, hash::Hash, ops::Deref, sync::{atomic::{self, AtomicBool}, Mutex, MutexGuard, OnceLock}, thread};
+use std::{collections::{BTreeMap, BTreeSet, HashSet}, convert::Infallible, hash::Hash, ops::Deref, sync::{atomic::{self, AtomicBool}, Mutex, MutexGuard, OnceLock}, thread};
 
 use super::*;
 
@@ -44,7 +44,7 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                     lazy_hierarchy::concrete::Leaf::new(
                         InnerLeafData::LazySubgroup(value),
                         NodeData {
-                            auto_name: AutoNameStatus::Named(String::from("Root")), // TODO: Translate
+                            auto_name: AutoNameStatus::new_named_no_items(String::from("Root")), // TODO: Translate
                             local_id_path: None,
                             additional_problems: Vec::new(),
                             static_id: None,
@@ -54,7 +54,7 @@ impl From<lazy_group::Dynamic> for TemplateHiearchy {
                 )],
                 (),
                 NodeData {
-                    auto_name: AutoNameStatus::Named(String::from("Root")), // TODO: Translate
+                    auto_name: AutoNameStatus::new_named_no_items(String::from("Root")), // TODO: Translate
                     local_id_path: None,
                     additional_problems: Vec::new(),
                     static_id: None,
@@ -87,7 +87,17 @@ pub struct LGSorted {
         nametiles_reader::NamePart,
         geogroup_algo::deep_sorter::naming::NamingErr<NamingLeafErr>,
     >,
-    naming_thread_interface: Arc<NamingInterface>
+    naming_thread_interface: Arc<NamingInterface>,
+    /// Names which can't appear in the final names
+    name_item_overrides: BTreeMap<String, NDItemOverride>,
+    pub names_time_style: String
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum NDItemOverride {
+    Remove,
+    /// Remove all items with greater area from all names which contain this name
+    Prioritize
 }
 
 /// Interface with the naming thread
@@ -224,7 +234,9 @@ impl LGSorted {
             naming_thread_interface: Arc::new(NamingInterface {
                 naming_error: Mutex::new(None),
                 naming_running: AtomicBool::new(false)
-            })
+            }),
+            name_item_overrides: BTreeMap::new(),
+            names_time_style: "%Y-%m-%d %H-%M-%S ".into()
         };
 
         res.start_naming();
@@ -234,15 +246,47 @@ impl LGSorted {
     pub fn params_mut(&mut self) -> &mut algorithm::Params {
         self.sorter.params_mut()
     }
+    pub fn is_naming_running(&self) -> bool {
+        self.naming_thread_interface.is_naming_running()
+    }
+    pub fn global_naming_error(&self) -> impl Deref<Target = Option<GlobalNamingError>> {
+        self.naming_thread_interface.get_naming_error()
+    }
+
+    pub fn ban_name_item(&mut self, item: String) {
+        self.name_item_overrides.insert(item, NDItemOverride::Remove);
+    }
+    pub fn unban_name_item(&mut self, item: &str) {
+        if self.is_name_item_banned(item) {
+            self.name_item_overrides.remove(item);
+        }
+    }
+    pub fn is_name_item_banned(&self, item: &str) -> bool {
+        self.name_item_overrides.get(item) == Some(&NDItemOverride::Remove)
+    }
+
+    pub fn prioritize_name_item(&mut self, item: String) {
+        self.name_item_overrides.insert(item, NDItemOverride::Prioritize);
+    }
+    pub fn unprioritize_name_item(&mut self, item: &str) {
+        if self.is_name_item_prioritized(item) {
+            self.name_item_overrides.remove(item);
+        }
+    }
+    pub fn is_name_item_prioritized(&self, item: &str) -> bool {
+        self.name_item_overrides.get(item) == Some(&NDItemOverride::Prioritize)
+    }
+
 
     /// Finishes immediately, starts naming process.
     ///
-    /// Returns boolean whether the naming process was actually started, false if it was already running.
-    pub fn start_naming(&mut self) {
+    /// Returns boolean whether the naming process was actually started, (possibly causing an error)
+    /// [false] if it was already running.
+    pub fn start_naming(&mut self) -> bool {
 
         let naming_thread_interface = self.naming_thread_interface.clone();
         if !naming_thread_interface.pre_start_naming() {
-            return;
+            return false;
         }
 
         let rt_res = tokio::runtime::Builder::new_current_thread()
@@ -254,7 +298,7 @@ impl LGSorted {
             Ok(rt) => rt,
             Err(err) => {
                 naming_thread_interface.finish_naming_with_error(err.into());
-                return;
+                return true;
             }
         };
 
@@ -309,6 +353,8 @@ impl LGSorted {
 
             //});
         }
+
+        true
     }
 
     pub fn sorter_mut(&mut self) -> &mut algorithm::Sorter<
@@ -475,11 +521,21 @@ pub enum NodeProblem {
 /// State of automatic naming of the item.
 #[derive(Clone, Debug)]
 pub enum AutoNameStatus {
-    Named(String),
+    Named {
+        final_name: String,
+        /// Also includes blocked items
+        naming_items: Option<Vec<nametiles_reader::NamePart>>
+    },
     /// Naming is in progress. Possibly contains partial name (eg. containing only date)
     InProgress(Option<String>),
     /// Naming has been attempted, but failed. Possibly contains partial name (eg. containing only date)
     Error {err: NameError, name: Option<String>},
+}
+
+impl AutoNameStatus {
+    pub fn new_named_no_items(name: String) -> Self {
+        AutoNameStatus::Named { final_name: name, naming_items: None }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -518,19 +574,24 @@ impl AutoNameStatus {
     /// Gets name on best-effort basis - if `self` isn't [`NameStatus::Named`], the returned name may be incomplete or missing
     pub fn get_name(&self) -> Option<&str> {
         match self {
-            AutoNameStatus::Named(name) => Some(name),
+            AutoNameStatus::Named { final_name, .. } => Some(final_name),
             AutoNameStatus::InProgress(name) => name.as_ref().map(|s| s.as_str()),
             AutoNameStatus::Error { err: _, name } => name.as_ref().map(|s| s.as_str()),
         }
     }
 
-    /// If [None], returns [`NameStatus::UnexpectedError`]
+    /// - Doesn't include [`naming_items`](AutoNameStatus::Named::naming_items).
+    /// - If [None], returns [`NameStatus::UnexpectedError`]
     pub fn named_or_unexpected(input: Option<String>) -> Self {
         match input {
-            Some(n) => AutoNameStatus::Named(n),
+            Some(final_name) => AutoNameStatus::Named {
+                final_name,
+                naming_items: None
+            },
             None => AutoNameStatus::new_unexpected_err(),
         }
     }
+
 }
 
 // TODO: Allow holding references to the original hierarchy

@@ -87,7 +87,8 @@ pub fn selection_to_indicies<
                     .peeking_take_while(|selection_component| {
                         local_id_path_iter
                             .peeking_next(|loc_id_path_component| {
-                                *selection_component == PathComponent::IdPath(*loc_id_path_component)
+                                *selection_component
+                                    == PathComponent::IdPath(*loc_id_path_component)
                             })
                             .is_some()
                     })
@@ -139,20 +140,37 @@ impl main_hierarchy::TemplateHiearchy {
         )
     }
 
-    pub fn selection_to_static_id(&self, selection_iter: impl Iterator<Item = PathComponent> + Clone)
-        -> Option<u64> {
+    pub fn selection_to_node_data(
+        &self,
+        selection_iter: impl Iterator<Item = PathComponent> + Clone,
+    ) -> main_hierarchy::NodeData {
         let indices = self.selection_to_indices(selection_iter);
         let mut current_group = self.root_final();
 
         for idx in indices {
-            let child = current_group.get_children().ok()?.nth(idx)?;
+            let Ok(mut children) = current_group.get_children() else {
+                return current_group.node_data();
+            };
+
+            let Some(child) = children.nth(idx) else {
+                return current_group.node_data();
+            };
+            drop(children);
+
             match child {
                 lazy_hierarchy::NodeRef::Group(g) => current_group = g,
-                lazy_hierarchy::NodeRef::Leaf(l) => return l.node_data().static_id,
+                lazy_hierarchy::NodeRef::Leaf(l) => return l.node_data(),
             }
         }
 
-        current_group.node_data().static_id
+        current_group.node_data()
+    }
+
+    pub fn selection_to_static_id(
+        &self,
+        selection_iter: impl Iterator<Item = PathComponent> + Clone,
+    ) -> Option<u64> {
+        self.selection_to_node_data(selection_iter).static_id
     }
 
     /// Convert simple indices to selection in form of [`PathComponent`]s

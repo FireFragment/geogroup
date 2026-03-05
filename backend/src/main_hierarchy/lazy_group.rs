@@ -64,14 +64,25 @@ impl Final {
                             group.group_data().is_root
                         } else { false };
 
-                        let time = node.node_data().fl_time.first.format("%Y-%m-%d %H-%M-%S");
+                        let fmt = chrono::format::strftime::StrftimeItems::new_lenient(&sorted.names_time_style);
+                        let time = node.node_data().fl_time.first.format_with_items(fmt);
                         NodeData {
                             static_id: Some(node.node_data().id),
                             manual_name: node.node_data().manual_name,
                             auto_name: match node.node_data().auto_name {
                                 // TODO: Add date as name
                                 algorithm::NameStatus::Named(items) => {
-                                    AutoNameStatus::Named(format!("{time} {}", items.into_iter().map(|item| item.name).join(",")))
+                                    let location_name = items.iter()
+                                        .take_while_inclusive(|item|
+                                            !sorted.is_name_item_prioritized(&item.name)
+                                        )
+                                        .filter(|item| !sorted.is_name_item_banned(&item.name))
+                                        .map(|item| &item.name)
+                                        .join(", ");
+                                    AutoNameStatus::Named {
+                                        final_name: format!("{time}{location_name}"),
+                                        naming_items: Some(items),
+                                    }
                                 }
                                 algorithm::NameStatus::InProgress if global_naming_running => AutoNameStatus::InProgress(Some(time.to_string())),
                                 algorithm::NameStatus::InProgress => {
@@ -82,7 +93,6 @@ impl Final {
                                                 NameError::UnexpectedError("naming not running but also no global error reported".into())
                                             },
                                         name: Some(time.to_string())
-
                                     }
                                 }
                                 algorithm::NameStatus::LocationMissing => {

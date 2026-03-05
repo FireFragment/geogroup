@@ -49,8 +49,6 @@ pub struct Sorter<
     manual_modification: HashMap<u64, ManualModification>,
     /// Maps global ids to manually assigned names
     manual_renames: HashMap<u64, ManualRename>,
-    /// Items which are blocked from appearing in names
-    nditem_bans: HashSet<NDItem>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -226,14 +224,8 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr: Clone>
                 id_path.push(node_data.original.data.id.clone());
                 let name = node_data.original.data.get_naming_data().map(|n|
                     n.as_ref()
-                        .map(|name|
-
-                            iter::chain(name.iter(), node_data.inherited.naming_data.iter())
-                                .filter(|nditem| !self.is_nditem_banned(nditem))
-                                .cloned()
-                                .collect()
-                            /*[name.clone(), node_data.inherited.naming_data]
-                                .concat()*/
+                        .map(|name| [name.clone(), node_data.inherited.naming_data]
+                                .concat()
                         )
                         .map_err(|e| e.clone())
                 );
@@ -269,20 +261,8 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, NameErr>
             params,
             manual_modification: HashMap::new(),
             manual_renames: HashMap::new(),
-            nditem_bans: HashSet::new()
         }
     }
-
-    pub fn ban_nditem(&mut self, item: NDItem) {
-        self.nditem_bans.insert(item);
-    }
-    pub fn unban_nditem(&mut self, item: &NDItem) {
-        self.nditem_bans.remove(item);
-    }
-    pub fn is_nditem_banned(&self, item: &NDItem) -> bool {
-        self.nditem_bans.contains(item)
-    }
-
 
     pub fn set_manual_rename(&mut self, id: u64, name: ManualRename) {
         self.manual_renames.insert(id, name);

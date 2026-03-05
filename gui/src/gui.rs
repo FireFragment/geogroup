@@ -290,37 +290,137 @@ impl App {
 
                         }
                         PaneContent::Naming => {
-                            let selected_static_id_opt = hiearchy.selection_to_static_id(main_page.selection.iter().cloned());
-                            if let Some(subgroup_sorted) = get_lgsorted(hiearchy) && let Some(selected_id) = selected_static_id_opt {
+                            let selected_node_data = hiearchy.selection_to_node_data(main_page.selection.iter().cloned());
+                            if let Some(subgroup_sorted) = get_lgsorted(hiearchy) && let Some(selected_id) = selected_node_data.static_id {
+                                let mut should_start_naming = false;
+
                                 ui.vertical(|ui| {
-                                    let mut manual_rename = subgroup_sorted.sorter_mut()
-                                        .get_manual_rename(selected_id);
+                                    if let Some(ref err) = *subgroup_sorted.global_naming_error() {
+                                        error_button(ui, "Automatic naming failed", || err.to_string());
 
-                                    if let Some(mut manual_rename) = manual_rename {
-                                        let mut auto_naming = false;
-                                        egui::Checkbox::new(&mut auto_naming, "Name automatically").ui(ui);
-                                        ui.text_edit_singleline(&mut manual_rename.name);
-
-                                        if !auto_naming {
-                                            subgroup_sorted.sorter_mut().set_manual_rename(selected_id, manual_rename);
-                                        } else {
-                                            subgroup_sorted.sorter_mut().set_automatic_naming(selected_id);
-                                        }
-                                    } else {
-                                        let mut auto_naming = true;
-                                        egui::Checkbox::new(&mut auto_naming, "Name automatically").ui(ui);
-
-                                        if !auto_naming {
-                                            subgroup_sorted.sorter_mut().set_manual_rename(
-                                                selected_id,
-                                                ManualRename {
-                                                    kind: algorithm::geogroup::ManRenameKind::Full,
-                                                    name: String::new(),
-                                                }
-                                            );
+                                        if ui.button("Retry").clicked() {
+                                            should_start_naming = true;
                                         }
                                     }
+                                    ui.label("Time format");
+                                    ui.text_edit_singleline(&mut subgroup_sorted.names_time_style);
                                 });
+                                ui.separator();
+
+                                if should_start_naming {
+                                    subgroup_sorted.start_naming();
+                                }
+
+                                let mut manual_rename = subgroup_sorted.sorter_mut()
+                                    .get_manual_rename(selected_id);
+                                let autonaming_checkbox_text = "Name selection automatically";
+                                if let Some(mut manual_rename) = manual_rename {
+                                    let mut auto_naming = false;
+                                    ui.vertical(|ui| {
+                                        egui::Checkbox::new(&mut auto_naming, autonaming_checkbox_text).ui(ui);
+                                        ui.text_edit_singleline(&mut manual_rename.name);
+                                    });
+
+                                    if !auto_naming {
+                                        subgroup_sorted.sorter_mut().set_manual_rename(selected_id, manual_rename);
+                                    } else {
+                                        subgroup_sorted.sorter_mut().set_automatic_naming(selected_id);
+                                    }
+                                } else {
+                                    let mut auto_naming = true;
+                                    ui.vertical(|ui| {
+                                        egui::Checkbox::new(&mut auto_naming, autonaming_checkbox_text).ui(ui);
+                                        if let main_hierarchy::AutoNameStatus::Named {
+                                            final_name,
+                                            naming_items: Some(mut naming_items)
+                                        } = selected_node_data.auto_name {
+                                            naming_items.dedup_by_key(|it| it.name.clone());
+                                            ui.menu_button("Name part hiding", |ui| {
+                                                use egui_extras::Column;
+
+                                                // Workaround for egui bug which causes that the menu permanently retains the width it
+                                                // had when first opened causing it to be too narrow when opened after opening it empty
+                                                ui.set_min_width(384.0);
+
+                                            ui.weak("Note: Following changes affects ALL items where those names are used");
+
+                                            TableBuilder::new(ui)
+                                                .column(Column::auto())
+                                                .column(Column::remainder())
+                                                //.column(Column::auto())
+                                                /*.header(20.0, |mut header| {
+                                                    header.col(|ui| {
+                                                    });
+                                                    header.col(|ui| {
+                                                        ui.label("Name");
+                                                    });
+                                                    header.col(|ui| {
+                                                        ui.label("Area");
+                                                    });
+                                                })*/
+                                                .body(|mut body| {
+                                                    for item in naming_items {
+                                                        body.row(30.0, |mut row| {
+                                                            row.col(|ui| {
+                                                                ui.horizontal(|ui| {
+                                                                    // VISIBILITY
+                                                                    let mut visible = !subgroup_sorted
+                                                                        .is_name_item_banned(&item.name);
+                                                                    let orig_visible = visible;
+                                                                    ui.toggle_value(&mut visible, "👁");
+                                                                    if visible != orig_visible {
+                                                                        if visible {
+                                                                            subgroup_sorted
+                                                                                .unban_name_item(&item.name);
+                                                                        } else {
+                                                                            subgroup_sorted
+                                                                                .ban_name_item(item.name.clone());
+                                                                        }
+                                                                    }
+
+                                                                    // PRIORITY
+                                                                    let mut prioritized = subgroup_sorted
+                                                                        .is_name_item_prioritized(&item.name);
+                                                                    let orig_prioritized = prioritized;
+                                                                    ui.toggle_value(&mut prioritized, "★");
+                                                                    if prioritized != orig_prioritized {
+                                                                        if prioritized {
+                                                                            subgroup_sorted
+                                                                                .prioritize_name_item(item.name.clone());
+                                                                        } else {
+                                                                            subgroup_sorted
+                                                                                .unprioritize_name_item(&item.name);
+                                                                        }
+                                                                    }
+                                                                });
+                                                            });
+                                                            row.col(|ui| {
+                                                                ui.label(&item.name);
+                                                            });
+                                                            /*row.col(|ui| {
+                                                                if let Some(area) = item.area {
+                                                                    ui.label(format!("{area}m²"));
+                                                                } else {
+                                                                    ui.label("N/A");
+                                                                }
+                                                            });*/
+                                                        });
+                                                    }
+                                                });
+                                            });
+                                        }
+                                    });
+
+                                    if !auto_naming {
+                                        subgroup_sorted.sorter_mut().set_manual_rename(
+                                            selected_id,
+                                            ManualRename {
+                                                kind: algorithm::geogroup::ManRenameKind::Full,
+                                                name: String::new(),
+                                            }
+                                        );
+                                    }
+                                }
 
                                 //ui.line
 
@@ -349,15 +449,7 @@ impl App {
                             };
 
                             if let Some(err) = &main_page.apply_final_error {
-                                ui.with_layout(Layout::top_down(Align::Min).with_cross_justify(false),
-                                    |ui| {
-                                        error_ui(ui, &format!("Failed to apply hierarchy"));
-                                        ui.menu_button("See details", |ui| {
-                                            egui::Label::new(&format!("{err}"))
-                                                .selectable(true)
-                                                .ui(ui);
-                                        });
-                                });
+                                error_button(ui, "Failed to apply hierarchy", || err.to_owned());
                             }
                         }
                         PaneContent::Window => {
@@ -525,6 +617,34 @@ impl App {
             });
         }
     }
+}
+
+/// Converts a pair of getters and setters into a mutable borrow.
+/// Only uses the setter if the value has actually changed.
+fn getset_as_mut<T: Eq + Clone, R, Any>(
+    mut get: impl FnOnce() -> T,
+    mut set: impl FnOnce(&mut T) -> Any,
+    fun: impl FnOnce(&mut T) -> R
+) -> R {
+    let mut value = get();
+    let orig_value = value.clone();
+    let ret = fun(&mut value);
+    if value != orig_value {
+        set(&mut value);
+    }
+    ret
+}
+
+fn error_button(ui: &mut egui::Ui, err_preview: &str, mut err: impl FnMut() -> String) {
+    ui.with_layout(Layout::top_down(Align::Min).with_cross_justify(false),
+        |ui| {
+            error_ui(ui, err_preview);
+            ui.menu_button("See details", |ui| {
+                egui::Label::new(&format!("{}", err()))
+                    .selectable(true)
+                    .ui(ui);
+            });
+    });
 }
 
 pub fn show_hiearchy(
@@ -737,7 +857,7 @@ fn name_label(ui: &mut egui::Ui, node_data: main_hierarchy::NodeData, is_group: 
 
         ui.horizontal(|ui| {
             match node_data.auto_name {
-                main_hierarchy::AutoNameStatus::Named(_) => {},
+                main_hierarchy::AutoNameStatus::Named{ .. } => {},
                 main_hierarchy::AutoNameStatus::InProgress(_) => {
                     ui.spinner();
                     //ui.small(RichText::new("Naming...").italics());
