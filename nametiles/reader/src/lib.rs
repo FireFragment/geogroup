@@ -11,14 +11,14 @@ use pmtiles::{PmtError, TileCoord, TileId, s3};
 use thiserror::Error;
 
 pub struct NametilesConnection {
-    pmtiles: DynPmTilesReader,
+    pmtiles: Result<DynPmTilesReader, PmtError>,
     cache_dir: Option<PathBuf>,
 }
 
 impl From<pmtiles::AsyncPmTilesReader<pmtiles::S3Backend>> for NametilesConnection {
     fn from(value: pmtiles::AsyncPmTilesReader<pmtiles::S3Backend>) -> Self {
         NametilesConnection {
-            pmtiles: DynPmTilesReader::S3(value),
+            pmtiles: Ok(DynPmTilesReader::S3(value)),
             cache_dir: nametiles_default_cache_dir(),
         }
     }
@@ -63,6 +63,8 @@ pub enum Error {
     /// Cast from [`mvt_reader::error::ParserError`]
     #[error("MVT format error: {0}")]
     MvtError(String),
+    #[error("Failed to set up connection to nametiles: {0}")]
+    GlobalOnlineError(String)
 }
 
 #[derive(Error, Debug)]
@@ -90,6 +92,8 @@ pub enum SimpleError {
     TileMissing(pmtiles::TileCoord),
     #[error("MVT format error: {0}")]
     MvtError(String),
+    #[error("Failed to set up connection to nametiles: {0}")]
+    GlobalOnlineError(String)
 }
 
 impl From<Error> for SimpleError {
@@ -98,6 +102,7 @@ impl From<Error> for SimpleError {
             Error::PmtError(err) => Self::PmtError(err.to_string()),
             Error::TileMissing(tile) => Self::TileMissing(tile),
             Error::MvtError(err) => Self::MvtError(err.to_string()),
+            Error::GlobalOnlineError(err) => Self::GlobalOnlineError(err),
         }
     }
 }
@@ -131,9 +136,9 @@ pub struct NamePart {
 impl NametilesConnection {
     pub async fn new_from_file(path: &Path) -> Result<Self, pmtiles::PmtError> {
         Ok(Self {
-            pmtiles: pmtiles::AsyncPmTilesReader::new_with_path(path)
-                .await?
-                .into(),
+            pmtiles: Ok(pmtiles::AsyncPmTilesReader::new_with_path(path)
+                .await? // Here we throw error right away, because cache is not set up anyway
+                .into()),
 
             cache_dir: None, // We don't need cache when we're already reading from the disk
         })
@@ -165,8 +170,8 @@ impl NametilesConnection {
                 )?,
                 env_var_or_default("NAMETILES_S3_BUCKET_FILE", "out.pmtiles"),
             )
-            .await?
-            .into(),
+            .await
+            .map(|i| i.into()),
             cache_dir: nametiles_default_cache_dir(),
         })
     }
@@ -225,10 +230,12 @@ impl NametilesConnection {
         }
 
         // Try to fetch the tile
-        let Some(network_tile) = self.pmtiles.get_tile_decompressed(tile_pos).await? else {
+        let Some(network_tile) = self.pmtiles.as_ref()
+            .map_err(|e| Error::GlobalOnlineError(e.to_string()))?
+            .get_tile_decompressed(tile_pos).await?
+        else {
             return Err(Error::TileMissing(tile_pos));
         };
-
         // Try to write tile to cache
         if let Some(tile_cache_path) = &tile_cache_path {
             if let Some(tile_cache_dir) = tile_cache_path.parent() {
