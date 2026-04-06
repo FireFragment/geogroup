@@ -294,14 +294,19 @@ impl App {
                             if let Some(subgroup_sorted) = get_lgsorted(hiearchy) && let Some(selected_id) = selected_node_data.static_id {
                                 let mut should_start_naming = false;
 
-                                ui.vertical(|ui| {
-                                    if let Some(ref err) = *subgroup_sorted.global_naming_error() {
-                                        error_button(ui, "Automatic naming failed", || err.to_string());
 
-                                        if ui.button("Retry").clicked() {
-                                            should_start_naming = true;
-                                        }
+                                    if let Some(ref err) = *subgroup_sorted.global_naming_error() {
+                                        ui.vertical(|ui| {
+                                            error_button(ui, "Automatic naming failed", || err.to_string());
+
+                                            if ui.button("Retry").clicked() {
+                                                should_start_naming = true;
+                                            }
+                                        });
+                                        ui.separator();
                                     }
+
+                                ui.vertical(|ui| {
                                     ui.label("Time format");
                                     ui.text_edit_singleline(&mut subgroup_sorted.names_time_style);
                                 });
@@ -636,9 +641,10 @@ fn getset_as_mut<T: Eq + Clone, R, Any>(
 }
 
 fn error_button(ui: &mut egui::Ui, err_preview: &str, mut err: impl FnMut() -> String) {
-    ui.with_layout(Layout::top_down(Align::Min).with_cross_justify(false),
+    ui.with_layout(Layout::left_to_right(Align::Min).with_cross_justify(false),
         |ui| {
             error_ui(ui, err_preview);
+            ui.end_row();
             ui.menu_button("See details", |ui| {
                 egui::Label::new(&format!("{}", err()))
                     .selectable(true)
