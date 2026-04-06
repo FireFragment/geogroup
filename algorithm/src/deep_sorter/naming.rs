@@ -90,18 +90,13 @@ pub async fn try_naming_generic<
                     // Is `None` iff no children were named successfully
                     let full_name_of_this = new_full_names
                         .iter()
-                        .map(|it| it.as_option())
-                        .flatten() // Ignore error names when naming parent
+                        .filter_map(|it| it.as_option()) // Ignore error names when naming parent
                         .cloned()
                         .reduce(|acc_name, name_to_add| {
-                            if acc_name.is_empty() {
-                                name_to_add
-                            } else {
-                                acc_name
-                                    .into_iter()
-                                    .filter(|acc_name_item| name_to_add.contains(acc_name_item))
-                                    .collect()
-                            }
+                            acc_name
+                                .into_iter()
+                                .filter(|acc_name_item| name_to_add.contains(acc_name_item))
+                                .collect()
                         });
 
                     //match name_of_this {}
