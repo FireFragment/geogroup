@@ -27,9 +27,7 @@ pub async fn main() {
     let (x, y) = project_point_to_tiles(coord, zoom);
     println!("Reading tile {zoom}/{}/{}", x.floor(), y.floor());
 
-    let nametiles = NametilesConnection::new_from_file(&PathBuf::from(
-        "/nix/temporary/nametilesgen/out.pmtiles", // TODO: Don't hardcode the path
-    ))
+    let nametiles = NametilesConnection::new_from_env()
     .await
     .unwrap();
 

@@ -1,4 +1,5 @@
 use clap::Parser as _;
+use console::Term;
 use flatgeobuf::geozero::GeomProcessor;
 use flatgeobuf::geozero::PropertyProcessor;
 use flatgeobuf::geozero::FeatureProcessor;
@@ -6,12 +7,18 @@ use geo::Area;
 use geo::GeodesicArea;
 use geo::LineString;
 use geo::Polygon;
+use indicatif::ProgressBar;
+use indicatif::ProgressIterator;
+use rayon::iter::Either;
 use std::cmp::max;
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::io::stdout;
+use std::io::Write;
 use std::panic;
 use std::path::PathBuf;
 use std::thread;
+use std::thread::sleep;
 use std::{collections::{HashMap, HashSet}, env, fs::File, io::Read, sync::{atomic::AtomicU32, mpsc}, time::{Duration, Instant}};
 
 use flatgeobuf::FgbWriter;
@@ -34,14 +41,45 @@ where
     let mut deps = BTreeSet::new();
     let mut first_pass = true;
     let mut idx =  0;
+    let mut failed_objs = 0;
     while !finished {
         log::debug!(target: "nametiles_generator::get_objs_and_deps", "Pass {idx}, first_pass={first_pass}, deps.len()={}", deps.len());
         osm_pbf_reader.rewind().expect("Rewind failed");
         finished = true;
-        for obj in osm_pbf_reader.par_iter() {
-            let obj = obj.unwrap_or_else(|err|
-                panic!("Failed to read object: {err}\n{err:?}\n{:?}", err.source())
-            );
+
+        let mut last_update = Instant::now();
+
+        //let progress = ProgressBar::no_length();
+        for (idx, obj) in osm_pbf_reader.par_iter().enumerate() {
+            //println!("");
+
+            if last_update.elapsed() > Duration::from_millis(500) {
+                let mut stdout = stdout();
+                print!("\rProcessed {idx} objects...");
+                // or
+                // stdout.write(format!("\rProcessing {}%...", i).as_bytes()).unwrap();
+                stdout.flush().unwrap();
+
+                last_update = Instant::now();
+            }
+
+            let obj = match obj {
+                Ok(o) => o,
+                Err(err) => {
+                    if failed_objs < 16 {
+                        log::debug!("Failed to read object: {err}\n{err:?}\n{:?}", err.source());
+                    }
+                    //panic!("Failed to read object: {err}\n{err:?}\n{:?}", err.source());
+                    failed_objs += 1;
+                    continue;
+                }
+            };
+
+            if obj.is_way() {
+
+                //log::debug!("Object {:?} read successfully", obj.id());
+            }
+
             if (!first_pass || !pred(&obj)) && !deps.contains(&obj.id()) {
                 continue;
             }
@@ -61,8 +99,14 @@ where
             deps.remove(&obj.id());
             objects.insert(obj.id(), obj);
         }
+        println!(); // To not mess up the console after showing progress
+
         first_pass = false;
         idx += 1;
+    }
+
+    if failed_objs > 0 {
+        log::warn!("Failed to read {failed_objs} OSM objects!");
     }
 }
 
@@ -132,11 +176,6 @@ fn include_in_tiles(obj: &osmpbfreader::OsmObj) -> bool {
     )
 }
 
-// Important! Update also `include_in_tiles` when updating this
-fn include_way_in_tiles(way: &osmpbfreader::Way) -> bool {
-    way.is_closed() && has_tags_of_interest(&way.tags)
-}
-
 fn has_tags_of_interest(tags: &osmpbfreader::Tags) -> bool {
     cmp_tag(tags, "leisure", [
         "bathing_place",
@@ -179,21 +218,19 @@ struct Args {
 }
 
 fn main() {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info,nametiles_generator=debug"));
+    //env_logger::init_from_env(env_logger::Env::new().default_filter_or("info,nametiles_generator=debug"));
 
-    /*
-     *
-     *
      let logger =
-         env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("info,nametiles_generator=debug"))
-             .build();
+         env_logger::Builder::from_env(env_logger::Env::new()
+             .default_filter_or("info,nametiles_generator=debug"))
+             .init(); // .build();
 
-     let indicatif_progress = indicatif::MultiProgress::new();
+    let indicatif_progress = indicatif::MultiProgress::new();
 
-     indicatif_log_bridge::LogWrapper::new(indicatif_progress.clone(), logger)
+        /*indicatif_log_bridge::LogWrapper::new(indicatif_progress.clone(), logger)
          .try_init()
-         .unwrap();
-     */
+         .unwrap();*/
+
 
     let args = Args::parse();
 
@@ -209,9 +246,13 @@ fn main() {
     //let mut last_logged = Instant::now();
     //
     //
-    let mut tmp_db = KvStoreOSM(kv::Store::new(kv::Config::new(
-        env::var("NAMETILES_GEN_TEMP_DB").expect("Please specify NAMETILES_GEN_TEMP_DB where I can save temporary data")
-    )).unwrap());
+    let temp_db_dir = env::var("NAMETILES_GEN_TEMP_DB").expect("Please specify NAMETILES_GEN_TEMP_DB where I can save temporary data");
+    let mut tmp_db = KvStoreOSM(kv::Store::new(kv::Config::new(&temp_db_dir)).unwrap());
+
+    if !tmp_db.osm_elems_bucket().is_empty() {
+        log::warn!("There's some already cached data in {temp_db_dir}.
+If you use a different source PBF file than before, make sure to clear the cache first.");
+    }
 
 
     log::info!("Database opened");
@@ -224,9 +265,9 @@ fn main() {
         log::info!("OsmPbfReader created");
 
         log::info!("Finding all boundary relations and their members...");
-        log::info!("Note: this may take a while without any feedback.
+        /*log::info!("Note: this may take a while without any feedback.
 If you want to make sure it actually progresses, you can set the environment variable RUST_LOG=info,nametiles_generator=trace
-(but even then, it takes some time before the first logs appear)");
+(but even then, it takes some time before the first logs appear)"); // No longer with the progress indicator */
         get_objs_and_deps_store(&mut pbf_reader, include_in_tiles, &mut tmp_db);
 
         log::info!("...done");
@@ -245,159 +286,168 @@ Please provide the PBF file as a command line argument.");
     }
 
     //log::info!("Total of {} elements were extracted from the PBF file.", objs_of_interest_bucket.len());
-    log::info!("Constructing polygons from the relations");
+    log::info!("Setting up kv database iterator for processing relations...");
 
-    let relations_of_interest = objs_of_interest_bucket.iter()
-        .map(|it| it.unwrap().value().unwrap())
-        .filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.relation().cloned());
+    let objs_of_interest = objs_of_interest_bucket.iter()
+        .progress_with(indicatif_progress.add(ProgressBar::no_length(
+            // `objs_of_interest_bucket.len` takes linear time (https://github.com/zshipko/rust-kv/issues/42),
+            // so we can't know the amount of elements beforehand
+        )))
+        .map(|it| it.unwrap().value::<kv::Bincode<_>>().unwrap().0)
+        .filter(include_in_tiles);
+        //.filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.relation().cloned())
 
-    let ways_of_interest = objs_of_interest_bucket.iter()
-        .map(|it| it.unwrap().value().unwrap())
-        .filter_map(|obj: kv::Bincode<osmpbfreader::OsmObj>| obj.0.way().cloned());
 
     struct ProcessedBoundary {
         pub polygon: Polygon,
         pub name: String
     }
 
-    let relation_processing_results = relations_of_interest.par_bridge().map(|relation| {
-        if !include_in_tiles(&relation.clone().into()) {
-            return Result::Err(());
-        }
-        let Some(relation_name) = get_name(&relation.tags) else {
+    let obj_processing_results = objs_of_interest.par_bridge().map(|obj| {
+        log::trace!("Processing object {:?}", obj.id());
+
+        let Some(obj_name) = get_name(obj.tags()) else {
+            log::error!("Object {:?} has no name, but it should have. This is a bug", obj.id());
             return Result::Err(());
         };
 
-        log::trace!("Processing relation {}", relation.id.0);
+        match obj {
+            osmpbfreader::OsmObj::Relation(relation) => {
 
-        let opt_unused_member_ways = relation.refs.iter()
-            .filter(|obj|
-                obj.member.is_way()
-                    && obj.role == "outer" // For now, we ignore enclaves and inner ways
-            )
-            .map(|way| objs_of_interest_bucket.get(&osm_id_to_kv_key(&way.member)).unwrap().map(|w| w.0.way().unwrap().to_owned()))
-            .collect::<Option<Vec<_>>>();
-        let Some(mut unused_member_ways) = opt_unused_member_ways else {
-            log::trace!("Relation {} ({}) is incomplete, skipping it",
-                relation.id.0, relation_name // We filtered the relations to all contain names
-            );
-            return Result::Err(());//continue 'relation_loop;
-        };
-
-        //let way_info = HashMap::new();
-        //
-        let mut polygons = Vec::new();
-
-        while !unused_member_ways.is_empty() { // This loop iterates over all outer rings of the polygon
-            let Some(first_way) = unused_member_ways.pop() else {
-                log::trace!("Relation {} ({}) contains no ways, skipping it",
-                    relation.id.0, relation_name // We filtered the relations to all contain names
-                );
-                return Result::Err(());//continue 'relation_loop;
-            };
-
-            let Some((mut first_node, mut current_node)) = first_and_last_node(&objs_of_interest_bucket, &first_way) else {
-                log::trace!("Relation {} ({}) contains an incomplete way ({}), skipping it",
-                    relation.id.0,
-                    relation_name, // We filtered the relations to all contain names
-                    first_way.id.0
-                );
-                return Result::Err(());// 'relation_loop;
-            };
-
-            let mut polygon_nodes: Vec<_> = osm_way_to_coords(&objs_of_interest_bucket, first_way).collect();
-
-            while first_node.id != current_node.id {
-                struct WayInRelInfo {
-                    /// Index in `unused_member_ways`
-                    way_idx: usize,
-                    reversed: bool
-                }
-
-                let next_way_info = unused_member_ways.iter().enumerate().find_map(|(idx, way)| {
-                    let Some((first_node_of_way, last_node_of_way)) = first_and_last_node(&objs_of_interest_bucket, &way) else {
-                        log::debug!("Relation {} ({}) contains an incomplete way ({}), it will likely be skipped and marked as unclosed relation",
-                            relation.id.0,
-                            relation_name, // We filtered the relations to all contain names
-                            way.id.0
-                        );
-                        return None;
-                    };
-
-                    if first_node_of_way.id == current_node.id {
-                        current_node = last_node_of_way;
-                        Some(WayInRelInfo {
-                            way_idx: idx, reversed: false
-                        })
-                    } else if last_node_of_way.id == current_node.id {
-                        current_node = first_node_of_way;
-                        Some(WayInRelInfo {
-                            way_idx: idx, reversed: true
-                        })
-                    } else { None }
-                });
-
-                let Some(next_way_info) = next_way_info else {
-                    // TODO: Don't panic
-                    log::debug!("Unclosed relation: {} ({}) - node {} belongs to end of only one way, skipping it",
-                        relation.id.0,
-                        relation_name,
-                        current_node.id.0
-                    ); // We filtered the relations to all contain names
-                    return Result::Err(()); //continue 'relation_loop;
+                let opt_unused_member_ways = relation.refs.iter()
+                    .filter(|obj|
+                        obj.member.is_way()
+                            && obj.role == "outer" // For now, we ignore enclaves and inner ways
+                    )
+                    .map(|way| objs_of_interest_bucket.get(&osm_id_to_kv_key(&way.member)).unwrap().map(|w| w.0.way().unwrap().to_owned()))
+                    .collect::<Option<Vec<_>>>();
+                let Some(mut unused_member_ways) = opt_unused_member_ways else {
+                    log::trace!("Relation {} ({}) is incomplete, skipping it",
+                        relation.id.0, obj_name // We filtered the relations to all contain names
+                    );
+                    return Result::Err(());//continue 'relation_loop;
                 };
 
-                let mut found_way = unused_member_ways.swap_remove(next_way_info.way_idx);
-                if next_way_info.reversed {
-                    found_way.nodes.reverse();
-                }
+                //let way_info = HashMap::new();
+                //
+                let mut polygons = Vec::new();
 
-                let nodes = osm_way_to_coords(&objs_of_interest_bucket, found_way);
+                while !unused_member_ways.is_empty() { // This loop iterates over all outer rings of the polygon
+                    let Some(first_way) = unused_member_ways.pop() else {
+                        log::trace!("Relation {} ({}) contains no ways, skipping it",
+                            relation.id.0, obj_name // We filtered the relations to all contain names
+                        );
+                        return Result::Err(());//continue 'relation_loop;
+                    };
 
-                polygon_nodes.extend(nodes);
+                    let Some((mut first_node, mut current_node)) = first_and_last_node(&objs_of_interest_bucket, &first_way) else {
+                        log::trace!("Relation {} ({}) contains an incomplete way ({}), skipping it",
+                            relation.id.0,
+                            obj_name, // We filtered the relations to all contain names
+                            first_way.id.0
+                        );
+                        return Result::Err(());// 'relation_loop;
+                    };
+
+                    let mut polygon_nodes: Vec<_> = osm_way_to_coords(&objs_of_interest_bucket, first_way).collect();
+
+                    while first_node.id != current_node.id {
+                        struct WayInRelInfo {
+                            /// Index in `unused_member_ways`
+                            way_idx: usize,
+                            reversed: bool
+                        }
+
+                        let next_way_info = unused_member_ways.iter().enumerate().find_map(|(idx, way)| {
+                            let Some((first_node_of_way, last_node_of_way)) = first_and_last_node(&objs_of_interest_bucket, &way) else {
+                                log::debug!("Relation {} ({}) contains an incomplete way ({}), it will likely be skipped and marked as unclosed relation",
+                                    relation.id.0,
+                                    obj_name, // We filtered the relations to all contain names
+                                    way.id.0
+                                );
+                                return None;
+                            };
+
+                            if first_node_of_way.id == current_node.id {
+                                current_node = last_node_of_way;
+                                Some(WayInRelInfo {
+                                    way_idx: idx, reversed: false
+                                })
+                            } else if last_node_of_way.id == current_node.id {
+                                current_node = first_node_of_way;
+                                Some(WayInRelInfo {
+                                    way_idx: idx, reversed: true
+                                })
+                            } else { None }
+                        });
+
+                        let Some(next_way_info) = next_way_info else {
+                            // TODO: Don't panic
+                            log::debug!("Unclosed relation: {} ({}) - node {} belongs to end of only one way, skipping it",
+                                relation.id.0,
+                                obj_name,
+                                current_node.id.0
+                            ); // We filtered the relations to all contain names
+                            return Result::Err(()); //continue 'relation_loop;
+                        };
+
+                        let mut found_way = unused_member_ways.swap_remove(next_way_info.way_idx);
+                        if next_way_info.reversed {
+                            found_way.nodes.reverse();
+                        }
+
+                        let nodes = osm_way_to_coords(&objs_of_interest_bucket, found_way);
+
+                        polygon_nodes.extend(nodes);
+                    }
+                    let mut nodes_ls = LineString::from(polygon_nodes);
+                    nodes_ls.make_ccw_winding();  // For correct area calculations later
+                    polygons.push(geo::Polygon::new(
+                        nodes_ls,
+                        Vec::new()
+                    ));
+                };
+
+                /*let Some(winding_order) = geo::LineString::from(polygon_nodes).winding_order() else {
+                    log::warn!("Relation {} ({}) contains less than 3 distinct coordinates, skipping it",
+                        relation.id.0,
+                        relation_name
+                    );
+                    return Result::Err(());
+                };*/
+
+
+
+                /*let poly = polyline::encode_coordinates(polygon_nodes, 5).unwrap();
+                println!("");
+                println!("{}", relation_name);
+                println!("{poly}");*/
+
+                // Warning: We rely below on the fact that there are NO more than 1 exterior and no interior rings
+                Result::Ok(Either::Left(polygons.into_iter().map(move |polygon| ProcessedBoundary {
+                    polygon,
+                    name: obj_name.clone(),
+                }).par_bridge()))
             }
-            let mut nodes_ls = LineString::from(polygon_nodes);
-            nodes_ls.make_ccw_winding();  // For correct area calculations later
-            polygons.push(geo::Polygon::new(
-                nodes_ls,
-                Vec::new()
-            ));
-        };
+            osmpbfreader::OsmObj::Way(way) => {
+                let mut nodes_ls: LineString = osm_way_to_coords(&objs_of_interest_bucket, way).collect();
+                nodes_ls.make_ccw_winding(); // For correct area calculations later
+                Ok(Either::Right(rayon::iter::once(ProcessedBoundary {
+                    polygon:
+                        geo::Polygon::new(nodes_ls, Vec::new()),
+                    name: obj_name
+                })))
+            }
+            osmpbfreader::OsmObj::Node(_) => {
+                // We don't process nodes here
+                Err(())
+            }
+        }
+    })
+    .filter_map(|res| res.ok()) // TODO: Don't ignore failures
+    .flatten();
 
-        /*let Some(winding_order) = geo::LineString::from(polygon_nodes).winding_order() else {
-            log::warn!("Relation {} ({}) contains less than 3 distinct coordinates, skipping it",
-                relation.id.0,
-                relation_name
-            );
-            return Result::Err(());
-        };*/
-
-
-
-        /*let poly = polyline::encode_coordinates(polygon_nodes, 5).unwrap();
-        println!("");
-        println!("{}", relation_name);
-        println!("{poly}");*/
-
-        // Warning: We rely below on the fact that there are NO more than 1 exterior and no interior rings
-        Result::Ok(polygons.into_iter().map(move |polygon| ProcessedBoundary {
-            polygon,
-            name: relation_name.clone(),
-        }).par_bridge())
-    });
-
-    let ways_processing_results = ways_of_interest.par_bridge().filter(include_way_in_tiles).flat_map(|way| {
-        let Some(name) = get_name(&way.tags) else {
-            return None;
-        };
-        let mut nodes_ls: LineString = osm_way_to_coords(&objs_of_interest_bucket, way).collect();
-        nodes_ls.make_ccw_winding(); // For correct area calculations later
-        Some(ProcessedBoundary {
-            polygon:
-                geo::Polygon::new(nodes_ls, Vec::new()),
-            name
-        })
-    });
+    log::info!("Initializing the FGB dataset");
 
     let (polygons_tx, polygons_rx) = mpsc::channel::<ProcessedBoundary>();
 
@@ -413,7 +463,7 @@ Please provide the PBF file as a command line argument.");
 
     log::info!("Initialized the FGB dataset");
 
-    //let prog_fgb_writing = indicatif_progress.add(indicatif::ProgressBar::new(0).with_message("Writing FGB..."));
+
     //let fgb_writing_ref = prog_fgb_writing.clone();
     let writign_thread_handle = thread::spawn(move || {
         let mut max_area = 0;
@@ -459,10 +509,7 @@ Please provide the PBF file as a command line argument.");
         max_area
     });
 
-    relation_processing_results
-        .filter_map(|res| res.ok()) // TODO: Don't ignore failures
-        .flatten()
-        .chain(ways_processing_results)
+    obj_processing_results
         .for_each(|boundary| {
             //prog_fgb_writing.inc_length(1);
             polygons_tx.send(boundary).unwrap();
@@ -540,21 +587,23 @@ Please provide the PBF file as a command line argument.");
 }
 
 fn osm_way_to_coords(objs_of_interest_bucket: &kv::Bucket<'_, Vec<u8>, kv::Bincode<osmpbfreader::OsmObj>>, found_way: osmpbfreader::Way) -> impl Iterator<Item = Coord> {
-    let nodes = found_way.nodes.into_iter().map(|node|
+
+    found_way.nodes.into_iter().flat_map(|node|
         {
             //println!(");
-            let bc = objs_of_interest_bucket
+            let Some(bc) = objs_of_interest_bucket
                 .get(&osm_id_to_kv_key(&OsmId::Node(node)))
-                .unwrap()
-                .expect(&format!("Node {node:?} not found in db"));
+                .unwrap() else {
+                    log::warn!("Node {node:?} not found in db");
+                    return None;
+                };
             let node = bc.0.node().unwrap();
-            Coord {
+            Some(Coord {
                 x: node.lon(),
                 y: node.lat(),
-            }
+            })
         }
-    );
-    nodes
+    )
 }
 
 fn first_and_last_node(objs_of_interest_bucket: &kv::Bucket<'_, Vec<u8>, kv::Bincode<osmpbfreader::OsmObj>>, way: &osmpbfreader::Way) -> Option<(osmpbfreader::Node, osmpbfreader::Node)> {
