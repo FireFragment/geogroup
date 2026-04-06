@@ -147,6 +147,8 @@ impl<Item: SortableItem, NDItem: Clone + PartialEq + Eq + Hash, LeafNameErr: Clo
         fun_get_leaf_name: impl AsyncFn(&Item) -> Result<HashSet<NDItem>, LeafNameErr>,
         fun_cmp_order: impl Fn(&NDItem, &NDItem) -> cmp::Ordering
     ) {
+        log::debug!("`try_naming` started");
+
         // TODO: Do some locks so that it can't be launched multiple times simoultaneously
         let root_name = try_naming_generic(
             lazy_hierarchy::NodeRef::Group(
